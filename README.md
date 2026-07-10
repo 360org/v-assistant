@@ -55,7 +55,7 @@ runs in the background.
 ```
 
 The UI talks only to the **AI Runtime Service**. The engine behind it is
-[NanoClaw](https://github.com/qwibitai/nanoclaw) — and it is an
+[NanoClaw](https://github.com/nanocoai/nanoclaw) — and it is an
 implementation detail, never surfaced to the user. The desktop app speaks
 NanoClaw's native channel contract, making V Assistant just another channel
 alongside WhatsApp or Telegram:
