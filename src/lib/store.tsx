@@ -104,7 +104,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const consumeChatDraft = useCallback(() => setChatDraft(null), []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // Storage can be unavailable (sandboxed webviews, private mode) — the
+    // app must keep working without persistence.
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      /* run without persistence */
+    }
   }, [state]);
 
   const completeOnboarding = useCallback(
@@ -205,7 +211,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetApp = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* run without persistence */
+    }
     setState(initialState);
     setView("home");
   }, []);

@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:demo": "vite build -c vite.demo.config.ts && node scripts/inline-demo.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
