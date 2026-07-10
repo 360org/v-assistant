@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 type Step = "welcome" | "login" | "connect";
 
 export function Onboarding() {
-  const { completeOnboarding, setProviderConfig, oauthReturn, oauthError } =
+  const { completeOnboarding, connectProvider, oauthReturn, oauthError } =
     useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [provider, setProvider] = useState<ProviderId | null>(null);
@@ -182,7 +182,7 @@ export function Onboarding() {
           context="onboarding"
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
-            if (config) setProviderConfig(connectFor, config);
+            if (config) void connectProvider(connectFor, config);
             setProvider(connectFor);
             setConnectFor(null);
             setStep("connect");

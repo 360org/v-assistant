@@ -83,3 +83,39 @@ export async function completeOAuthReturn(): Promise<OAuthReturn | null> {
   const { key } = (await response.json()) as { key: string };
   return { provider: pending.provider, apiKey: key, context: pending.context };
 }
+
+export interface VendorAccount {
+  label: string;
+  detail?: string;
+}
+
+/**
+ * Fetch the signed-in account from the vendor so the app can create a local
+ * user on first login — no separate sign-up. Best-effort: returns null if
+ * the vendor has no readable profile for this key.
+ */
+export async function fetchVendorAccount(
+  provider: ProviderId,
+  apiKey: string,
+): Promise<VendorAccount | null> {
+  try {
+    if (provider === "openrouter") {
+      const res = await fetch("https://openrouter.ai/api/v1/key", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) return null;
+      const { data } = (await res.json()) as {
+        data?: { label?: string; limit?: number | null; usage?: number };
+      };
+      const label = data?.label?.trim() || "OpenRouter account";
+      const detail =
+        data?.limit != null
+          ? `$${(data.limit - (data.usage ?? 0)).toFixed(2)} credit left`
+          : undefined;
+      return { label, detail };
+    }
+  } catch {
+    /* fall through to null */
+  }
+  return null;
+}

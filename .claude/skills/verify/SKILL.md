@@ -50,8 +50,13 @@ Tauri) chat must silently fall back to the preview engine.
 
 ## Flows worth driving
 
-1. Onboarding: Get started → "Continue with Claude" → toggle Telegram →
-   Start chatting (lands on Chat).
+1. Onboarding is login-first: the sign-in screen shows only "Continue
+   with …" buttons (OpenRouter top, 1-click badge) and no API-key field.
+   OpenRouter → real PKCE OAuth redirect; other vendors open a dialog whose
+   API key sits under "Advanced options". First sign-in auto-creates the
+   local user from the vendor account (label + credit), shown in the sidebar
+   footer and Settings → Account. Stub the openrouter.ai routes to drive
+   this without real credentials (see scratch tests).
 2. Chat: fill composer, Enter → assistant reply streams (demo engine echoes
    with "preview response" text). Empty Enter must not send.
 3. Provider switch: chat header dropdown; sidebar "Powered by X" updates.

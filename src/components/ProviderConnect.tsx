@@ -1,15 +1,21 @@
 import { useState } from "react";
-import { ExternalLink, LogIn, X } from "lucide-react";
+import { ChevronDown, ExternalLink, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import { DEFAULT_MODELS, type ProviderConfig } from "@/runtime/providers";
 import { startOpenRouterLogin } from "@/runtime/oauth";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const inputClass =
   "w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 " +
   "text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400/60";
 
-/** Connect dialog: paste a key (or point at a local server) and go. */
+/**
+ * Connect dialog — login-first. Direct sign-in is the headline action;
+ * the API-key path is tucked under "Advanced options" for people who
+ * prefer a key or use a provider without OAuth yet. Local AI is the
+ * exception: its "connection" is a server address, shown directly.
+ */
 export function ProviderConnect({
   provider,
   initial,
@@ -30,6 +36,11 @@ export function ProviderConnect({
     initial?.baseUrl ?? (isLocal ? "http://localhost:11434/v1" : ""),
   );
   const [model, setModel] = useState(initial?.model ?? "");
+  // Advanced (key) section: open by default when editing an existing
+  // key-based connection or when the provider has no direct sign-in.
+  const [advanced, setAdvanced] = useState(
+    Boolean(initial?.apiKey) || (!info.oauth && !isLocal),
+  );
 
   const valid = isLocal ? baseUrl.trim() !== "" : apiKey.trim() !== "";
 
@@ -68,32 +79,9 @@ export function ProviderConnect({
           <p className="mt-3 text-xs text-neutral-400">{info.hint}</p>
         )}
 
-        {info.oauth ? (
-          <>
-            <Button
-              className="mt-4 w-full"
-              onClick={() => void startOpenRouterLogin(context)}
-            >
-              <LogIn className="size-4" /> {info.loginLabel}
-            </Button>
-            <div className="mt-4 flex items-center gap-3 text-[11px] text-neutral-600">
-              <span className="h-px flex-1 bg-neutral-800" />
-              or paste an API key
-              <span className="h-px flex-1 bg-neutral-800" />
-            </div>
-          </>
-        ) : (
-          !isLocal && (
-            <p className="mt-3 text-xs text-neutral-500">
-              Direct sign-in arrives once {info.name} approves third-party
-              apps. For now, connect with an API key — or use OpenRouter to
-              reach {info.name}'s models with one login.
-            </p>
-          )
-        )}
-
-        <div className="mt-4 flex flex-col gap-3">
-          {isLocal && (
+        {/* Local AI: the connection is a server address, no login. */}
+        {isLocal ? (
+          <div className="mt-4 flex flex-col gap-3">
             <label className="text-xs text-neutral-400">
               Server address
               <input
@@ -103,37 +91,81 @@ export function ProviderConnect({
                 placeholder="http://localhost:11434/v1"
               />
             </label>
-          )}
-          <label className="text-xs text-neutral-400">
-            API key{isLocal ? " (optional)" : ""}
-            <input
-              className={`${inputClass} mt-1`}
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={isLocal ? "usually not needed" : "sk-…"}
-            />
-          </label>
-          <label className="text-xs text-neutral-400">
-            Model (optional)
-            <input
-              className={`${inputClass} mt-1`}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={DEFAULT_MODELS[provider]}
-            />
-          </label>
-        </div>
+            <label className="text-xs text-neutral-400">
+              Model (optional)
+              <input
+                className={`${inputClass} mt-1`}
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={DEFAULT_MODELS[provider]}
+              />
+            </label>
+          </div>
+        ) : (
+          <>
+            {/* Headline: direct sign-in. */}
+            {info.oauth ? (
+              <Button
+                className="mt-4 w-full"
+                onClick={() => void startOpenRouterLogin(context)}
+              >
+                <LogIn className="size-4" /> {info.loginLabel}
+              </Button>
+            ) : (
+              <p className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-xs text-neutral-400">
+                One-click sign-in for {info.name} is coming once the vendor
+                opens it. For now, use an API key below — or sign in with
+                OpenRouter to reach {info.name}'s models instantly.
+              </p>
+            )}
 
-        {info.keyUrl && (
-          <a
-            href={info.keyUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-xs text-gold-300 hover:underline"
-          >
-            Get an API key <ExternalLink className="size-3" />
-          </a>
+            {/* Advanced: API key path. */}
+            <button
+              onClick={() => setAdvanced((a) => !a)}
+              className="mt-4 flex w-full cursor-pointer items-center justify-between text-xs text-neutral-400 hover:text-neutral-200"
+            >
+              Advanced options
+              <ChevronDown
+                className={cn(
+                  "size-4 transition-transform",
+                  advanced && "rotate-180",
+                )}
+              />
+            </button>
+            {advanced && (
+              <div className="mt-3 flex flex-col gap-3 border-t border-neutral-800 pt-3">
+                <label className="text-xs text-neutral-400">
+                  API key
+                  <input
+                    className={`${inputClass} mt-1`}
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-…"
+                  />
+                </label>
+                <label className="text-xs text-neutral-400">
+                  Model (optional)
+                  <input
+                    className={`${inputClass} mt-1`}
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    placeholder={DEFAULT_MODELS[provider]}
+                  />
+                </label>
+                {info.keyUrl && (
+                  <a
+                    href={info.keyUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-gold-300 hover:underline"
+                  >
+                    Get an API key <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         <div className="mt-5 flex items-center justify-between gap-2">
@@ -148,14 +180,16 @@ export function ProviderConnect({
             <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            <Button size="sm" disabled={!valid} onClick={save}>
-              Connect
-            </Button>
+            {(isLocal || advanced) && (
+              <Button size="sm" disabled={!valid} onClick={save}>
+                {isLocal ? "Connect" : "Save key"}
+              </Button>
+            )}
           </div>
         </div>
 
         <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
-          Your key is stored only on this device and sent only to{" "}
+          Your credentials are stored only on this device and sent only to{" "}
           {info.name}.
         </p>
       </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "@/lib/store";
-import { PROVIDERS, type ProviderId } from "@/lib/catalog";
+import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
 import { isConfigured } from "@/runtime/providers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ export function Settings() {
     setProvider,
     providerConfigs,
     setProviderConfig,
+    connectProvider,
+    user,
     resetApp,
   } = useApp();
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
@@ -22,6 +24,25 @@ export function Settings() {
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
       <h1 className="text-2xl font-bold">Settings</h1>
       <p className="mt-1 text-neutral-400">Simple by design.</p>
+
+      {user && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-neutral-300">Account</h2>
+          <Card className="mt-3 flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold">{user.name}</div>
+              <div className="text-xs text-neutral-500">
+                Signed in with {getProvider(user.provider).name}
+                {user.detail ? ` · ${user.detail}` : ""}
+              </div>
+            </div>
+            <Badge tone="green">Local user</Badge>
+          </Card>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-neutral-300">AI Provider</h2>
@@ -135,7 +156,8 @@ export function Settings() {
           initial={providerConfigs[connectFor]}
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
-            setProviderConfig(connectFor, config);
+            if (config) void connectProvider(connectFor, config);
+            else setProviderConfig(connectFor, null);
             setConnectFor(null);
           }}
         />

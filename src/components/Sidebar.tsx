@@ -31,7 +31,7 @@ export function Sidebar({
   /** Called after picking a menu item (used to close the mobile drawer). */
   onNavigate?: () => void;
 }) {
-  const { view, setView, provider } = useApp();
+  const { view, setView, provider, user } = useApp();
   const go = (v: View) => {
     setView(v);
     onNavigate?.();
@@ -71,19 +71,38 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto px-2 pb-1">
-        {provider && (
+        {user ? (
           <button
             onClick={() => go("settings")}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs text-neutral-400 transition-colors hover:border-neutral-700"
+            className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-left transition-colors hover:border-neutral-700"
           >
-            <span className="size-2 rounded-full bg-emerald-400" />
-            <span>
-              Powered by{" "}
-              <span className="font-medium text-neutral-200">
-                {getProvider(provider).name}
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-sm font-bold text-neutral-950">
+              {user.name.charAt(0).toUpperCase()}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-medium text-neutral-200">
+                {user.name}
+              </span>
+              <span className="block truncate text-[11px] text-neutral-500">
+                {provider ? getProvider(provider).name : "Signed in"}
               </span>
             </span>
           </button>
+        ) : (
+          provider && (
+            <button
+              onClick={() => go("settings")}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs text-neutral-400 transition-colors hover:border-neutral-700"
+            >
+              <span className="size-2 rounded-full bg-emerald-400" />
+              <span>
+                Powered by{" "}
+                <span className="font-medium text-neutral-200">
+                  {getProvider(provider).name}
+                </span>
+              </span>
+            </button>
+          )
         )}
       </div>
     </aside>

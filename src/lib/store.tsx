@@ -17,7 +17,12 @@ import {
 import type { ProviderId } from "@/lib/catalog";
 import type { ChatMessage } from "@/runtime/engine";
 import type { ProviderConfig } from "@/runtime/providers";
-import { completeOAuthReturn, type OAuthReturn } from "@/runtime/oauth";
+import {
+  completeOAuthReturn,
+  fetchVendorAccount,
+  type OAuthReturn,
+} from "@/runtime/oauth";
+import { getProvider } from "@/lib/catalog";
 
 export type View =
   | "home"
@@ -44,8 +49,24 @@ export interface CustomSkill {
   source: string;
 }
 
+/**
+ * The local user, created automatically on first sign-in from the vendor
+ * account — no separate registration. Lives only on this device.
+ */
+export interface LocalUser {
+  /** Display name (vendor account label, or the provider name). */
+  name: string;
+  /** Which vendor the account came from. */
+  provider: ProviderId;
+  /** Secondary line, e.g. remaining credit. */
+  detail?: string;
+  createdAt: number;
+}
+
 interface PersistedState {
   onboarded: boolean;
+  /** The auto-created local user, or null before first sign-in. */
+  user: LocalUser | null;
   provider: ProviderId | null;
   /** Per-provider credentials/config — stored on this device only. */
   providerConfigs: Partial<Record<ProviderId, ProviderConfig>>;
@@ -61,6 +82,7 @@ const STORAGE_KEY = "v-assistant-state-v1";
 
 const initialState: PersistedState = {
   onboarded: false,
+  user: null,
   provider: null,
   providerConfigs: {},
   installedAgents: [],
@@ -98,6 +120,14 @@ interface AppStore extends PersistedState {
     provider: ProviderId,
     config: ProviderConfig | null,
   ) => void;
+  /**
+   * Connect a provider and, on first sign-in, create the local user from
+   * the vendor account. Makes the provider active.
+   */
+  connectProvider: (
+    provider: ProviderId,
+    config: ProviderConfig,
+  ) => Promise<void>;
   addCustomSkill: (skill: CustomSkill) => void;
   removeCustomSkill: (source: string) => void;
   toggleAgent: (agentId: string) => void;
@@ -125,19 +155,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // store the credential, then let the UI (onboarding/settings) continue.
   useEffect(() => {
     completeOAuthReturn()
-      .then((result) => {
+      .then(async (result) => {
         if (!result) return;
-        setState((s) => ({
-          ...s,
-          provider: result.provider,
-          providerConfigs: {
-            ...s.providerConfigs,
-            [result.provider]: { apiKey: result.apiKey },
-          },
-        }));
+        // Sets config + creates the local user from the vendor account.
+        await connectProvider(result.provider, { apiKey: result.apiKey });
         setOauthReturn(result);
       })
       .catch((e) => setOauthError(e instanceof Error ? e.message : String(e)));
+    // connectProvider is stable (useCallback with no deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const useSkill = useCallback((prompt: string) => {
@@ -184,6 +210,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else delete providerConfigs[provider];
         return { ...s, providerConfigs };
       });
+    },
+    [],
+  );
+
+  const connectProvider = useCallback(
+    async (provider: ProviderId, config: ProviderConfig) => {
+      setState((s) => ({
+        ...s,
+        provider,
+        providerConfigs: { ...s.providerConfigs, [provider]: config },
+      }));
+      const account = config.apiKey
+        ? await fetchVendorAccount(provider, config.apiKey)
+        : null;
+      setState((s) => ({
+        ...s,
+        // First sign-in creates the local user; later connects only fill in
+        // details we didn't have yet.
+        user: s.user ?? {
+          name: account?.label ?? getProvider(provider).name,
+          provider,
+          detail: account?.detail,
+          createdAt: Date.now(),
+        },
+      }));
     },
     [],
   );
@@ -306,6 +357,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       setProvider,
       setProviderConfig,
+      connectProvider,
       addCustomSkill,
       removeCustomSkill,
       toggleAgent,
@@ -328,6 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       setProvider,
       setProviderConfig,
+      connectProvider,
       addCustomSkill,
       removeCustomSkill,
       toggleAgent,
