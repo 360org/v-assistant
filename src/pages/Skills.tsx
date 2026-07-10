@@ -1,5 +1,5 @@
 import { Wand2 } from "lucide-react";
-import { SKILLS } from "@/lib/catalog";
+import { SKILLS } from "@/lib/skills";
 import { useApp } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

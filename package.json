@@ -12,8 +12,9 @@
   "homepage": "https://vuaai.net",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/validate-skills.mjs && tsc && vite build",
     "build:demo": "vite build -c vite.demo.config.ts && node scripts/inline-demo.mjs",
+    "validate:skills": "node scripts/validate-skills.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

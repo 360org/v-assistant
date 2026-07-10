@@ -82,12 +82,28 @@ npm run tauri build
 
 ```
 src/                  React UI
-  pages/              Home, Chat, Agents, Knowledge, Integrations, Settings
+  pages/              Home, Chat, Agents, Skills, Knowledge, Integrations, Settings
   components/         Sidebar + shadcn-style UI primitives
-  lib/                App store (persisted), catalogs, utils
+  lib/                App store (persisted), catalogs, skills loader, utils
   runtime/            AI Runtime Service boundary (engine interface + demo engine)
+skills/               Agent Skills (one directory per skill, see below)
 src-tauri/            Tauri 2 shell (Rust)
 ```
+
+## Skills
+
+Every skill in the app is a standard [Agent Skills](https://agentskills.io)
+directory under `skills/<name>/SKILL.md`: YAML frontmatter with the
+spec-required `name` and `description`, app display fields under `metadata`
+(`vua-`-prefixed keys), and a markdown body with the instructions the engine
+follows when the skill runs. The UI loads them at build time
+(`src/lib/skills.ts`) — adding a skill is adding a folder, no code changes.
+
+```bash
+npm run validate:skills   # checks every skill against the Agent Skills spec
+```
+
+Validation also runs automatically as part of `npm run build`.
 
 ## Product principle
 
