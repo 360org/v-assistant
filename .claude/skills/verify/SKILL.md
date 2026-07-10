@@ -34,6 +34,20 @@ Drive with Playwright headless Chromium (globally installed; executable at
 import from `/opt/node22/lib/node_modules/playwright/index.mjs` since ESM
 ignores NODE_PATH).
 
+## Engine seam (NanoClaw runtime)
+
+The desktop ↔ engine IPC contract (SQLite inbound/outbound queues) is
+exercised cross-process without Docker or credentials:
+
+```bash
+cd src-tauri
+VUA_ENGINE_DIR=../scripts/engine-stub.mjs cargo run --example ipc_check
+```
+
+Prints ✓ lines for engine attach, group/skills sync, chat round-trips on
+`main` and an agent group, and engine shutdown. In the web preview (no
+Tauri) chat must silently fall back to the preview engine.
+
 ## Flows worth driving
 
 1. Onboarding: Get started → "Continue with Claude" → toggle Telegram →

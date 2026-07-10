@@ -42,22 +42,48 @@ runs in the background.
 | Tauri                             |
 +-------------------+---------------+
                     |
-           AI Runtime Service
+           AI Runtime Service        src-tauri/src/runtime.rs
+                    |
+        ipc/inbound.db · ipc/outbound.db   (SQLite queues, one writer each)
+                    |
+             NanoClaw Engine         host process + per-agent containers
                     |
       +-------------+-------------+
       |             |             |
  GPT/Claude     Telegram      Knowledge
  Gemini         WhatsApp      Files
-      |
-   Agent Runtime
 ```
 
-The UI talks only to the **AI Runtime Service**. The engine behind it is an
-implementation detail and is never surfaced to the user. The current build
-ships a local demo engine so every flow (onboarding, streaming chat, provider
-switching, agent install, knowledge processing, integration connect) is fully
-navigable offline; wiring real providers means replacing `createEngine()` in
-`src/runtime/engine.ts` — no UI changes.
+The UI talks only to the **AI Runtime Service**. The engine behind it is
+[NanoClaw](https://github.com/qwibitai/nanoclaw) — and it is an
+implementation detail, never surfaced to the user. The desktop app speaks
+NanoClaw's native channel contract, making V Assistant just another channel
+alongside WhatsApp or Telegram:
+
+- **Chat & Agents → NanoClaw groups.** Each installed agent is materialized
+  as a `groups/<agent-id>/` folder with a generated `CLAUDE.md`; plain chat
+  is the `main` group. Messages flow through the two SQLite queues
+  (`runtime_send` / `runtime_receive` Tauri commands).
+- **Skills → NanoClaw skills.** The `skills/` directory (standard Agent
+  Skills format) is copied into the runtime dir for containers to mount.
+- **Integrations → NanoClaw connector channels.** Telegram, WhatsApp,
+  Discord, Slack etc. are NanoClaw channel modules; the Connect button is
+  the front door to installing and pairing them.
+- **Providers → engine credentials.** Keys live at the engine's proxy layer
+  (Agent Vault), never in agent containers and never in the UI.
+
+Point `VUA_ENGINE_DIR` at an engine entry script to attach a real engine
+(`scripts/engine-stub.mjs` is a dev stand-in that echoes; a NanoClaw
+checkout with the desktop channel is the real thing). Without an engine the
+app silently falls back to the built-in preview engine, so every flow —
+onboarding, streaming chat, provider switching, agent install, knowledge,
+integrations — stays fully navigable offline. The seam can be exercised
+end-to-end without Docker or credentials:
+
+```bash
+cd src-tauri
+VUA_ENGINE_DIR=../scripts/engine-stub.mjs cargo run --example ipc_check
+```
 
 ## Development
 

@@ -18,12 +18,16 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+export interface ChatOptions {
+  provider: ProviderId;
+  agentName?: string;
+  /** Installed-agent id; maps to a NanoClaw group on the engine side. */
+  agentId?: string;
+}
+
 export interface Engine {
   /** Streams the assistant reply as text chunks. */
-  chat(
-    messages: ChatMessage[],
-    options: { provider: ProviderId; agentName?: string },
-  ): AsyncGenerator<string>;
+  chat(messages: ChatMessage[], options: ChatOptions): AsyncGenerator<string>;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -57,8 +61,20 @@ const demoEngine: Engine = {
   },
 };
 
+/**
+ * Engine selection, decided per message: inside the desktop shell with a
+ * NanoClaw engine attached, chat goes through the runtime; anywhere else
+ * (web preview, engine not installed) the preview engine answers, so the
+ * product is always usable.
+ */
 export function createEngine(): Engine {
-  return demoEngine;
+  return {
+    async *chat(messages, options) {
+      const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
+      const engine = (await engineRunning()) ? nanoclawEngine : demoEngine;
+      yield* engine.chat(messages, options);
+    },
+  };
 }
 
 export function newMessageId(): string {

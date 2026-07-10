@@ -80,6 +80,7 @@ export function Chat() {
       for await (const chunk of engine.chat(history, {
         provider,
         agentName: activeAgent?.name,
+        agentId: activeAgent?.id,
       })) {
         setMessages((prev) =>
           prev.map((m) =>

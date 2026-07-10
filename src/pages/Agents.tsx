@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Download, MessageSquare } from "lucide-react";
 import { AGENT_STORE } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
+import { syncAgents } from "@/runtime/nanoclaw";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,12 @@ export function Agents() {
     setTimeout(() => {
       toggleAgent(id);
       setInstalling(null);
+      // Give the engine the new agent's group (best-effort, invisible).
+      void syncAgents(
+        AGENT_STORE.filter(
+          (a) => a.id === id || installedAgents.includes(a.id),
+        ).map(({ id, name, description }) => ({ id, name, description })),
+      );
     }, 600);
   };
 
