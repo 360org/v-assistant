@@ -149,7 +149,7 @@ export function Chat() {
       <div className="flex-1 overflow-y-auto px-6 py-6" data-selectable>
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <Logo className="size-12 rounded-2xl text-xl opacity-90" />
+            <Logo className="size-14 opacity-95" />
             <h2 className="mt-4 text-lg font-semibold">
               How can I help you today?
             </h2>

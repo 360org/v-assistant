@@ -1,16 +1,15 @@
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo.png";
 
-/** The V Assistant mark: a gold rounded square with a V. */
+/** The V Assistant brand mark. */
 export function Logo({ className }: { className?: string }) {
   return (
-    <div
-      className={cn(
-        "flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-600 font-black text-neutral-950",
-        className,
-      )}
+    <img
+      src={logo}
+      alt=""
+      draggable={false}
+      className={cn("size-8 select-none", className)}
       aria-hidden
-    >
-      V
-    </div>
+    />
   );
 }
