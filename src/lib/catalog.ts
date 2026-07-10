@@ -153,6 +153,100 @@ export const AGENT_STORE: AgentTemplate[] = [
   },
 ];
 
+export interface SkillTemplate {
+  id: string;
+  name: string;
+  emoji: string;
+  category: string;
+  description: string;
+  /** Pre-filled into the chat composer when the user clicks Use. */
+  prompt: string;
+}
+
+export const SKILLS: SkillTemplate[] = [
+  {
+    id: "write-email",
+    name: "Write Email",
+    emoji: "✉️",
+    category: "Office",
+    description: "Turn a few bullet points into a polished, professional email.",
+    prompt: "Write a professional email about: ",
+  },
+  {
+    id: "summarize",
+    name: "Summarize Document",
+    emoji: "📄",
+    category: "Office",
+    description: "Get the key points of any long text or document in seconds.",
+    prompt: "Summarize the key points of the following document:\n\n",
+  },
+  {
+    id: "translate",
+    name: "Translate",
+    emoji: "🌐",
+    category: "Language",
+    description: "Translate between Vietnamese, English and 100+ languages.",
+    prompt: "Translate the following text to Vietnamese:\n\n",
+  },
+  {
+    id: "excel-formula",
+    name: "Excel Formula",
+    emoji: "📊",
+    category: "Office",
+    description: "Describe what you need and get the exact Excel formula.",
+    prompt: "Write an Excel formula that: ",
+  },
+  {
+    id: "meeting-notes",
+    name: "Meeting Notes",
+    emoji: "📝",
+    category: "Office",
+    description: "Turn a rough transcript into clean minutes with action items.",
+    prompt:
+      "Turn these meeting notes into clean minutes with action items:\n\n",
+  },
+  {
+    id: "report-writer",
+    name: "Write Report",
+    emoji: "📈",
+    category: "Business",
+    description: "Draft a structured business report from your raw data.",
+    prompt: "Write a structured business report about: ",
+  },
+  {
+    id: "social-post",
+    name: "Social Media Post",
+    emoji: "📣",
+    category: "Marketing",
+    description: "Catchy posts for Facebook, LinkedIn or TikTok in your voice.",
+    prompt: "Write an engaging social media post about: ",
+  },
+  {
+    id: "brainstorm",
+    name: "Brainstorm Ideas",
+    emoji: "💡",
+    category: "Creative",
+    description: "Generate fresh ideas for any topic, product or campaign.",
+    prompt: "Brainstorm 10 creative ideas for: ",
+  },
+  {
+    id: "fix-writing",
+    name: "Improve Writing",
+    emoji: "✨",
+    category: "Language",
+    description: "Fix grammar and make any text clearer and more natural.",
+    prompt: "Improve the grammar, clarity and tone of this text:\n\n",
+  },
+  {
+    id: "explain",
+    name: "Explain Simply",
+    emoji: "🎓",
+    category: "Learning",
+    description: "Understand any complex topic, explained in plain language.",
+    prompt: "Explain in simple terms: ",
+  },
+];
+
 export interface Integration {
   id: string;
   name: string;

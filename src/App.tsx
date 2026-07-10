@@ -5,6 +5,7 @@ import { Onboarding } from "@/pages/Onboarding";
 import { Home } from "@/pages/Home";
 import { Chat } from "@/pages/Chat";
 import { Agents } from "@/pages/Agents";
+import { Skills } from "@/pages/Skills";
 import { Knowledge } from "@/pages/Knowledge";
 import { Integrations } from "@/pages/Integrations";
 import { Settings } from "@/pages/Settings";
@@ -13,6 +14,7 @@ const pages: Record<View, () => JSX.Element> = {
   home: Home,
   chat: Chat,
   agents: Agents,
+  skills: Skills,
   knowledge: Knowledge,
   integrations: Integrations,
   settings: Settings,

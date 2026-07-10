@@ -39,7 +39,9 @@ ignores NODE_PATH).
 3. Provider switch: chat header dropdown; sidebar "Powered by X" updates.
 4. Agents: Install on a card → button becomes Chat → click Chat → composer
    placeholder becomes "Ask your <Agent>…".
-5. Knowledge: `setInputFiles` on the hidden `input[type=file]` → row shows
+5. Skills: Use on a card → lands on Chat with the composer pre-filled and
+   focused; navigating away and back must not re-fill it.
+6. Knowledge: `setInputFiles` on the hidden `input[type=file]` → row shows
    Processing → Ready (~1–3s).
 6. Integrations: Connect on a card → Connected badge.
 7. Persistence probe: `page.reload()` → app skips onboarding (localStorage),

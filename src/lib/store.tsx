@@ -21,6 +21,7 @@ export type View =
   | "home"
   | "chat"
   | "agents"
+  | "skills"
   | "knowledge"
   | "integrations"
   | "settings";
@@ -70,6 +71,10 @@ function loadState(): PersistedState {
 interface AppStore extends PersistedState {
   view: View;
   setView: (view: View) => void;
+  /** One-shot draft for the chat composer (set by Skills → Use). */
+  chatDraft: string | null;
+  useSkill: (prompt: string) => void;
+  consumeChatDraft: () => void;
   completeOnboarding: (provider: ProviderId, integrations: string[]) => void;
   setProvider: (provider: ProviderId) => void;
   toggleAgent: (agentId: string) => void;
@@ -89,6 +94,14 @@ const AppContext = createContext<AppStore | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(loadState);
   const [view, setView] = useState<View>("home");
+  const [chatDraft, setChatDraft] = useState<string | null>(null);
+
+  const useSkill = useCallback((prompt: string) => {
+    setChatDraft(prompt);
+    setView("chat");
+  }, []);
+
+  const consumeChatDraft = useCallback(() => setChatDraft(null), []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -202,6 +215,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...state,
       view,
       setView,
+      chatDraft,
+      useSkill,
+      consumeChatDraft,
       completeOnboarding,
       setProvider,
       toggleAgent,
@@ -216,6 +232,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       state,
       view,
+      chatDraft,
+      useSkill,
+      consumeChatDraft,
       completeOnboarding,
       setProvider,
       toggleAgent,

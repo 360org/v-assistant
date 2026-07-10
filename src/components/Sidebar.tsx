@@ -5,6 +5,7 @@ import {
   Library,
   MessageSquare,
   Settings,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "home", label: "Home", icon: Home },
   { view: "chat", label: "Chat", icon: MessageSquare },
   { view: "agents", label: "Agents", icon: Bot },
+  { view: "skills", label: "Skills", icon: Wand2 },
   { view: "knowledge", label: "Knowledge", icon: Library },
   { view: "integrations", label: "Integrations", icon: Blocks },
   { view: "settings", label: "Settings", icon: Settings },

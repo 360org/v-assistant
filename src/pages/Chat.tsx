@@ -23,11 +23,14 @@ export function Chat() {
     installedAgents,
     activeAgentId,
     setActiveAgent,
+    chatDraft,
+    consumeChatDraft,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const activeAgent = useMemo(
     () => AGENT_STORE.find((a) => a.id === activeAgentId) ?? null,
@@ -41,6 +44,18 @@ export function Chat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, streaming]);
+
+  // A skill was used: pre-fill the composer and put the cursor at the end.
+  useEffect(() => {
+    if (chatDraft === null) return;
+    setInput(chatDraft);
+    consumeChatDraft();
+    const el = composerRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(chatDraft.length, chatDraft.length);
+    }
+  }, [chatDraft, consumeChatDraft]);
 
   const send = async () => {
     const content = input.trim();
@@ -192,6 +207,7 @@ export function Chat() {
       <div className="border-t border-neutral-800 px-6 py-4">
         <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-2xl border border-neutral-700 bg-neutral-900 p-2 focus-within:border-gold-400/60">
           <textarea
+            ref={composerRef}
             rows={1}
             value={input}
             placeholder={
