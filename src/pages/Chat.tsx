@@ -95,9 +95,9 @@ export function Chat() {
   return (
     <div className="flex h-full flex-col">
       {/* Header: agent context + one-click provider switch */}
-      <header className="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">
+      <header className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold">
             {activeAgent ? `${activeAgent.emoji} ${activeAgent.name}` : "Chat"}
           </span>
           {installedAgentList.length > 0 && (
@@ -116,7 +116,7 @@ export function Chat() {
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <div className="relative">
             <button
               onClick={() => setPickerOpen((o) => !o)}
@@ -161,7 +161,7 @@ export function Chat() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6" data-selectable>
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6" data-selectable>
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <Logo className="size-14 opacity-95" />
@@ -204,7 +204,7 @@ export function Chat() {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-neutral-800 px-6 py-4">
+      <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
         <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-2xl border border-neutral-700 bg-neutral-900 p-2 focus-within:border-gold-400/60">
           <textarea
             ref={composerRef}

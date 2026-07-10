@@ -41,7 +41,7 @@ export function Home() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
       <h1 className="text-2xl font-bold">Welcome back 👋</h1>
       <p className="mt-1 text-neutral-400">
         Everything is running{provider ? ` on ${getProvider(provider).name}` : ""}.

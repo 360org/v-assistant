@@ -47,6 +47,11 @@ ignores NODE_PATH).
 7. Persistence probe: `page.reload()` → app skips onboarding (localStorage),
    chat history/agents/provider survive. App lands on Home after reload.
 
+8. Responsive: at a mobile viewport (e.g. 390×844) the sidebar is replaced
+   by a top bar; "Open menu" opens the drawer, picking an item or clicking
+   the backdrop closes it, and `scrollWidth <= clientWidth` (no horizontal
+   scroll). At ≥768px the sidebar returns and the top bar disappears.
+
 ## Gotchas
 
 - Many labels are substrings of each other ("Chat" nav vs "Start a chat"
