@@ -18,6 +18,10 @@ export interface Provider {
   tagline: string;
   /** Providers with OAuth need no API key — the "Continue with …" path. */
   oauth: boolean;
+  /** Where the user gets an API key. */
+  keyUrl?: string;
+  /** Short connect hint shown in the connect dialog. */
+  hint?: string;
 }
 
 export const PROVIDERS: Provider[] = [
@@ -27,6 +31,8 @@ export const PROVIDERS: Provider[] = [
     loginLabel: "Continue with ChatGPT",
     tagline: "OpenAI GPT models",
     oauth: true,
+    keyUrl: "https://platform.openai.com/api-keys",
+    hint: "Browsers may block direct OpenAI calls; the desktop app or OpenRouter is the reliable path for GPT models.",
   },
   {
     id: "claude",
@@ -34,6 +40,7 @@ export const PROVIDERS: Provider[] = [
     loginLabel: "Continue with Claude",
     tagline: "Anthropic Claude models",
     oauth: true,
+    keyUrl: "https://console.anthropic.com/settings/keys",
   },
   {
     id: "gemini",
@@ -41,6 +48,8 @@ export const PROVIDERS: Provider[] = [
     loginLabel: "Continue with Gemini",
     tagline: "Google Gemini models",
     oauth: true,
+    keyUrl: "https://aistudio.google.com/apikey",
+    hint: "Google AI Studio issues free API keys in a few clicks.",
   },
   {
     id: "openrouter",
@@ -48,6 +57,8 @@ export const PROVIDERS: Provider[] = [
     loginLabel: "Continue with OpenRouter",
     tagline: "Hundreds of models, one account",
     oauth: true,
+    keyUrl: "https://openrouter.ai/keys",
+    hint: "One key unlocks GPT, Claude, Gemini, Llama and hundreds more.",
   },
   {
     id: "local",
@@ -55,6 +66,7 @@ export const PROVIDERS: Provider[] = [
     loginLabel: "Use Local AI",
     tagline: "Runs entirely on this computer",
     oauth: false,
+    hint: "Point at any OpenAI-compatible server — Ollama (http://localhost:11434/v1) or LM Studio.",
   },
 ];
 

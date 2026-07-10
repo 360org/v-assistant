@@ -25,6 +25,7 @@ export function Chat() {
     setActiveAgent,
     chatDraft,
     consumeChatDraft,
+    providerConfigs,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -79,7 +80,9 @@ export function Chat() {
     try {
       for await (const chunk of engine.chat(history, {
         provider,
+        config: providerConfigs[provider],
         agentName: activeAgent?.name,
+        agentDescription: activeAgent?.description,
         agentId: activeAgent?.id,
       })) {
         setMessages((prev) =>
@@ -88,6 +91,15 @@ export function Chat() {
           ),
         );
       }
+    } catch (error) {
+      const note = `⚠️ ${error instanceof Error ? error.message : String(error)}`;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: m.content ? `${m.content}\n\n${note}` : note }
+            : m,
+        ),
+      );
     } finally {
       setStreaming(false);
     }

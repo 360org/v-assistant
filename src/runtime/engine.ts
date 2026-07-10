@@ -10,6 +10,11 @@
  */
 
 import { getProvider, type ProviderId } from "@/lib/catalog";
+import {
+  isConfigured,
+  streamProvider,
+  type ProviderConfig,
+} from "./providers";
 
 export interface ChatMessage {
   id: string;
@@ -20,7 +25,10 @@ export interface ChatMessage {
 
 export interface ChatOptions {
   provider: ProviderId;
+  /** Credentials for the provider; real calls happen when present. */
+  config?: ProviderConfig;
   agentName?: string;
+  agentDescription?: string;
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
 }
@@ -61,18 +69,49 @@ const demoEngine: Engine = {
   },
 };
 
+/** The persona sent to real providers as the system prompt. */
+function buildSystemPrompt(options: ChatOptions): string {
+  const base =
+    "You are V Assistant, a helpful personal AI assistant for everyday " +
+    "work. Be concise and concrete. Always answer in the user's language.";
+  if (!options.agentName) return base;
+  return (
+    `${base}\n\nYou are currently acting as the user's ${options.agentName}. ` +
+    `${options.agentDescription ?? ""}`
+  );
+}
+
+/** Streams from the selected provider's real API. */
+const providerEngine: Engine = {
+  async *chat(messages, options) {
+    yield* streamProvider(
+      options.provider,
+      options.config!,
+      buildSystemPrompt(options),
+      messages,
+    );
+  },
+};
+
 /**
- * Engine selection, decided per message: inside the desktop shell with a
- * NanoClaw engine attached, chat goes through the runtime; anywhere else
- * (web preview, engine not installed) the preview engine answers, so the
- * product is always usable.
+ * Engine selection, decided per message:
+ *  1. Desktop shell with a NanoClaw engine attached → the agent runtime.
+ *  2. Provider configured (API key / local server) → real provider API.
+ *  3. Otherwise → the built-in preview engine, so the app is always usable.
  */
 export function createEngine(): Engine {
   return {
     async *chat(messages, options) {
       const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
-      const engine = (await engineRunning()) ? nanoclawEngine : demoEngine;
-      yield* engine.chat(messages, options);
+      if (await engineRunning()) {
+        yield* nanoclawEngine.chat(messages, options);
+        return;
+      }
+      if (isConfigured(options.provider, options.config)) {
+        yield* providerEngine.chat(messages, options);
+        return;
+      }
+      yield* demoEngine.chat(messages, options);
     },
   };
 }

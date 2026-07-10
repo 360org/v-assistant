@@ -5,32 +5,22 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { INTEGRATIONS, PROVIDERS, type ProviderId } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { ProviderConnect } from "@/components/ProviderConnect";
 import { cn } from "@/lib/utils";
 
 type Step = "welcome" | "login" | "connect";
 
 export function Onboarding() {
-  const { completeOnboarding } = useApp();
+  const { completeOnboarding, setProviderConfig } = useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [provider, setProvider] = useState<ProviderId | null>(null);
-  const [connecting, setConnecting] = useState<ProviderId | null>(null);
+  const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-
-  const chooseProvider = (id: ProviderId) => {
-    // Real build: opens the provider's OAuth window. The demo engine skips
-    // straight to connected so the flow stays under two minutes.
-    setConnecting(id);
-    setTimeout(() => {
-      setProvider(id);
-      setConnecting(null);
-      setStep("connect");
-    }, 700);
-  };
 
   const toggle = (id: string) =>
     setSelected((s) =>
@@ -80,12 +70,10 @@ export function Onboarding() {
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.id}
-                    disabled={connecting !== null}
-                    onClick={() => chooseProvider(p.id)}
+                    onClick={() => setConnectFor(p.id)}
                     className={cn(
                       "flex cursor-pointer items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/60 px-4 py-3.5 text-left transition-colors",
                       "hover:border-gold-400/50 hover:bg-neutral-800/70",
-                      "disabled:pointer-events-none disabled:opacity-60",
                     )}
                   >
                     <div>
@@ -96,14 +84,19 @@ export function Onboarding() {
                         {p.tagline}
                       </div>
                     </div>
-                    {connecting === p.id ? (
-                      <Sparkles className="size-4 animate-pulse text-gold-300" />
-                    ) : (
-                      <ArrowRight className="size-4 text-neutral-600" />
-                    )}
+                    <ArrowRight className="size-4 text-neutral-600" />
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => {
+                  setProvider("openrouter");
+                  setStep("connect");
+                }}
+                className="mt-4 w-full cursor-pointer text-center text-sm text-neutral-500 hover:text-neutral-300"
+              >
+                Try the preview without an account
+              </button>
             </div>
           )}
 
@@ -153,6 +146,19 @@ export function Onboarding() {
           )}
         </motion.div>
       </AnimatePresence>
+
+      {connectFor && (
+        <ProviderConnect
+          provider={connectFor}
+          onClose={() => setConnectFor(null)}
+          onSave={(config) => {
+            if (config) setProviderConfig(connectFor, config);
+            setProvider(connectFor);
+            setConnectFor(null);
+            setStep("connect");
+          }}
+        />
+      )}
     </div>
   );
 }

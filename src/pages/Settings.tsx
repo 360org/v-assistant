@@ -1,12 +1,22 @@
+import { useState } from "react";
 import { useApp } from "@/lib/store";
-import { PROVIDERS } from "@/lib/catalog";
+import { PROVIDERS, type ProviderId } from "@/lib/catalog";
+import { isConfigured } from "@/runtime/providers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ProviderConnect } from "@/components/ProviderConnect";
 import { cn } from "@/lib/utils";
 
 export function Settings() {
-  const { provider, setProvider, resetApp } = useApp();
+  const {
+    provider,
+    setProvider,
+    providerConfigs,
+    setProviderConfig,
+    resetApp,
+  } = useApp();
+  const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
@@ -19,24 +29,56 @@ export function Settings() {
           Switch with one click. Your chats and knowledge stay.
         </p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {PROVIDERS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setProvider(p.id)}
-              className={cn(
-                "flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors",
-                provider === p.id
-                  ? "border-gold-400/60 bg-gold-400/10"
-                  : "border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800/70",
-              )}
-            >
-              <div>
-                <div className="text-sm font-semibold">{p.name}</div>
-                <div className="text-xs text-neutral-500">{p.tagline}</div>
-              </div>
-              {provider === p.id && <Badge tone="gold">Active</Badge>}
-            </button>
-          ))}
+          {PROVIDERS.map((p) => {
+            const connected = isConfigured(p.id, providerConfigs[p.id]);
+            return (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setProvider(p.id);
+                  if (!connected) setConnectFor(p.id);
+                }}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left transition-colors",
+                  provider === p.id
+                    ? "border-gold-400/60 bg-gold-400/10"
+                    : "border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800/70",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    {p.name}
+                    {connected ? (
+                      <Badge tone="green">Connected</Badge>
+                    ) : (
+                      <span className="text-[11px] font-normal text-neutral-600">
+                        not connected
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-neutral-500">{p.tagline}</div>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConnectFor(p.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.stopPropagation();
+                        setConnectFor(p.id);
+                      }
+                    }}
+                    className="mt-1 inline-block cursor-pointer text-xs text-gold-300 hover:underline"
+                  >
+                    {connected ? "Manage" : "Connect"}
+                  </span>
+                </div>
+                {provider === p.id && <Badge tone="gold">Active</Badge>}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -86,6 +128,18 @@ export function Settings() {
           </Button>
         </Card>
       </section>
+
+      {connectFor && (
+        <ProviderConnect
+          provider={connectFor}
+          initial={providerConfigs[connectFor]}
+          onClose={() => setConnectFor(null)}
+          onSave={(config) => {
+            setProviderConfig(connectFor, config);
+            setConnectFor(null);
+          }}
+        />
+      )}
     </div>
   );
 }

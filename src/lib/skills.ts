@@ -82,6 +82,19 @@ const files = import.meta.glob<string>("../../skills/*/SKILL.md", {
   eager: true,
 });
 
+/** Maps a parsed Agent Skill onto the app's card/template shape. */
+export function toTemplate(skill: AgentSkill): SkillTemplate {
+  return {
+    id: skill.name,
+    name: skill.metadata["vua-title"] ?? skill.name,
+    emoji: skill.metadata["vua-emoji"] ?? "🧩",
+    category: skill.metadata["vua-category"] ?? "General",
+    description: skill.metadata["vua-tagline"] ?? skill.description,
+    prompt: skill.metadata["vua-prompt"] ?? "",
+    instructions: skill.instructions,
+  };
+}
+
 export const SKILLS: SkillTemplate[] = Object.entries(files)
   .map(([path, raw]) => {
     const skill = parseSkillMd(raw);
@@ -92,15 +105,7 @@ export const SKILLS: SkillTemplate[] = Object.entries(files)
     }
     return {
       order: Number(skill.metadata["vua-order"] ?? 999),
-      template: {
-        id: skill.name,
-        name: skill.metadata["vua-title"] ?? skill.name,
-        emoji: skill.metadata["vua-emoji"] ?? "🧩",
-        category: skill.metadata["vua-category"] ?? "General",
-        description: skill.metadata["vua-tagline"] ?? skill.description,
-        prompt: skill.metadata["vua-prompt"] ?? "",
-        instructions: skill.instructions,
-      } satisfies SkillTemplate,
+      template: toTemplate(skill),
     };
   })
   .sort((a, b) => a.order - b.order)

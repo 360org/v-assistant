@@ -16,6 +16,7 @@ import {
 } from "react";
 import type { ProviderId } from "@/lib/catalog";
 import type { ChatMessage } from "@/runtime/engine";
+import type { ProviderConfig } from "@/runtime/providers";
 
 export type View =
   | "home"
@@ -36,14 +37,23 @@ export interface KnowledgeFile {
   status: KnowledgeStatus;
 }
 
+/** An external skill installed from a URL (raw SKILL.md, source kept). */
+export interface CustomSkill {
+  raw: string;
+  source: string;
+}
+
 interface PersistedState {
   onboarded: boolean;
   provider: ProviderId | null;
+  /** Per-provider credentials/config — stored on this device only. */
+  providerConfigs: Partial<Record<ProviderId, ProviderConfig>>;
   installedAgents: string[];
   connectedIntegrations: string[];
   knowledgeFiles: KnowledgeFile[];
   messages: ChatMessage[];
   activeAgentId: string | null;
+  customSkills: CustomSkill[];
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -51,11 +61,13 @@ const STORAGE_KEY = "v-assistant-state-v1";
 const initialState: PersistedState = {
   onboarded: false,
   provider: null,
+  providerConfigs: {},
   installedAgents: [],
   connectedIntegrations: [],
   knowledgeFiles: [],
   messages: [],
   activeAgentId: null,
+  customSkills: [],
 };
 
 function loadState(): PersistedState {
@@ -77,6 +89,12 @@ interface AppStore extends PersistedState {
   consumeChatDraft: () => void;
   completeOnboarding: (provider: ProviderId, integrations: string[]) => void;
   setProvider: (provider: ProviderId) => void;
+  setProviderConfig: (
+    provider: ProviderId,
+    config: ProviderConfig | null,
+  ) => void;
+  addCustomSkill: (skill: CustomSkill) => void;
+  removeCustomSkill: (source: string) => void;
   toggleAgent: (agentId: string) => void;
   setActiveAgent: (agentId: string | null) => void;
   toggleIntegration: (integrationId: string) => void;
@@ -130,6 +148,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setProvider = useCallback((provider: ProviderId) => {
     setState((s) => ({ ...s, provider }));
+  }, []);
+
+  const setProviderConfig = useCallback(
+    (provider: ProviderId, config: ProviderConfig | null) => {
+      setState((s) => {
+        const providerConfigs = { ...s.providerConfigs };
+        if (config) providerConfigs[provider] = config;
+        else delete providerConfigs[provider];
+        return { ...s, providerConfigs };
+      });
+    },
+    [],
+  );
+
+  const addCustomSkill = useCallback((skill: CustomSkill) => {
+    setState((s) => ({
+      ...s,
+      customSkills: [
+        ...s.customSkills.filter((c) => c.source !== skill.source),
+        skill,
+      ],
+    }));
+  }, []);
+
+  const removeCustomSkill = useCallback((source: string) => {
+    setState((s) => ({
+      ...s,
+      customSkills: s.customSkills.filter((c) => c.source !== source),
+    }));
   }, []);
 
   const toggleAgent = useCallback((agentId: string) => {
@@ -230,6 +277,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       consumeChatDraft,
       completeOnboarding,
       setProvider,
+      setProviderConfig,
+      addCustomSkill,
+      removeCustomSkill,
       toggleAgent,
       setActiveAgent,
       toggleIntegration,
@@ -247,6 +297,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       consumeChatDraft,
       completeOnboarding,
       setProvider,
+      setProviderConfig,
+      addCustomSkill,
+      removeCustomSkill,
       toggleAgent,
       setActiveAgent,
       toggleIntegration,
