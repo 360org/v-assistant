@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import { DEFAULT_MODELS, type ProviderConfig } from "@/runtime/providers";
+import { startOpenRouterLogin } from "@/runtime/oauth";
 import { Button } from "@/components/ui/button";
 
 const inputClass =
@@ -14,11 +15,13 @@ export function ProviderConnect({
   initial,
   onSave,
   onClose,
+  context = "settings",
 }: {
   provider: ProviderId;
   initial?: ProviderConfig;
   onSave: (config: ProviderConfig | null) => void;
   onClose: () => void;
+  context?: "onboarding" | "settings";
 }) {
   const info = getProvider(provider);
   const isLocal = provider === "local";
@@ -63,6 +66,30 @@ export function ProviderConnect({
 
         {info.hint && (
           <p className="mt-3 text-xs text-neutral-400">{info.hint}</p>
+        )}
+
+        {info.oauth ? (
+          <>
+            <Button
+              className="mt-4 w-full"
+              onClick={() => void startOpenRouterLogin(context)}
+            >
+              <LogIn className="size-4" /> {info.loginLabel}
+            </Button>
+            <div className="mt-4 flex items-center gap-3 text-[11px] text-neutral-600">
+              <span className="h-px flex-1 bg-neutral-800" />
+              or paste an API key
+              <span className="h-px flex-1 bg-neutral-800" />
+            </div>
+          </>
+        ) : (
+          !isLocal && (
+            <p className="mt-3 text-xs text-neutral-500">
+              Direct sign-in arrives once {info.name} approves third-party
+              apps. For now, connect with an API key — or use OpenRouter to
+              reach {info.name}'s models with one login.
+            </p>
+          )
         )}
 
         <div className="mt-4 flex flex-col gap-3">

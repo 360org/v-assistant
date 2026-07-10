@@ -16,7 +16,7 @@ export interface Provider {
   name: string;
   loginLabel: string;
   tagline: string;
-  /** Providers with OAuth need no API key — the "Continue with …" path. */
+  /** True when one-click direct sign-in (OAuth) is available today. */
   oauth: boolean;
   /** Where the user gets an API key. */
   keyUrl?: string;
@@ -26,41 +26,41 @@ export interface Provider {
 
 export const PROVIDERS: Provider[] = [
   {
+    id: "openrouter",
+    name: "OpenRouter",
+    loginLabel: "Continue with OpenRouter",
+    tagline: "GPT, Claude, Gemini & hundreds more — one login",
+    oauth: true,
+    keyUrl: "https://openrouter.ai/keys",
+    hint: "Sign in once and use GPT, Claude, Gemini, Llama and hundreds more.",
+  },
+{
     id: "chatgpt",
     name: "ChatGPT",
     loginLabel: "Continue with ChatGPT",
     tagline: "OpenAI GPT models",
-    oauth: true,
+    oauth: false,
     keyUrl: "https://platform.openai.com/api-keys",
     hint: "Browsers may block direct OpenAI calls; the desktop app or OpenRouter is the reliable path for GPT models.",
   },
-  {
+{
     id: "claude",
     name: "Claude",
     loginLabel: "Continue with Claude",
     tagline: "Anthropic Claude models",
-    oauth: true,
+    oauth: false,
     keyUrl: "https://console.anthropic.com/settings/keys",
   },
-  {
+{
     id: "gemini",
     name: "Gemini",
     loginLabel: "Continue with Gemini",
     tagline: "Google Gemini models",
-    oauth: true,
+    oauth: false,
     keyUrl: "https://aistudio.google.com/apikey",
     hint: "Google AI Studio issues free API keys in a few clicks.",
   },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    loginLabel: "Continue with OpenRouter",
-    tagline: "Hundreds of models, one account",
-    oauth: true,
-    keyUrl: "https://openrouter.ai/keys",
-    hint: "One key unlocks GPT, Claude, Gemini, Llama and hundreds more.",
-  },
-  {
+{
     id: "local",
     name: "Local AI",
     loginLabel: "Use Local AI",

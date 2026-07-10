@@ -3,12 +3,14 @@
  * No configuration, no terminal, no API keys when the provider supports OAuth.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Check } from "lucide-react";
 import { INTEGRATIONS, PROVIDERS, type ProviderId } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
+import { startOpenRouterLogin } from "@/runtime/oauth";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
 import { ProviderConnect } from "@/components/ProviderConnect";
 import { cn } from "@/lib/utils";
@@ -16,11 +18,30 @@ import { cn } from "@/lib/utils";
 type Step = "welcome" | "login" | "connect";
 
 export function Onboarding() {
-  const { completeOnboarding, setProviderConfig } = useApp();
+  const { completeOnboarding, setProviderConfig, oauthReturn, oauthError } =
+    useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [provider, setProvider] = useState<ProviderId | null>(null);
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+
+  // Back from a provider's sign-in page: the account is connected, resume
+  // at the integrations step.
+  useEffect(() => {
+    if (oauthReturn) {
+      setProvider(oauthReturn.provider);
+      setStep("connect");
+    }
+  }, [oauthReturn]);
+
+  const choose = (id: ProviderId) => {
+    if (id === "openrouter") {
+      // Real one-click sign-in — leaves the page, comes back connected.
+      void startOpenRouterLogin("onboarding");
+    } else {
+      setConnectFor(id);
+    }
+  };
 
   const toggle = (id: string) =>
     setSelected((s) =>
@@ -66,19 +87,27 @@ export function Onboarding() {
               <p className="mt-2 text-center text-sm text-neutral-400">
                 Use the AI account you already have. You can switch anytime.
               </p>
+              {oauthError && (
+                <p className="mt-3 text-center text-xs text-red-400">
+                  ⚠️ {oauthError}
+                </p>
+              )}
               <div className="mt-6 flex flex-col gap-2.5">
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => setConnectFor(p.id)}
+                    onClick={() => choose(p.id)}
                     className={cn(
-                      "flex cursor-pointer items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/60 px-4 py-3.5 text-left transition-colors",
-                      "hover:border-gold-400/50 hover:bg-neutral-800/70",
+                      "flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3.5 text-left transition-colors",
+                      p.oauth
+                        ? "border-gold-400/40 bg-gold-400/5 hover:border-gold-400/70 hover:bg-gold-400/10"
+                        : "border-neutral-800 bg-neutral-900/60 hover:border-gold-400/50 hover:bg-neutral-800/70",
                     )}
                   >
                     <div>
-                      <div className="text-sm font-semibold">
+                      <div className="flex items-center gap-2 text-sm font-semibold">
                         {p.loginLabel}
+                        {p.oauth && <Badge tone="gold">1-click</Badge>}
                       </div>
                       <div className="text-xs text-neutral-500">
                         {p.tagline}
@@ -150,6 +179,7 @@ export function Onboarding() {
       {connectFor && (
         <ProviderConnect
           provider={connectFor}
+          context="onboarding"
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
             if (config) setProviderConfig(connectFor, config);

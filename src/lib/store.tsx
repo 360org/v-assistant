@@ -17,6 +17,7 @@ import {
 import type { ProviderId } from "@/lib/catalog";
 import type { ChatMessage } from "@/runtime/engine";
 import type { ProviderConfig } from "@/runtime/providers";
+import { completeOAuthReturn, type OAuthReturn } from "@/runtime/oauth";
 
 export type View =
   | "home"
@@ -87,6 +88,10 @@ interface AppStore extends PersistedState {
   chatDraft: string | null;
   useSkill: (prompt: string) => void;
   consumeChatDraft: () => void;
+  /** Set when the app just returned from a provider sign-in redirect. */
+  oauthReturn: OAuthReturn | null;
+  /** Error from a failed sign-in return, for the UI to surface. */
+  oauthError: string | null;
   completeOnboarding: (provider: ProviderId, integrations: string[]) => void;
   setProvider: (provider: ProviderId) => void;
   setProviderConfig: (
@@ -113,6 +118,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(loadState);
   const [view, setView] = useState<View>("home");
   const [chatDraft, setChatDraft] = useState<string | null>(null);
+  const [oauthReturn, setOauthReturn] = useState<OAuthReturn | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+
+  // Returning from a provider's sign-in page: finish the code exchange and
+  // store the credential, then let the UI (onboarding/settings) continue.
+  useEffect(() => {
+    completeOAuthReturn()
+      .then((result) => {
+        if (!result) return;
+        setState((s) => ({
+          ...s,
+          provider: result.provider,
+          providerConfigs: {
+            ...s.providerConfigs,
+            [result.provider]: { apiKey: result.apiKey },
+          },
+        }));
+        setOauthReturn(result);
+      })
+      .catch((e) => setOauthError(e instanceof Error ? e.message : String(e)));
+  }, []);
 
   const useSkill = useCallback((prompt: string) => {
     setChatDraft(prompt);
@@ -275,6 +301,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       chatDraft,
       useSkill,
       consumeChatDraft,
+      oauthReturn,
+      oauthError,
       completeOnboarding,
       setProvider,
       setProviderConfig,
@@ -295,6 +323,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       chatDraft,
       useSkill,
       consumeChatDraft,
+      oauthReturn,
+      oauthError,
       completeOnboarding,
       setProvider,
       setProviderConfig,
