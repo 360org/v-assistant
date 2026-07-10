@@ -28,6 +28,30 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   local: "llama3.2",
 };
 
+/** The router all direct sign-ins go through (OpenRouter-style). */
+export const ROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+/**
+ * Model each "Login with …" maps to when signing in through the router —
+ * so "Continue with ChatGPT" reaches GPT, "Continue with Claude" reaches
+ * Claude, etc., all from one login and with no API key.
+ */
+export const ROUTED_MODELS: Record<ProviderId, string> = {
+  chatgpt: "openai/gpt-4o-mini",
+  claude: "anthropic/claude-3.5-sonnet",
+  gemini: "google/gemini-2.0-flash-001",
+  openrouter: "openrouter/auto",
+  local: "",
+};
+
+/** Build the provider config for a router sign-in (routes to the vendor). */
+export function routedConfig(
+  provider: ProviderId,
+  apiKey: string,
+): ProviderConfig {
+  return { apiKey, baseUrl: ROUTER_BASE_URL, model: ROUTED_MODELS[provider] };
+}
+
 /** True when the config is complete enough to make real calls. */
 export function isConfigured(
   provider: ProviderId,
@@ -45,6 +69,19 @@ export async function* streamProvider(
   messages: ChatMessage[],
 ): AsyncGenerator<string> {
   const model = config.model || DEFAULT_MODELS[provider];
+  // A base URL means OpenAI-compatible transport: the router (direct
+  // sign-in for any vendor) or a Local AI server. Native vendor APIs are
+  // only used when a raw key is supplied without a base URL.
+  if (config.baseUrl) {
+    yield* streamOpenAICompat(
+      config.baseUrl.replace(/\/$/, ""),
+      config.apiKey,
+      model,
+      system,
+      messages,
+    );
+    return;
+  }
   switch (provider) {
     case "claude":
       yield* streamAnthropic(config.apiKey!, model, system, messages);

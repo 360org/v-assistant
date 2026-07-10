@@ -22,6 +22,7 @@ import {
   fetchVendorAccount,
   type OAuthReturn,
 } from "@/runtime/oauth";
+import { routedConfig } from "@/runtime/providers";
 import { getProvider } from "@/lib/catalog";
 
 export type View =
@@ -157,8 +158,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     completeOAuthReturn()
       .then(async (result) => {
         if (!result) return;
-        // Sets config + creates the local user from the vendor account.
-        await connectProvider(result.provider, { apiKey: result.apiKey });
+        // Sets config (routed to the chosen vendor) + creates the local user.
+        await connectProvider(
+          result.provider,
+          routedConfig(result.provider, result.apiKey),
+        );
         setOauthReturn(result);
       })
       .catch((e) => setOauthError(e instanceof Error ? e.message : String(e)));

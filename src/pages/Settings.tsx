@@ -2,7 +2,7 @@ import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
-import { isConfigured } from "@/runtime/providers";
+import { isConfigured, routedConfig } from "@/runtime/providers";
 import { signIn } from "@/runtime/oauth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,11 @@ export function Settings() {
             <Button
               onClick={() =>
                 void signIn("openrouter", "settings").then((r) => {
-                  if (r) void connectProvider(r.provider, { apiKey: r.apiKey });
+                  if (r)
+                    void connectProvider(
+                      r.provider,
+                      routedConfig(r.provider, r.apiKey),
+                    );
                 })
               }
             >

@@ -3,6 +3,7 @@ import { ChevronDown, ExternalLink, Loader2, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import { DEFAULT_MODELS, type ProviderConfig } from "@/runtime/providers";
 import { signIn } from "@/runtime/oauth";
+import { routedConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,7 @@ export function ProviderConnect({
     try {
       const result = await signIn(provider, context);
       // Demo mode returns a credential in place; real mode navigated away.
-      if (result) onSave({ apiKey: result.apiKey });
+      if (result) onSave(routedConfig(result.provider, result.apiKey));
     } finally {
       setSigningIn(false);
     }

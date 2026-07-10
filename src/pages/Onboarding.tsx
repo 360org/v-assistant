@@ -14,6 +14,7 @@ import {
 } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
 import { signIn } from "@/runtime/oauth";
+import { routedConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
@@ -51,8 +52,12 @@ export function Onboarding() {
     try {
       const result = await signIn(id, "onboarding");
       if (result) {
-        // Demo mode returns here; real mode has navigated away.
-        await connectProvider(result.provider, { apiKey: result.apiKey });
+        // Demo mode returns here; real mode has navigated away. The sign-in
+        // routes the chosen vendor's models through the router key.
+        await connectProvider(
+          result.provider,
+          routedConfig(result.provider, result.apiKey),
+        );
         setProvider(result.provider);
         setStep("connect");
       }

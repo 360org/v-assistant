@@ -69,9 +69,9 @@ export async function signIn(
     await sleep(900); // "Redirecting to the provider…"
     return { provider, apiKey: "demo-key" };
   }
-  if (provider === "openrouter") {
-    await startOpenRouterLogin(context);
-  }
+  // Every direct sign-in goes through the router; the chosen vendor just
+  // decides which models the account is pointed at.
+  await startOpenRouterLogin(context, provider);
   return null; // navigated away
 }
 
@@ -96,14 +96,19 @@ async function s256(verifier: string): Promise<string> {
   return base64url(new Uint8Array(digest));
 }
 
-/** Kick off the OpenRouter PKCE login: leaves the page. */
+/**
+ * Kick off the PKCE login through the router (leaves the page). `provider`
+ * is the vendor the user picked ("Login with ChatGPT/Claude/Gemini") so the
+ * app can route to that vendor's models after the one login.
+ */
 export async function startOpenRouterLogin(
   context: OAuthReturn["context"],
+  provider: ProviderId = "openrouter",
 ): Promise<void> {
   const verifier = base64url(crypto.getRandomValues(new Uint8Array(48)));
   safeStore.set(
     PENDING_KEY,
-    JSON.stringify({ provider: "openrouter", verifier, context }),
+    JSON.stringify({ provider, verifier, context }),
   );
   const challenge = await s256(verifier);
   const callback = window.location.origin + window.location.pathname;
@@ -164,7 +169,9 @@ export async function fetchVendorAccount(
     return { label: `Demo user · ${getProvider(provider).name}`, detail: "Preview account" };
   }
   try {
-    if (provider === "openrouter") {
+    // Direct sign-ins all use a router key, so the account lives at the
+    // router regardless of which vendor button was clicked.
+    if (provider !== "local") {
       const res = await fetch("https://openrouter.ai/api/v1/key", {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
