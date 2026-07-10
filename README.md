@@ -93,3 +93,7 @@ src-tauri/            Tauri 2 shell (Rust)
 
 > If someone who has never used AI can download, install and start using it
 > in under 2 minutes without reading any documentation, we've met the bar.
+
+## Author
+
+**360org** · [vuaai.net](https://vuaai.net) · [support@vuaai.net](mailto:support@vuaai.net)

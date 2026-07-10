@@ -4,6 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "description": "V Assistant — AI for everyone. Download, install, login, connect, start.",
+  "author": {
+    "name": "360org",
+    "email": "support@vuaai.net",
+    "url": "https://vuaai.net"
+  },
+  "homepage": "https://vuaai.net",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

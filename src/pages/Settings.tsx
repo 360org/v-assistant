@@ -50,6 +50,25 @@ export function Settings() {
           <div className="mt-1">
             AI for everyone — install in 2 minutes, use immediately.
           </div>
+          <div className="mt-3 flex flex-col gap-1 border-t border-neutral-800 pt-3 text-xs">
+            <span>
+              Made by <span className="text-neutral-200">360org</span>
+            </span>
+            <a
+              href="https://vuaai.net"
+              target="_blank"
+              rel="noreferrer"
+              className="text-gold-300 hover:underline"
+            >
+              vuaai.net
+            </a>
+            <a
+              href="mailto:support@vuaai.net"
+              className="text-gold-300 hover:underline"
+            >
+              support@vuaai.net
+            </a>
+          </div>
         </Card>
       </section>
 
