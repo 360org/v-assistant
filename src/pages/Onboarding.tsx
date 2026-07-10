@@ -5,10 +5,15 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check } from "lucide-react";
-import { INTEGRATIONS, PROVIDERS, type ProviderId } from "@/lib/catalog";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
+import {
+  INTEGRATIONS,
+  PROVIDERS,
+  getProvider,
+  type ProviderId,
+} from "@/lib/catalog";
 import { useApp } from "@/lib/store";
-import { startOpenRouterLogin } from "@/runtime/oauth";
+import { signIn } from "@/runtime/oauth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
@@ -23,6 +28,7 @@ export function Onboarding() {
   const [step, setStep] = useState<Step>("welcome");
   const [provider, setProvider] = useState<ProviderId | null>(null);
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
+  const [signingIn, setSigningIn] = useState<ProviderId | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
 
   // Back from a provider's sign-in page: the account is connected, resume
@@ -34,12 +40,24 @@ export function Onboarding() {
     }
   }, [oauthReturn]);
 
-  const choose = (id: ProviderId) => {
-    if (id === "openrouter") {
-      // Real one-click sign-in — leaves the page, comes back connected.
-      void startOpenRouterLogin("onboarding");
-    } else {
+  const choose = async (id: ProviderId) => {
+    // Providers with direct sign-in log in one click; others open the
+    // connect dialog (key under Advanced).
+    if (!getProvider(id).oauth) {
       setConnectFor(id);
+      return;
+    }
+    setSigningIn(id);
+    try {
+      const result = await signIn(id, "onboarding");
+      if (result) {
+        // Demo mode returns here; real mode has navigated away.
+        await connectProvider(result.provider, { apiKey: result.apiKey });
+        setProvider(result.provider);
+        setStep("connect");
+      }
+    } finally {
+      setSigningIn(null);
     }
   };
 
@@ -96,9 +114,10 @@ export function Onboarding() {
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => choose(p.id)}
+                    disabled={signingIn !== null}
+                    onClick={() => void choose(p.id)}
                     className={cn(
-                      "flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3.5 text-left transition-colors",
+                      "flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3.5 text-left transition-colors disabled:opacity-60",
                       p.oauth
                         ? "border-gold-400/40 bg-gold-400/5 hover:border-gold-400/70 hover:bg-gold-400/10"
                         : "border-neutral-800 bg-neutral-900/60 hover:border-gold-400/50 hover:bg-neutral-800/70",
@@ -110,10 +129,14 @@ export function Onboarding() {
                         {p.oauth && <Badge tone="gold">1-click</Badge>}
                       </div>
                       <div className="text-xs text-neutral-500">
-                        {p.tagline}
+                        {signingIn === p.id ? "Signing you in…" : p.tagline}
                       </div>
                     </div>
-                    <ArrowRight className="size-4 text-neutral-600" />
+                    {signingIn === p.id ? (
+                      <Loader2 className="size-4 animate-spin text-gold-300" />
+                    ) : (
+                      <ArrowRight className="size-4 text-neutral-600" />
+                    )}
                   </button>
                 ))}
               </div>

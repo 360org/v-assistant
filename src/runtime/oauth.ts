@@ -9,9 +9,71 @@
  * here once those vendors issue us OAuth client credentials.
  */
 
-import type { ProviderId } from "@/lib/catalog";
+import { getProvider, type ProviderId } from "@/lib/catalog";
 
 const PENDING_KEY = "v-assistant-oauth-pending";
+
+/**
+ * Demo build: the artifact/preview can't complete a real OAuth round-trip
+ * (external redirect is blocked, storage is sandboxed). In demo mode the
+ * sign-in simulates the vendor round-trip locally so the full login UX is
+ * visible; the real desktop/hosted build does true OAuth.
+ */
+export const DEMO_MODE = import.meta.env.VITE_DEMO === "1";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Storage that never throws (sandboxed webviews block localStorage). */
+const safeStore = {
+  get(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* no persistence available */
+    }
+  },
+  remove(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* no-op */
+    }
+  },
+};
+
+export interface LoginResult {
+  provider: ProviderId;
+  apiKey: string;
+}
+
+/**
+ * Start direct sign-in with a provider. Real mode navigates to the vendor
+ * and never returns (the app resumes via `completeOAuthReturn` after the
+ * redirect). Demo mode simulates the round-trip and resolves with a
+ * credential so the caller can finish the flow in place.
+ */
+export async function signIn(
+  provider: ProviderId,
+  context: OAuthReturn["context"],
+): Promise<LoginResult | null> {
+  if (DEMO_MODE) {
+    await sleep(900); // "Redirecting to the provider…"
+    return { provider, apiKey: "demo-key" };
+  }
+  if (provider === "openrouter") {
+    await startOpenRouterLogin(context);
+  }
+  return null; // navigated away
+}
 
 export interface OAuthReturn {
   provider: ProviderId;
@@ -39,7 +101,7 @@ export async function startOpenRouterLogin(
   context: OAuthReturn["context"],
 ): Promise<void> {
   const verifier = base64url(crypto.getRandomValues(new Uint8Array(48)));
-  localStorage.setItem(
+  safeStore.set(
     PENDING_KEY,
     JSON.stringify({ provider: "openrouter", verifier, context }),
   );
@@ -57,9 +119,9 @@ export async function startOpenRouterLogin(
  */
 export async function completeOAuthReturn(): Promise<OAuthReturn | null> {
   const code = new URLSearchParams(window.location.search).get("code");
-  const pendingRaw = localStorage.getItem(PENDING_KEY);
+  const pendingRaw = safeStore.get(PENDING_KEY);
   if (!code || !pendingRaw) return null;
-  localStorage.removeItem(PENDING_KEY);
+  safeStore.remove(PENDING_KEY);
   const pending = JSON.parse(pendingRaw) as {
     provider: ProviderId;
     verifier: string;
@@ -98,6 +160,9 @@ export async function fetchVendorAccount(
   provider: ProviderId,
   apiKey: string,
 ): Promise<VendorAccount | null> {
+  if (DEMO_MODE) {
+    return { label: `Demo user · ${getProvider(provider).name}`, detail: "Preview account" };
+  }
   try {
     if (provider === "openrouter") {
       const res = await fetch("https://openrouter.ai/api/v1/key", {

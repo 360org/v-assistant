@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, ExternalLink, LogIn, X } from "lucide-react";
+import { ChevronDown, ExternalLink, Loader2, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import { DEFAULT_MODELS, type ProviderConfig } from "@/runtime/providers";
-import { startOpenRouterLogin } from "@/runtime/oauth";
+import { signIn } from "@/runtime/oauth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,8 +41,20 @@ export function ProviderConnect({
   const [advanced, setAdvanced] = useState(
     Boolean(initial?.apiKey) || (!info.oauth && !isLocal),
   );
+  const [signingIn, setSigningIn] = useState(false);
 
   const valid = isLocal ? baseUrl.trim() !== "" : apiKey.trim() !== "";
+
+  const login = async () => {
+    setSigningIn(true);
+    try {
+      const result = await signIn(provider, context);
+      // Demo mode returns a credential in place; real mode navigated away.
+      if (result) onSave({ apiKey: result.apiKey });
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const save = () => {
     onSave({
@@ -107,9 +119,18 @@ export function ProviderConnect({
             {info.oauth ? (
               <Button
                 className="mt-4 w-full"
-                onClick={() => void startOpenRouterLogin(context)}
+                disabled={signingIn}
+                onClick={() => void login()}
               >
-                <LogIn className="size-4" /> {info.loginLabel}
+                {signingIn ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Signing in…
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="size-4" /> {info.loginLabel}
+                  </>
+                )}
               </Button>
             ) : (
               <p className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-xs text-neutral-400">

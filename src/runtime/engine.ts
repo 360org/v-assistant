@@ -15,6 +15,7 @@ import {
   streamProvider,
   type ProviderConfig,
 } from "./providers";
+import { DEMO_MODE } from "./oauth";
 
 export interface ChatMessage {
   id: string;
@@ -102,6 +103,11 @@ const providerEngine: Engine = {
 export function createEngine(): Engine {
   return {
     async *chat(messages, options) {
+      // Demo build has no real backend and a strict CSP: always preview.
+      if (DEMO_MODE) {
+        yield* demoEngine.chat(messages, options);
+        return;
+      }
       const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
       if (await engineRunning()) {
         yield* nanoclawEngine.chat(messages, options);

@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { LogIn } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
 import { isConfigured } from "@/runtime/providers";
+import { signIn } from "@/runtime/oauth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,9 +27,9 @@ export function Settings() {
       <h1 className="text-2xl font-bold">Settings</h1>
       <p className="mt-1 text-neutral-400">Simple by design.</p>
 
-      {user && (
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold text-neutral-300">Account</h2>
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-neutral-300">Account</h2>
+        {user ? (
           <Card className="mt-3 flex items-center gap-3">
             <div className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950">
               {user.name.charAt(0).toUpperCase()}
@@ -41,8 +43,27 @@ export function Settings() {
             </div>
             <Badge tone="green">Local user</Badge>
           </Card>
-        </section>
-      )}
+        ) : (
+          <Card className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <div className="font-semibold">You're in preview mode</div>
+              <div className="text-xs text-neutral-500">
+                Sign in with an AI account to unlock real answers. It creates
+                your local user automatically — no separate registration.
+              </div>
+            </div>
+            <Button
+              onClick={() =>
+                void signIn("openrouter", "settings").then((r) => {
+                  if (r) void connectProvider(r.provider, { apiKey: r.apiKey });
+                })
+              }
+            >
+              <LogIn className="size-4" /> Sign in with AI
+            </Button>
+          </Card>
+        )}
+      </section>
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-neutral-300">AI Provider</h2>
