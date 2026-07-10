@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold-50: #fdf8ec;
+  --color-gold-100: #f9edcc;
+  --color-gold-200: #f3da95;
+  --color-gold-300: #ecc25e;
+  --color-gold-400: #e6ad39;
+  --color-gold-500: #dd9422;
+  --color-gold-600: #c4741b;
+  --color-gold-700: #a3541a;
+  --color-gold-800: #85421c;
+  --color-gold-900: #6e371a;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-neutral-950 text-neutral-100 antialiased;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[data-selectable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Slim, unobtrusive scrollbars, similar to native desktop apps. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
