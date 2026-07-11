@@ -125,7 +125,12 @@ export function Skills() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => useSkill(template.prompt || template.description)}
+                onClick={() =>
+                  useSkill(template.prompt || template.description, {
+                    name: template.name,
+                    instructions: template.instructions,
+                  })
+                }
               >
                 <Wand2 className="size-3.5" /> Use
               </Button>
@@ -154,7 +159,12 @@ export function Skills() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => useSkill(skill.prompt)}
+                onClick={() =>
+                  useSkill(skill.prompt, {
+                    name: skill.name,
+                    instructions: skill.instructions,
+                  })
+                }
               >
                 <Wand2 className="size-3.5" /> Use
               </Button>

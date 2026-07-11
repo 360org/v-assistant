@@ -32,6 +32,10 @@ export interface ChatOptions {
   agentDescription?: string;
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
+  /** Active skill's name — shown to the model as the task it's running. */
+  skillName?: string;
+  /** Active skill's full SKILL.md instructions, injected as guidance. */
+  skillInstructions?: string;
 }
 
 export interface Engine {
@@ -72,14 +76,21 @@ const demoEngine: Engine = {
 
 /** The persona sent to real providers as the system prompt. */
 function buildSystemPrompt(options: ChatOptions): string {
-  const base =
+  let prompt =
     "You are V Assistant, a helpful personal AI assistant for everyday " +
     "work. Be concise and concrete. Always answer in the user's language.";
-  if (!options.agentName) return base;
-  return (
-    `${base}\n\nYou are currently acting as the user's ${options.agentName}. ` +
-    `${options.agentDescription ?? ""}`
-  );
+  if (options.agentName) {
+    prompt +=
+      `\n\nYou are currently acting as the user's ${options.agentName}. ` +
+      `${options.agentDescription ?? ""}`;
+  }
+  // The active skill's full instructions steer how the model does the task.
+  if (options.skillInstructions) {
+    prompt +=
+      `\n\nYou are performing the "${options.skillName ?? "task"}" skill. ` +
+      `Follow these instructions exactly:\n\n${options.skillInstructions}`;
+  }
+  return prompt;
 }
 
 /** Streams from the selected provider's real API. */

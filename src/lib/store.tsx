@@ -58,6 +58,12 @@ export interface CustomSkill {
   source: string;
 }
 
+/** The skill steering a chat: its name and full SKILL.md instructions. */
+export interface ActiveSkill {
+  name: string;
+  instructions: string;
+}
+
 /**
  * The local user, created automatically on first sign-in from the vendor
  * account — no separate registration. Lives only on this device.
@@ -134,7 +140,10 @@ interface AppStore extends PersistedState {
   setView: (view: View) => void;
   /** One-shot draft for the chat composer (set by Skills → Use). */
   chatDraft: string | null;
-  useSkill: (prompt: string) => void;
+  /** The skill whose instructions are steering the current chat, if any. */
+  activeSkill: ActiveSkill | null;
+  useSkill: (prompt: string, skill?: ActiveSkill) => void;
+  clearActiveSkill: () => void;
   consumeChatDraft: () => void;
   /** Set when the app just returned from a provider sign-in redirect. */
   oauthReturn: OAuthReturn | null;
@@ -178,6 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(loadState);
   const [view, setView] = useState<View>("home");
   const [chatDraft, setChatDraft] = useState<string | null>(null);
+  const [activeSkill, setActiveSkill] = useState<ActiveSkill | null>(null);
   const [oauthReturn, setOauthReturn] = useState<OAuthReturn | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
 
@@ -199,10 +209,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const useSkill = useCallback((prompt: string) => {
+  const useSkill = useCallback((prompt: string, skill?: ActiveSkill) => {
     setChatDraft(prompt);
+    setActiveSkill(skill ?? null);
     setView("chat");
   }, []);
+
+  const clearActiveSkill = useCallback(() => setActiveSkill(null), []);
 
   const consumeChatDraft = useCallback(() => setChatDraft(null), []);
 
@@ -475,6 +488,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       chatDraft,
       useSkill,
       consumeChatDraft,
+      activeSkill,
+      clearActiveSkill,
       oauthReturn,
       oauthError,
       completeOnboarding,
@@ -502,6 +517,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       chatDraft,
       useSkill,
       consumeChatDraft,
+      activeSkill,
+      clearActiveSkill,
       oauthReturn,
       oauthError,
       completeOnboarding,

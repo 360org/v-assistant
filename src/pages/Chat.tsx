@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Eraser, SendHorizonal } from "lucide-react";
+import { ChevronDown, Eraser, SendHorizonal, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import {
   AGENT_STORE,
@@ -26,6 +26,8 @@ export function Chat() {
     chatDraft,
     consumeChatDraft,
     providerConfigs,
+    activeSkill,
+    clearActiveSkill,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -84,6 +86,8 @@ export function Chat() {
         agentName: activeAgent?.name,
         agentDescription: activeAgent?.description,
         agentId: activeAgent?.id,
+        skillName: activeSkill?.name,
+        skillInstructions: activeSkill?.instructions,
       })) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -126,6 +130,19 @@ export function Chat() {
                 </option>
               ))}
             </select>
+          )}
+          {activeSkill && (
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold-400/15 px-2.5 py-0.5 text-xs font-medium text-gold-300">
+              <Wand2 className="size-3" />
+              {activeSkill.name}
+              <button
+                onClick={clearActiveSkill}
+                className="cursor-pointer rounded-full hover:text-gold-100"
+                title="Stop using this skill"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
           )}
         </div>
 
