@@ -24,9 +24,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-const inputClass =
-  "w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 " +
+const baseInput =
+  "rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 " +
   "text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400/60";
+const inputClass = `w-full ${baseInput}`;
 
 const blank = (): VaultEntry => ({
   id: newVaultId(),
@@ -251,13 +252,13 @@ function VaultEditor({
             {(form.fields ?? []).map((row, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input
-                  className={`${inputClass} w-2/5`}
+                  className={`${baseInput} w-1/3 shrink-0`}
                   value={row.label}
                   onChange={(e) => setCustom(i, { label: e.target.value })}
                   placeholder="Field name"
                 />
                 <input
-                  className={`${inputClass} flex-1`}
+                  className={`${baseInput} min-w-0 flex-1`}
                   type={row.secret ? "password" : "text"}
                   value={row.value}
                   onChange={(e) => setCustom(i, { value: e.target.value })}
