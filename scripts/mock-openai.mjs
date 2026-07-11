@@ -24,7 +24,7 @@ createServer((req, res) => {
     const user = [...messages].reverse().find((m) => m.role === "user");
     const reply =
       `Real streaming reply from ${model}: you said “${user?.content}”. ` +
-      `System prompt begins: “${system.slice(0, 220)}…”`;
+      `System prompt begins: “${system.slice(0, 2000)}…”`;
 
     res.writeHead(200, {
       "Content-Type": "text/event-stream",

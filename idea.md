@@ -72,11 +72,12 @@ engine execution pending) · ⬜ planned/not started
 ## 5. Agents  ← next feature
 
 - [x] Agent Store: one-click install; installed agent → system-prompt persona
-- [ ] **Instructions**: per-agent workflow/process config (ChatGPT-style) ⬜
-- [ ] **Soul**: personality/voice description that shapes replies ⬜
+- [x] **Instructions**: per-agent workflow/process config (ChatGPT-style),
+      injected into the system prompt — verified
+- [x] **Soul**: personality/voice description that shapes replies — verified
+- [x] Agent config screen (Configure dialog: Instructions + Soul)
 - [ ] **Memory**: persistent per-agent memory across chats ⬜
 - [ ] **Self-improving**: learn from interactions (Hermes-style) ⬜
-- [ ] Agent config screen surfacing all of the above ⬜
 - [ ] Agents read the Vault to perform real tool actions ⬜ → see §9
 
 ## 6. Knowledge
