@@ -81,6 +81,33 @@ export async function telegramTokenPresent(): Promise<boolean> {
 }
 
 /**
+ * Push a message to the user's Telegram (best-effort). Uses the bot token and
+ * the optional Chat ID saved in the Vault; a no-op if either is missing. Used
+ * to deliver scheduled-task results.
+ */
+export async function notifyTelegram(text: string): Promise<boolean> {
+  const token = await botToken();
+  if (!token) return false;
+  const entry = await findVaultEntry("telegram");
+  const chatId =
+    entry &&
+    (readField(entry, "Chat ID") ??
+      readField(entry, "chatId") ??
+      entry.fields?.find((f) => /chat/i.test(f.label))?.value);
+  if (!chatId) return false;
+  try {
+    await fetch(`${API}/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: text.slice(0, TELEGRAM_MAX) }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Start the Telegram channel. Idempotent: a second call is a no-op while one
  * is already running. `resolve` returns the current chat options each time a
  * message arrives, so provider/agent switches take effect live.

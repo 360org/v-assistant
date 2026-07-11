@@ -25,7 +25,9 @@ import {
 } from "@/runtime/oauth";
 import { routedConfig } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
-import { startTelegram, stopTelegram } from "@/runtime/telegram";
+import { notifyTelegram, startTelegram, stopTelegram } from "@/runtime/telegram";
+import { runDueTasks } from "@/runtime/scheduler";
+import { newMessageId } from "@/runtime/engine";
 import { AGENT_STORE, getProvider, PROVIDERS } from "@/lib/catalog";
 
 /** Vault key holding a provider's secret (API key / router token). */
@@ -100,6 +102,8 @@ export interface ScheduledTask {
   schedule: string;
   enabled: boolean;
   createdAt: number;
+  /** When the task last ran (ms), so it isn't fired twice. */
+  lastRun?: number;
 }
 
 interface PersistedState {
@@ -316,6 +320,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => stopTelegram();
   }, [telegramOn, resolveChatOptions]);
 
+  // Scheduled tasks: tick once a minute and run whatever is due. Results show
+  // up in chat and, when Telegram is connected, are pushed there too.
+  useEffect(() => {
+    let ticking = false;
+    const tick = async () => {
+      if (ticking) return;
+      ticking = true;
+      try {
+        await runDueTasks(stateRef.current.scheduledTasks, new Date(), {
+          resolveOptions: resolveChatOptions,
+          markRun: (id, at) =>
+            setState((s) => ({
+              ...s,
+              scheduledTasks: s.scheduledTasks.map((t) =>
+                t.id === id ? { ...t, lastRun: at } : t,
+              ),
+            })),
+          deliver: async (task, result) => {
+            setState((s) => ({
+              ...s,
+              messages: [
+                ...s.messages,
+                {
+                  id: newMessageId(),
+                  role: "assistant",
+                  content: `⏰ ${task.name}\n\n${result}`,
+                  createdAt: Date.now(),
+                },
+              ],
+            }));
+            void notifyTelegram(`⏰ ${task.name}\n\n${result}`);
+          },
+        });
+      } finally {
+        ticking = false;
+      }
+    };
+    const timer = setInterval(() => void tick(), 60_000);
+    // A short initial delay lets sign-in/rehydration settle before the first
+    // check, so a task due "now" fires soon after launch.
+    const warmup = setTimeout(() => void tick(), 5_000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(warmup);
+    };
+    // resolveChatOptions is stable; the tick reads live state from the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolveChatOptions]);
+
   const completeOnboarding = useCallback(
     (provider: ProviderId, integrations: string[]) => {
       setState((s) => ({
@@ -412,6 +465,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ...task,
             id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
             createdAt: Date.now(),
+            // Seed lastRun to now so a task doesn't back-fire the moment it's
+            // created (e.g. a "daily at 9:00" added at 14:00 waits for 9:00).
+            lastRun: Date.now(),
           },
           ...s.scheduledTasks,
         ],

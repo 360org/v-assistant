@@ -23,6 +23,8 @@ jobs:
       - run: node scripts/tool-loop-check.mjs
       # Telegram 2-way channel: inbound message → assistant → reply, in-app.
       - run: node scripts/telegram-check.mjs
+      # Scheduled tasks: schedule matching + a due task runs and delivers.
+      - run: node scripts/schedule-check.mjs
 
   rust:
     runs-on: ubuntu-22.04

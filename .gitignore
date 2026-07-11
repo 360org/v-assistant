@@ -12,6 +12,7 @@ src-tauri/gen/schemas/
 # Temp check artifacts
 scripts/.tool-loop-*.mjs
 scripts/.telegram-*.mjs
+scripts/.schedule-*.mjs
 
 # Editor / OS
 .DS_Store

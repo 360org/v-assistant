@@ -116,10 +116,14 @@ engine execution pending) · ⬜ planned/not started
       secret → replies. Verified end-to-end (`scripts/tool-loop-check.mjs`,
       runs in CI)
 
-## 10. Scheduled tasks
+## 10. Scheduled tasks  ✅
 
 - [x] Menu + page: create task (name, instruction, schedule), pause/resume, delete
-- [ ] Engine actually runs tasks on schedule and messages results back ⬜
+- [x] Schedule matcher (`schedule.ts`): daily/weekday/named-day/hourly/monthly
+- [x] Runner (`scheduler.ts`) ticks each minute, runs due tasks through the
+      embedded assistant, records `lastRun` so nothing double-fires
+- [x] Results delivered to chat and pushed to Telegram when connected.
+      Verified (`scripts/schedule-check.mjs`, runs in CI)
 
 ## 11. Agent engine
 
