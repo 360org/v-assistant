@@ -66,19 +66,47 @@ export function vaultIsSecure(): boolean {
  * item; a small index lists them for the UI (secrets stay in the items).
  * ---------------------------------------------------------------------- */
 
+/** A user-added custom field on a Vault entry (e.g. "API key", "Client ID"). */
+export interface VaultField {
+  label: string;
+  value: string;
+  /** Mask the value in the UI (passwords, tokens). */
+  secret?: boolean;
+}
+
 export interface VaultEntry {
   id: string;
   /** Friendly name the user (and agents) refer to, e.g. "My WordPress". */
   label: string;
-  /** Optional service/type hint, e.g. "wordpress", "gmail". */
-  service?: string;
   /** Site URL or API endpoint. */
   url?: string;
   username?: string;
   password?: string;
-  apiKey?: string;
   notes?: string;
+  /** Extra fields the user adds themselves. */
+  fields?: VaultField[];
+  /** Optional service/type tag (set by integrations for lookup). */
+  service?: string;
   updatedAt: number;
+}
+
+/** Read any field on an entry by name — default or custom (case-insensitive). */
+export function readField(
+  entry: VaultEntry,
+  name: string,
+): string | undefined {
+  const q = name.trim().toLowerCase();
+  const builtin: Record<string, string | undefined> = {
+    url: entry.url,
+    username: entry.username,
+    user: entry.username,
+    password: entry.password,
+    pass: entry.password,
+    notes: entry.notes,
+    note: entry.notes,
+  };
+  if (q in builtin && builtin[q]) return builtin[q];
+  return entry.fields?.find((f) => f.label.trim().toLowerCase() === q)?.value;
 }
 
 /** Non-secret summary used to render the list. */

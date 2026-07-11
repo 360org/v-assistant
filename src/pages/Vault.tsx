@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyRound, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   deleteVaultEntry,
   getVaultEntry,
@@ -9,6 +18,7 @@ import {
   vaultIsSecure,
   type VaultEntry,
   type VaultEntryMeta,
+  type VaultField,
 } from "@/runtime/vault";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +31,11 @@ const inputClass =
 const blank = (): VaultEntry => ({
   id: newVaultId(),
   label: "",
-  service: "",
   url: "",
   username: "",
   password: "",
-  apiKey: "",
   notes: "",
+  fields: [],
   updatedAt: Date.now(),
 });
 
@@ -149,12 +158,32 @@ function VaultEditor({
 
   const valid = useMemo(() => form.label.trim().length > 0, [form.label]);
 
+  const setCustom = (i: number, patch: Partial<VaultField>) =>
+    setForm((f) => ({
+      ...f,
+      fields: (f.fields ?? []).map((row, idx) =>
+        idx === i ? { ...row, ...patch } : row,
+      ),
+    }));
+  const addCustom = () =>
+    setForm((f) => ({
+      ...f,
+      fields: [...(f.fields ?? []), { label: "", value: "", secret: false }],
+    }));
+  const removeCustom = (i: number) =>
+    setForm((f) => ({
+      ...f,
+      fields: (f.fields ?? []).filter((_, idx) => idx !== i),
+    }));
+
   const save = async () => {
     setSaving(true);
     try {
       await saveVaultEntry({
         ...form,
         label: form.label.trim(),
+        // Drop custom rows with no name.
+        fields: (form.fields ?? []).filter((f) => f.label.trim() !== ""),
         updatedAt: Date.now(),
       });
       await onSaved();
@@ -165,7 +194,7 @@ function VaultEditor({
 
   const field = (
     label: string,
-    key: keyof VaultEntry,
+    key: "label" | "url" | "username" | "password" | "notes",
     opts: { placeholder?: string; type?: string } = {},
   ) => (
     <label className="text-xs text-neutral-400">
@@ -173,7 +202,7 @@ function VaultEditor({
       <input
         className={`${inputClass} mt-1`}
         type={opts.type ?? "text"}
-        value={(form[key] as string) ?? ""}
+        value={form[key] ?? ""}
         onChange={(e) => set({ [key]: e.target.value } as Partial<VaultEntry>)}
         placeholder={opts.placeholder}
       />
@@ -202,19 +231,67 @@ function VaultEditor({
           </button>
         </div>
 
+        {/* Default fields */}
         <div className="mt-4 flex flex-col gap-3">
           {field("Name *", "label", { placeholder: "My WordPress blog" })}
-          {field("Service (optional)", "service", {
-            placeholder: "wordpress",
-          })}
           {field("URL / endpoint", "url", {
             placeholder: "https://blog.example.com",
           })}
           {field("Username / email", "username")}
           {field("Password", "password", { type: "password" })}
-          {field("API key", "apiKey", { type: "password" })}
           {field("Notes", "notes")}
         </div>
+
+        {/* Custom fields the user adds themselves */}
+        {(form.fields ?? []).length > 0 && (
+          <div className="mt-4 flex flex-col gap-2 border-t border-neutral-800 pt-4">
+            <div className="text-xs font-medium text-neutral-400">
+              Custom fields
+            </div>
+            {(form.fields ?? []).map((row, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  className={`${inputClass} w-2/5`}
+                  value={row.label}
+                  onChange={(e) => setCustom(i, { label: e.target.value })}
+                  placeholder="Field name"
+                />
+                <input
+                  className={`${inputClass} flex-1`}
+                  type={row.secret ? "password" : "text"}
+                  value={row.value}
+                  onChange={(e) => setCustom(i, { value: e.target.value })}
+                  placeholder="Value"
+                />
+                <button
+                  onClick={() => setCustom(i, { secret: !row.secret })}
+                  className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+                  title={row.secret ? "Show value" : "Hide value"}
+                >
+                  {row.secret ? (
+                    <EyeOff className="size-4" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                </button>
+                <button
+                  onClick={() => removeCustom(i)}
+                  className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
+                  title="Remove field"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={addCustom}
+          className="mt-3 inline-flex cursor-pointer items-center gap-1.5 text-xs text-gold-300 hover:underline"
+        >
+          <Plus className="size-3.5" /> Add field
+        </button>
 
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose}>

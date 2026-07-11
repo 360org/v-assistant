@@ -126,11 +126,13 @@ function IntegrationConfig({
         id: vaultIdFor(integration.id),
         label: integration.name,
         service: integration.id,
-        apiKey: values.token ?? values.botToken ?? "",
-        username: values.chatId ?? "",
-        notes: Object.entries(values)
-          .map(([k, v]) => `${k}=${v}`)
-          .join("\n"),
+        fields: (integration.fields ?? [])
+          .map((f) => ({
+            label: f.label,
+            value: values[f.key] ?? "",
+            secret: f.secret,
+          }))
+          .filter((f) => f.value.trim() !== ""),
         updatedAt: Date.now(),
       });
       onSaved();
