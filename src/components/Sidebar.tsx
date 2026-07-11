@@ -1,6 +1,7 @@
 import {
   Blocks,
   Bot,
+  CalendarClock,
   Home,
   KeyRound,
   Library,
@@ -11,7 +12,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/store";
-import { getProvider } from "@/lib/catalog";
 import { Logo } from "@/components/Logo";
 
 const items: { view: View; label: string; icon: LucideIcon }[] = [
@@ -21,8 +21,8 @@ const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "skills", label: "Skills", icon: Wand2 },
   { view: "knowledge", label: "Knowledge", icon: Library },
   { view: "vault", label: "Vault", icon: KeyRound },
+  { view: "scheduled", label: "Scheduled", icon: CalendarClock },
   { view: "integrations", label: "Integrations", icon: Blocks },
-  { view: "settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar({
@@ -33,7 +33,7 @@ export function Sidebar({
   /** Called after picking a menu item (used to close the mobile drawer). */
   onNavigate?: () => void;
 }) {
-  const { view, setView, provider, user } = useApp();
+  const { view, setView, user } = useApp();
   const go = (v: View) => {
     setView(v);
     onNavigate?.();
@@ -72,40 +72,37 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className="mt-auto px-2 pb-1">
-        {user ? (
-          <button
-            onClick={() => go("settings")}
-            className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-left transition-colors hover:border-neutral-700"
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-sm font-bold text-neutral-950">
-              {user.name.charAt(0).toUpperCase()}
+      {/* User cluster: Settings lives here, grouped with the profile. */}
+      <div className="mt-auto flex flex-col gap-1 px-2 pb-1">
+        <button
+          onClick={() => go("settings")}
+          className={cn(
+            "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+            view === "settings"
+              ? "bg-neutral-800 text-neutral-50"
+              : "text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-200",
+          )}
+        >
+          <Settings className="size-4" />
+          Settings
+        </button>
+
+        <button
+          onClick={() => go("settings")}
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-left transition-colors hover:border-neutral-700"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-sm font-bold text-neutral-950">
+            {(user?.name ?? "V").charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-xs font-medium text-neutral-200">
+              {user?.name ?? "V Assistant"}
             </span>
-            <span className="min-w-0">
-              <span className="block truncate text-xs font-medium text-neutral-200">
-                {user.name}
-              </span>
-              <span className="block truncate text-[11px] text-neutral-500">
-                {provider ? getProvider(provider).name : "Signed in"}
-              </span>
+            <span className="block truncate text-[11px] text-neutral-500">
+              Powered by VuaAI.net
             </span>
-          </button>
-        ) : (
-          provider && (
-            <button
-              onClick={() => go("settings")}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-xs text-neutral-400 transition-colors hover:border-neutral-700"
-            >
-              <span className="size-2 rounded-full bg-emerald-400" />
-              <span>
-                Powered by{" "}
-                <span className="font-medium text-neutral-200">
-                  {getProvider(provider).name}
-                </span>
-              </span>
-            </button>
-          )
-        )}
+          </span>
+        </button>
       </div>
     </aside>
   );

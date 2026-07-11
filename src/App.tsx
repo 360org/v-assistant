@@ -11,6 +11,7 @@ import { Agents } from "@/pages/Agents";
 import { Skills } from "@/pages/Skills";
 import { Knowledge } from "@/pages/Knowledge";
 import { Vault } from "@/pages/Vault";
+import { Scheduled } from "@/pages/Scheduled";
 import { Integrations } from "@/pages/Integrations";
 import { Settings } from "@/pages/Settings";
 
@@ -21,6 +22,7 @@ const pages: Record<View, () => JSX.Element> = {
   skills: Skills,
   knowledge: Knowledge,
   vault: Vault,
+  scheduled: Scheduled,
   integrations: Integrations,
   settings: Settings,
 };

@@ -38,6 +38,7 @@ export type View =
   | "skills"
   | "knowledge"
   | "vault"
+  | "scheduled"
   | "integrations"
   | "settings";
 
