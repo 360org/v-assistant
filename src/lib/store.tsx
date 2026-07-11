@@ -71,6 +71,18 @@ export interface LocalUser {
   createdAt: number;
 }
 
+/** A recurring job the assistant runs on a schedule (NanoClaw scheduling). */
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  /** What the assistant should do each run. */
+  prompt: string;
+  /** Human recurrence, e.g. "Every day at 9:00". */
+  schedule: string;
+  enabled: boolean;
+  createdAt: number;
+}
+
 interface PersistedState {
   onboarded: boolean;
   /** The auto-created local user, or null before first sign-in. */
@@ -79,11 +91,14 @@ interface PersistedState {
   /** Per-provider credentials/config — stored on this device only. */
   providerConfigs: Partial<Record<ProviderId, ProviderConfig>>;
   installedAgents: string[];
+  /** NanoClaw engine skills the user has installed (channel/provider/etc). */
+  installedEngineSkills: string[];
   connectedIntegrations: string[];
   knowledgeFiles: KnowledgeFile[];
   messages: ChatMessage[];
   activeAgentId: string | null;
   customSkills: CustomSkill[];
+  scheduledTasks: ScheduledTask[];
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -94,11 +109,13 @@ const initialState: PersistedState = {
   provider: null,
   providerConfigs: {},
   installedAgents: [],
+  installedEngineSkills: [],
   connectedIntegrations: [],
   knowledgeFiles: [],
   messages: [],
   activeAgentId: null,
   customSkills: [],
+  scheduledTasks: [],
 };
 
 function loadState(): PersistedState {
@@ -138,6 +155,10 @@ interface AppStore extends PersistedState {
   ) => Promise<void>;
   addCustomSkill: (skill: CustomSkill) => void;
   removeCustomSkill: (source: string) => void;
+  toggleEngineSkill: (skillId: string) => void;
+  addScheduledTask: (task: Omit<ScheduledTask, "id" | "createdAt">) => void;
+  updateScheduledTask: (id: string, patch: Partial<ScheduledTask>) => void;
+  removeScheduledTask: (id: string) => void;
   toggleAgent: (agentId: string) => void;
   setActiveAgent: (agentId: string | null) => void;
   toggleIntegration: (integrationId: string) => void;
@@ -310,6 +331,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const toggleEngineSkill = useCallback((skillId: string) => {
+    setState((s) => ({
+      ...s,
+      installedEngineSkills: s.installedEngineSkills.includes(skillId)
+        ? s.installedEngineSkills.filter((id) => id !== skillId)
+        : [...s.installedEngineSkills, skillId],
+    }));
+  }, []);
+
+  const addScheduledTask = useCallback(
+    (task: Omit<ScheduledTask, "id" | "createdAt">) => {
+      setState((s) => ({
+        ...s,
+        scheduledTasks: [
+          {
+            ...task,
+            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+            createdAt: Date.now(),
+          },
+          ...s.scheduledTasks,
+        ],
+      }));
+    },
+    [],
+  );
+
+  const updateScheduledTask = useCallback(
+    (id: string, patch: Partial<ScheduledTask>) => {
+      setState((s) => ({
+        ...s,
+        scheduledTasks: s.scheduledTasks.map((t) =>
+          t.id === id ? { ...t, ...patch } : t,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const removeScheduledTask = useCallback((id: string) => {
+    setState((s) => ({
+      ...s,
+      scheduledTasks: s.scheduledTasks.filter((t) => t.id !== id),
+    }));
+  }, []);
+
   const toggleAgent = useCallback((agentId: string) => {
     setState((s) => ({
       ...s,
@@ -416,6 +482,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connectProvider,
       addCustomSkill,
       removeCustomSkill,
+      toggleEngineSkill,
+      addScheduledTask,
+      updateScheduledTask,
+      removeScheduledTask,
       toggleAgent,
       setActiveAgent,
       toggleIntegration,
@@ -439,6 +509,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connectProvider,
       addCustomSkill,
       removeCustomSkill,
+      toggleEngineSkill,
+      addScheduledTask,
+      updateScheduledTask,
+      removeScheduledTask,
       toggleAgent,
       setActiveAgent,
       toggleIntegration,

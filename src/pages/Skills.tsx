@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
-import { Download, Trash2, Wand2 } from "lucide-react";
+import { Check, Download, Trash2, Wand2 } from "lucide-react";
 import { SKILLS, parseSkillMd, toTemplate } from "@/lib/skills";
+import {
+  NANOCLAW_SKILLS,
+  ENGINE_SKILL_KIND_LABEL,
+} from "@/lib/nanoclawSkills";
 import { useApp } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +13,14 @@ import { Button } from "@/components/ui/button";
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 export function Skills() {
-  const { useSkill, customSkills, addCustomSkill, removeCustomSkill } =
-    useApp();
+  const {
+    useSkill,
+    customSkills,
+    addCustomSkill,
+    removeCustomSkill,
+    installedEngineSkills,
+    toggleEngineSkill,
+  } = useApp();
   const [url, setUrl] = useState("");
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +92,8 @@ export function Skills() {
       </div>
       {error && <p className="mt-2 text-xs text-red-400">⚠️ {error}</p>}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <h2 className="mt-8 text-lg font-semibold">Task skills</h2>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {custom.map(({ template, source }) => (
           <Card key={source} className="flex flex-col">
             <div className="flex items-start justify-between">
@@ -133,6 +144,50 @@ export function Skills() {
             </div>
           </Card>
         ))}
+      </div>
+
+      {/* NanoClaw engine skills — channels, providers, capabilities. */}
+      <div className="mt-12">
+        <h2 className="text-lg font-semibold">NanoClaw skills</h2>
+        <p className="mt-1 text-sm text-neutral-400">
+          Engine capabilities — channels, providers and powers. Install to
+          add them to your assistant.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {NANOCLAW_SKILLS.map((skill) => {
+            const installed = installedEngineSkills.includes(skill.id);
+            return (
+              <Card key={skill.id} className="flex items-center gap-4">
+                <span className="text-3xl">{skill.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{skill.name}</h3>
+                    <Badge>{ENGINE_SKILL_KIND_LABEL[skill.kind]}</Badge>
+                  </div>
+                  <p className="mt-0.5 text-sm text-neutral-400">
+                    {skill.description}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant={installed ? "ghost" : "secondary"}
+                  onClick={() => toggleEngineSkill(skill.id)}
+                  title={installed ? "Installed — click to remove" : skill.command}
+                >
+                  {installed ? (
+                    <>
+                      <Check className="size-3.5 text-emerald-400" /> Installed
+                    </>
+                  ) : (
+                    <>
+                      <Download className="size-3.5" /> Install
+                    </>
+                  )}
+                </Button>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
