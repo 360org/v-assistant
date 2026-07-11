@@ -67,7 +67,14 @@ export function vaultIsSecure(): boolean {
  * ---------------------------------------------------------------------- */
 
 /** The data type a user picks for a custom field. */
-export type VaultFieldType = "text" | "password" | "number" | "url" | "email";
+export type VaultFieldType =
+  | "text"
+  | "password"
+  | "number"
+  | "url"
+  | "email"
+  | "date"
+  | "datetime";
 
 /** A user-added custom field on a Vault entry (e.g. "API key", "Client ID"). */
 export interface VaultField {

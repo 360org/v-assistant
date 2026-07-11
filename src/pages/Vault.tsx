@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AtSign,
+  Calendar,
+  Clock,
   Eye,
   EyeOff,
+  Globe,
   Hash,
   KeyRound,
   Link2,
   Lock,
   Pencil,
   Plus,
+  StickyNote,
+  Tag,
   Trash2,
   Type as TypeIcon,
+  User,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -40,6 +46,13 @@ const FIELD_TYPES: {
   { type: "number", label: "Number", icon: Hash, inputType: "number" },
   { type: "url", label: "URL", icon: Link2, inputType: "url" },
   { type: "email", label: "Email", icon: AtSign, inputType: "email" },
+  { type: "date", label: "Date", icon: Calendar, inputType: "date" },
+  {
+    type: "datetime",
+    label: "Date & time",
+    icon: Clock,
+    inputType: "datetime-local",
+  },
 ];
 
 const fieldTypeInfo = (t: VaultFieldType | undefined) =>
@@ -51,7 +64,6 @@ import { Button } from "@/components/ui/button";
 const baseInput =
   "rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 " +
   "text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400/60";
-const inputClass = `w-full ${baseInput}`;
 
 const blank = (): VaultEntry => ({
   id: newVaultId(),
@@ -224,18 +236,24 @@ function VaultEditor({
   const field = (
     label: string,
     key: "label" | "url" | "username" | "password" | "notes",
+    Icon: LucideIcon,
     opts: { placeholder?: string; type?: string } = {},
   ) => (
-    <label className="text-xs text-neutral-400">
-      {label}
-      <input
-        className={`${inputClass} mt-1`}
-        type={opts.type ?? "text"}
-        value={form[key] ?? ""}
-        onChange={(e) => set({ [key]: e.target.value } as Partial<VaultEntry>)}
-        placeholder={opts.placeholder}
-      />
-    </label>
+    <div>
+      <div className="mb-1 text-xs text-neutral-400">{label}</div>
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-neutral-400">
+          <Icon className="size-4" />
+        </span>
+        <input
+          className={`${baseInput} min-w-0 flex-1`}
+          type={opts.type ?? "text"}
+          value={form[key] ?? ""}
+          onChange={(e) => set({ [key]: e.target.value } as Partial<VaultEntry>)}
+          placeholder={opts.placeholder}
+        />
+      </div>
+    </div>
   );
 
   return (
@@ -262,13 +280,13 @@ function VaultEditor({
 
         {/* Default fields */}
         <div className="mt-4 flex flex-col gap-3">
-          {field("Name *", "label", { placeholder: "My WordPress blog" })}
-          {field("URL / endpoint", "url", {
+          {field("Name *", "label", Tag, { placeholder: "My WordPress blog" })}
+          {field("URL / endpoint", "url", Globe, {
             placeholder: "https://blog.example.com",
           })}
-          {field("Username / email", "username")}
-          {field("Password", "password", { type: "password" })}
-          {field("Notes", "notes")}
+          {field("Username / email", "username", User)}
+          {field("Password", "password", Lock, { type: "password" })}
+          {field("Notes", "notes", StickyNote)}
         </div>
 
         {/* Custom fields the user adds themselves */}
