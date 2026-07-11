@@ -130,7 +130,7 @@ function IntegrationConfig({
           .map((f) => ({
             label: f.label,
             value: values[f.key] ?? "",
-            secret: f.secret,
+            type: (f.secret ? "password" : "text") as "password" | "text",
           }))
           .filter((f) => f.value.trim() !== ""),
         updatedAt: Date.now(),

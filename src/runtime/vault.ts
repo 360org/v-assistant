@@ -66,12 +66,22 @@ export function vaultIsSecure(): boolean {
  * item; a small index lists them for the UI (secrets stay in the items).
  * ---------------------------------------------------------------------- */
 
+/** The data type a user picks for a custom field. */
+export type VaultFieldType = "text" | "password" | "number" | "url" | "email";
+
 /** A user-added custom field on a Vault entry (e.g. "API key", "Client ID"). */
 export interface VaultField {
   label: string;
   value: string;
-  /** Mask the value in the UI (passwords, tokens). */
+  /** Chosen when the field is added; drives the value input's behaviour. */
+  type?: VaultFieldType;
+  /** Legacy flag; a "password" type is the masked kind. */
   secret?: boolean;
+}
+
+/** Whether a field's value should be masked in the UI. */
+export function isSecretField(field: VaultField): boolean {
+  return field.type === "password" || field.secret === true;
 }
 
 export interface VaultEntry {

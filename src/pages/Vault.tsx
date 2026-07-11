@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  AtSign,
   Eye,
   EyeOff,
+  Hash,
   KeyRound,
+  Link2,
   Lock,
   Pencil,
   Plus,
   Trash2,
+  Type as TypeIcon,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   deleteVaultEntry,
   getVaultEntry,
+  isSecretField,
   listVaultEntries,
   newVaultId,
   saveVaultEntry,
@@ -19,7 +25,25 @@ import {
   type VaultEntry,
   type VaultEntryMeta,
   type VaultField,
+  type VaultFieldType,
 } from "@/runtime/vault";
+
+/** The field types a user can pick when adding a custom field. */
+const FIELD_TYPES: {
+  type: VaultFieldType;
+  label: string;
+  icon: LucideIcon;
+  inputType: string;
+}[] = [
+  { type: "text", label: "Text", icon: TypeIcon, inputType: "text" },
+  { type: "password", label: "Password", icon: Lock, inputType: "password" },
+  { type: "number", label: "Number", icon: Hash, inputType: "number" },
+  { type: "url", label: "URL", icon: Link2, inputType: "url" },
+  { type: "email", label: "Email", icon: AtSign, inputType: "email" },
+];
+
+const fieldTypeInfo = (t: VaultFieldType | undefined) =>
+  FIELD_TYPES.find((f) => f.type === t) ?? FIELD_TYPES[0];
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -154,6 +178,8 @@ function VaultEditor({
 }) {
   const [form, setForm] = useState<VaultEntry>(entry);
   const [saving, setSaving] = useState(false);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const set = (patch: Partial<VaultEntry>) =>
     setForm((f) => ({ ...f, ...patch }));
 
@@ -166,11 +192,13 @@ function VaultEditor({
         idx === i ? { ...row, ...patch } : row,
       ),
     }));
-  const addCustom = () =>
+  const addCustom = (type: VaultFieldType) => {
     setForm((f) => ({
       ...f,
-      fields: [...(f.fields ?? []), { label: "", value: "", secret: false }],
+      fields: [...(f.fields ?? []), { label: "", value: "", type }],
     }));
+    setTypeMenuOpen(false);
+  };
   const removeCustom = (i: number) =>
     setForm((f) => ({
       ...f,
@@ -249,50 +277,96 @@ function VaultEditor({
             <div className="text-xs font-medium text-neutral-400">
               Custom fields
             </div>
-            {(form.fields ?? []).map((row, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  className={`${baseInput} w-1/3 shrink-0`}
-                  value={row.label}
-                  onChange={(e) => setCustom(i, { label: e.target.value })}
-                  placeholder="Field name"
-                />
-                <input
-                  className={`${baseInput} min-w-0 flex-1`}
-                  type={row.secret ? "password" : "text"}
-                  value={row.value}
-                  onChange={(e) => setCustom(i, { value: e.target.value })}
-                  placeholder="Value"
-                />
-                <button
-                  onClick={() => setCustom(i, { secret: !row.secret })}
-                  className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
-                  title={row.secret ? "Show value" : "Hide value"}
-                >
-                  {row.secret ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
+            {(form.fields ?? []).map((row, i) => {
+              const info = fieldTypeInfo(row.type);
+              const Icon = info.icon;
+              const secret = isSecretField(row);
+              const inputType = secret
+                ? revealed[i]
+                  ? "text"
+                  : "password"
+                : info.inputType;
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <span
+                    className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-neutral-400"
+                    title={info.label}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <input
+                    className={`${baseInput} w-1/3 shrink-0`}
+                    value={row.label}
+                    onChange={(e) => setCustom(i, { label: e.target.value })}
+                    placeholder="Field name"
+                  />
+                  <input
+                    className={`${baseInput} min-w-0 flex-1`}
+                    type={inputType}
+                    value={row.value}
+                    onChange={(e) => setCustom(i, { value: e.target.value })}
+                    placeholder={info.label}
+                  />
+                  {secret && (
+                    <button
+                      onClick={() =>
+                        setRevealed((r) => ({ ...r, [i]: !r[i] }))
+                      }
+                      className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+                      title={revealed[i] ? "Hide value" : "Show value"}
+                    >
+                      {revealed[i] ? (
+                        <EyeOff className="size-4" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                    </button>
                   )}
-                </button>
-                <button
-                  onClick={() => removeCustom(i)}
-                  className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
-                  title="Remove field"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-            ))}
+                  <button
+                    onClick={() => removeCustom(i)}
+                    className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
+                    title="Remove field"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        <button
-          onClick={addCustom}
-          className="mt-3 inline-flex cursor-pointer items-center gap-1.5 text-xs text-gold-300 hover:underline"
-        >
-          <Plus className="size-3.5" /> Add field
-        </button>
+        {/* Add field: pick a type first, then the row appears */}
+        <div className="relative mt-3 inline-block">
+          <button
+            onClick={() => setTypeMenuOpen((o) => !o)}
+            className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-gold-300 hover:underline"
+          >
+            <Plus className="size-3.5" /> Add field
+          </button>
+          {typeMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setTypeMenuOpen(false)}
+              />
+              <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-neutral-600">
+                  Field type
+                </div>
+                {FIELD_TYPES.map(({ type, label, icon: Icon }) => (
+                  <button
+                    key={type}
+                    onClick={() => addCustom(type)}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-neutral-300 hover:bg-neutral-800"
+                  >
+                    <Icon className="size-4 text-neutral-500" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose}>
