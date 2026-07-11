@@ -31,11 +31,18 @@ engine execution pending) · ⬜ planned/not started
 - [x] Login-first screen — only "Continue with …" buttons, no API key field
 - [x] One-click OAuth for every vendor via the router (ChatGPT→openai/*,
       Claude→anthropic/*, Gemini→google/*, OpenRouter→auto)
-- [x] Desktop: real loopback OAuth (native listener + system browser)
+- [x] Desktop: real loopback OAuth (native listener + system browser);
+      loopback contract verified (`examples/oauth_loopback_check`)
 - [x] Web (hosted https): real PKCE redirect
 - [x] Demo build: simulated round-trip (sandbox has no OAuth/network)
 - [x] First sign-in auto-creates the local user from the vendor account
 - [x] API key available under **Advanced options** as fallback
+- [x] Sign-in logic verified (`scripts/login-check.mjs`, in CI): code→key
+      exchange with PKCE (S256), each vendor routes to the right models
+      (ChatGPT→openai, Claude→anthropic, Gemini→google, OpenRouter→auto),
+      and the local user is created from the account
+- [ ] Manual check still needed: the live OAuth redirect + openrouter.ai
+      round-trip on a real desktop (can't run in CI — no browser) ⬜
 - [ ] Native per-vendor OAuth (needs each vendor's OAuth app credentials) ⬜
 
 ## 2. AI Providers

@@ -13,6 +13,7 @@ src-tauri/gen/schemas/
 scripts/.tool-loop-*.mjs
 scripts/.telegram-*.mjs
 scripts/.schedule-*.mjs
+scripts/.login-*.mjs
 
 # Editor / OS
 .DS_Store
