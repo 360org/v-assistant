@@ -11,6 +11,10 @@
 
 import type { ProviderId } from "@/lib/catalog";
 import type { ChatMessage } from "./engine";
+import type { AgentTool } from "./tools";
+
+/** Safety bound on the tool-calling loop (tool → result → model → …). */
+const MAX_TOOL_ROUNDS = 6;
 
 export interface ProviderConfig {
   apiKey?: string;
@@ -67,6 +71,7 @@ export async function* streamProvider(
   config: ProviderConfig,
   system: string,
   messages: ChatMessage[],
+  tools: AgentTool[] = [],
 ): AsyncGenerator<string> {
   const model = config.model || DEFAULT_MODELS[provider];
   // A base URL means OpenAI-compatible transport: the router (direct
@@ -79,6 +84,7 @@ export async function* streamProvider(
       model,
       system,
       messages,
+      tools,
     );
     return;
   }
@@ -96,6 +102,7 @@ export async function* streamProvider(
         model,
         system,
         messages,
+        tools,
       );
       return;
     case "chatgpt":
@@ -105,6 +112,7 @@ export async function* streamProvider(
         model,
         system,
         messages,
+        tools,
       );
       return;
     case "local":
@@ -114,6 +122,7 @@ export async function* streamProvider(
         model,
         system,
         messages,
+        tools,
       );
       return;
   }
@@ -149,35 +158,114 @@ async function raiseForStatus(response: Response): Promise<void> {
   throw new Error(`Provider error (${response.status}): ${detail}`);
 }
 
+/** One accumulated tool call as it streams in fragments. */
+interface PendingToolCall {
+  id: string;
+  name: string;
+  args: string;
+}
+
+/**
+ * OpenAI-compatible chat with an in-app tool-calling loop.
+ *
+ * Text deltas stream to the user as they arrive. When the model asks to call
+ * a tool, the fragments are accumulated, the tool runs locally (Vault, HTTP
+ * action), its result is fed back, and the model continues — until it
+ * produces a final answer with no more tool calls. With no tools this is a
+ * plain streaming chat, identical to before.
+ */
 async function* streamOpenAICompat(
   baseUrl: string,
   apiKey: string | undefined,
   model: string,
   system: string,
   messages: ChatMessage[],
+  tools: AgentTool[] = [],
 ): AsyncGenerator<string> {
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model,
-      stream: true,
-      messages: [
-        { role: "system", content: system },
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-      ],
-    }),
-  });
-  await raiseForStatus(response);
-  for await (const data of sseData(response)) {
-    try {
-      const delta = JSON.parse(data).choices?.[0]?.delta?.content;
-      if (delta) yield delta;
-    } catch {
-      /* ignore keep-alive frames */
+  const convo: Record<string, unknown>[] = [
+    { role: "system", content: system },
+    ...messages.map((m) => ({ role: m.role, content: m.content })),
+  ];
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        stream: true,
+        messages: convo,
+        ...(tools.length ? { tools: tools.map((t) => t.schema) } : {}),
+      }),
+    });
+    await raiseForStatus(response);
+
+    let text = "";
+    const pending = new Map<number, PendingToolCall>();
+    for await (const data of sseData(response)) {
+      let delta: {
+        content?: string;
+        tool_calls?: {
+          index?: number;
+          id?: string;
+          function?: { name?: string; arguments?: string };
+        }[];
+      };
+      try {
+        delta = JSON.parse(data).choices?.[0]?.delta ?? {};
+      } catch {
+        continue; // keep-alive frame
+      }
+      if (delta.content) {
+        text += delta.content;
+        yield delta.content;
+      }
+      for (const tc of delta.tool_calls ?? []) {
+        const idx = tc.index ?? 0;
+        const slot = pending.get(idx) ?? { id: "", name: "", args: "" };
+        if (tc.id) slot.id = tc.id;
+        if (tc.function?.name) slot.name += tc.function.name;
+        if (tc.function?.arguments) slot.args += tc.function.arguments;
+        pending.set(idx, slot);
+      }
+    }
+
+    // No tool calls → the streamed text is the final answer.
+    if (pending.size === 0) return;
+
+    // On the last allowed round, stop looping to avoid runaway tool use.
+    if (round === MAX_TOOL_ROUNDS) return;
+
+    const calls = [...pending.values()];
+    convo.push({
+      role: "assistant",
+      content: text || null,
+      tool_calls: calls.map((c, i) => ({
+        id: c.id || `call_${round}_${i}`,
+        type: "function",
+        function: { name: c.name, arguments: c.args || "{}" },
+      })),
+    });
+    for (const [i, call] of calls.entries()) {
+      const tool = tools.find((t) => t.schema.function.name === call.name);
+      let result: string;
+      if (!tool) {
+        result = `Error: unknown tool "${call.name}".`;
+      } else {
+        try {
+          result = await tool.run(JSON.parse(call.args || "{}"));
+        } catch (e) {
+          result = `Error: ${e instanceof Error ? e.message : e}`;
+        }
+      }
+      convo.push({
+        role: "tool",
+        tool_call_id: call.id || `call_${round}_${i}`,
+        content: result,
+      });
     }
   }
 }

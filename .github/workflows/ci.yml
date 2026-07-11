@@ -19,6 +19,8 @@ jobs:
       - run: npm ci
       # Runs validate-skills, tsc and vite build.
       - run: npm run build
+      # Agent tool-calling loop: Vault lookup → HTTP action → reply, in-app.
+      - run: node scripts/tool-loop-check.mjs
 
   rust:
     runs-on: ubuntu-22.04

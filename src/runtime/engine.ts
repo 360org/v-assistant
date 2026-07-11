@@ -15,6 +15,7 @@ import {
   streamProvider,
   type ProviderConfig,
 } from "./providers";
+import { buildAgentTools } from "./tools";
 import { DEMO_MODE } from "./oauth";
 
 export interface ChatMessage {
@@ -84,7 +85,13 @@ const demoEngine: Engine = {
 function buildSystemPrompt(options: ChatOptions): string {
   let prompt =
     "You are V Assistant, a helpful personal AI assistant for everyday " +
-    "work. Be concise and concrete. Always answer in the user's language.";
+    "work. Be concise and concrete. Always answer in the user's language.\n\n" +
+    "You can act on the user's behalf using tools. The user keeps logins, " +
+    "API keys and endpoints in their Vault. When a task needs a credential " +
+    "(e.g. \"post this to my blog\"), call vault_list to see what is stored, " +
+    "then use http_request to perform the action — reference any secret as " +
+    "{{vault:<name>.<field>}} so you never handle the raw value. Do not ask " +
+    "the user for a password that is already in the Vault.";
   if (options.agentName) {
     prompt +=
       `\n\nYou are currently acting as the user's ${options.agentName}. ` +
@@ -119,6 +126,7 @@ const providerEngine: Engine = {
       options.config!,
       buildSystemPrompt(options),
       messages,
+      buildAgentTools(),
     );
   },
 };

@@ -56,7 +56,7 @@ engine execution pending) · ⬜ planned/not started
       Email, Date, Date & time); password masks with reveal
 - [x] Field icons for default + custom fields
 - [x] `findVaultEntry(label|service)` + `readField()` lookup for agents
-- [ ] Agents actually pull credentials from the Vault to run tools 🟡 → see §9
+- [x] Agents actually pull credentials from the Vault to run tools ✅ → see §9
 
 ## 4. Skills
 
@@ -101,24 +101,36 @@ engine execution pending) · ⬜ planned/not started
 - [ ] Inbound message → agent reply → outbound (2-way), verified via
       engine-stub loopback (no Docker) ⬜
 
-## 9. Vault ↔ Agent actions
+## 9. Vault ↔ Agent actions  ✅
 
-- [ ] Agent looks up a Vault entry by name during a task ⬜
-- [ ] "Post this to my blog" → agent reads URL+login → calls a tool to post
-      (mock endpoint) → verified end-to-end ⬜
+- [x] In-app agent tool-calling loop (`tools.ts` + `providers.ts`) — no Docker
+- [x] `vault_list` tool: agent discovers stored logins (names/fields, never
+      secret values)
+- [x] `http_request` tool: agent acts (post, call API); secrets referenced as
+      `{{vault:Name.field}}` and substituted locally — never enter the model
+- [x] "Post this to my blog" → agent reads the Vault → posts with the real
+      secret → replies. Verified end-to-end (`scripts/tool-loop-check.mjs`,
+      runs in CI)
 
 ## 10. Scheduled tasks
 
 - [x] Menu + page: create task (name, instruction, schedule), pause/resume, delete
 - [ ] Engine actually runs tasks on schedule and messages results back ⬜
 
-## 11. NanoClaw runtime (engine boundary)
+## 11. Agent engine
 
-- [x] SQLite inbound/outbound IPC contract (`runtime.rs`) + Tauri commands
-- [x] Per-agent groups + skills materialized for the engine
-- [x] Engine attach via `VUA_ENGINE_DIR`; falls back to preview engine
+The engine is **embedded in the app** — it runs the moment the app opens.
+Chat, agents, skills and Vault-powered actions all execute in-app against the
+provider APIs; the user never installs Docker or a separate engine.
+
+- [x] Embedded provider engine: real streaming chat out of the box
+- [x] In-app agent tool-calling (Vault lookup + HTTP actions) — see §9
+- [x] SQLite inbound/outbound IPC contract (`runtime.rs`) + Tauri commands —
+      the optional bridge to a heavier NanoClaw host for power users
+- [x] Per-agent groups + skills materialized for that host
 - [x] Cross-process IPC verified (`examples/ipc_check`)
-- [ ] Real NanoClaw checkout + Docker attached ⬜
+- [ ] Optional: attach an external NanoClaw host via `VUA_ENGINE_DIR` for
+      sandboxed containers (advanced; not needed for normal use) ⬜
 
 ## 12. Desktop app (Tauri)
 
