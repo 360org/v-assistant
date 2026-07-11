@@ -30,6 +30,10 @@ export interface ChatOptions {
   config?: ProviderConfig;
   agentName?: string;
   agentDescription?: string;
+  /** The agent's configured workflow/process instructions. */
+  agentInstructions?: string;
+  /** The agent's personality/voice ("soul"). */
+  agentSoul?: string;
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
   /** Active skill's name — shown to the model as the task it's running. */
@@ -83,6 +87,12 @@ function buildSystemPrompt(options: ChatOptions): string {
     prompt +=
       `\n\nYou are currently acting as the user's ${options.agentName}. ` +
       `${options.agentDescription ?? ""}`;
+    if (options.agentSoul) {
+      prompt += `\n\nYour personality:\n${options.agentSoul}`;
+    }
+    if (options.agentInstructions) {
+      prompt += `\n\nHow you work (follow this process):\n${options.agentInstructions}`;
+    }
   }
   // The active skill's full instructions steer how the model does the task.
   if (options.skillInstructions) {

@@ -28,6 +28,7 @@ export function Chat() {
     providerConfigs,
     activeSkill,
     clearActiveSkill,
+    agentConfigs,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -85,6 +86,12 @@ export function Chat() {
         config: providerConfigs[provider],
         agentName: activeAgent?.name,
         agentDescription: activeAgent?.description,
+        agentInstructions: activeAgent
+          ? agentConfigs[activeAgent.id]?.instructions
+          : undefined,
+        agentSoul: activeAgent
+          ? agentConfigs[activeAgent.id]?.soul
+          : undefined,
         agentId: activeAgent?.id,
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,

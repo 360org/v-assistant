@@ -64,6 +64,14 @@ export interface ActiveSkill {
   instructions: string;
 }
 
+/** Per-agent configuration: workflow instructions and a personality "soul". */
+export interface AgentConfig {
+  /** How the agent should work — its process/steps (ChatGPT-style). */
+  instructions?: string;
+  /** The agent's personality/voice. */
+  soul?: string;
+}
+
 /**
  * The local user, created automatically on first sign-in from the vendor
  * account — no separate registration. Lives only on this device.
@@ -98,6 +106,8 @@ interface PersistedState {
   /** Per-provider credentials/config — stored on this device only. */
   providerConfigs: Partial<Record<ProviderId, ProviderConfig>>;
   installedAgents: string[];
+  /** Per-agent instructions + soul, keyed by agent id. */
+  agentConfigs: Record<string, AgentConfig>;
   /** NanoClaw engine skills the user has installed (channel/provider/etc). */
   installedEngineSkills: string[];
   connectedIntegrations: string[];
@@ -116,6 +126,7 @@ const initialState: PersistedState = {
   provider: null,
   providerConfigs: {},
   installedAgents: [],
+  agentConfigs: {},
   installedEngineSkills: [],
   connectedIntegrations: [],
   knowledgeFiles: [],
@@ -170,6 +181,7 @@ interface AppStore extends PersistedState {
   updateScheduledTask: (id: string, patch: Partial<ScheduledTask>) => void;
   removeScheduledTask: (id: string) => void;
   toggleAgent: (agentId: string) => void;
+  setAgentConfig: (agentId: string, patch: AgentConfig) => void;
   setActiveAgent: (agentId: string | null) => void;
   toggleIntegration: (integrationId: string) => void;
   addKnowledgeFiles: (files: { name: string; size: number }[]) => void;
@@ -403,6 +415,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const setAgentConfig = useCallback((agentId: string, patch: AgentConfig) => {
+    setState((s) => ({
+      ...s,
+      agentConfigs: {
+        ...s.agentConfigs,
+        [agentId]: { ...s.agentConfigs[agentId], ...patch },
+      },
+    }));
+  }, []);
+
   const setActiveAgent = useCallback((agentId: string | null) => {
     setState((s) => ({ ...s, activeAgentId: agentId }));
   }, []);
@@ -503,6 +525,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateScheduledTask,
       removeScheduledTask,
       toggleAgent,
+      setAgentConfig,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
@@ -532,6 +555,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateScheduledTask,
       removeScheduledTask,
       toggleAgent,
+      setAgentConfig,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
