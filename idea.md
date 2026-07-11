@@ -91,15 +91,19 @@ engine execution pending) · ⬜ planned/not started
 
 - [x] Token-based config dialog → Vault (Telegram, GitHub, Slack, Discord, Notion)
 - [x] Telegram: bot token (+ chat id) captured and stored
+- [x] Telegram channel actually runs (send/receive) in-app → see §8
 - [ ] OAuth integrations (Drive, Outlook, Calendar) real login ⬜
-- [ ] Channel actually runs via the engine (send/receive) ⬜ → see §8
 
-## 8. Telegram / channels — real run
+## 8. Telegram / channels — real run  ✅
 
 - [x] Bot token stored in the Vault
-- [ ] Engine reads the token and runs the Telegram channel ⬜
-- [ ] Inbound message → agent reply → outbound (2-way), verified via
-      engine-stub loopback (no Docker) ⬜
+- [x] In-app Telegram channel (`telegram.ts`): reads the token from the Vault
+      and long-polls Telegram — no server, no Docker
+- [x] Inbound message → embedded assistant (provider + agent + tools) →
+      reply sent back (2-way). Verified end-to-end
+      (`scripts/telegram-check.mjs`, runs in CI)
+- [x] Starts/stops automatically with the Telegram integration; provider and
+      agent switches take effect live
 
 ## 9. Vault ↔ Agent actions  ✅
 

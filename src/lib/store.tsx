@@ -11,11 +11,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { ProviderId } from "@/lib/catalog";
-import type { ChatMessage } from "@/runtime/engine";
+import type { ChatMessage, ChatOptions } from "@/runtime/engine";
 import type { ProviderConfig } from "@/runtime/providers";
 import {
   completeOAuthReturn,
@@ -24,7 +25,8 @@ import {
 } from "@/runtime/oauth";
 import { routedConfig } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
-import { getProvider, PROVIDERS } from "@/lib/catalog";
+import { startTelegram, stopTelegram } from "@/runtime/telegram";
+import { AGENT_STORE, getProvider, PROVIDERS } from "@/lib/catalog";
 
 /** Vault key holding a provider's secret (API key / router token). */
 function vaultKey(provider: ProviderId): string {
@@ -280,6 +282,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Telegram channel: while it's connected, run the 2-way bridge so the user
+  // can chat with their assistant from Telegram. It resolves the current
+  // provider/agent per message from a ref, so switches take effect live and
+  // the service itself never needs restarting.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const resolveChatOptions = useCallback((): ChatOptions | null => {
+    const s = stateRef.current;
+    if (!s.provider) return null;
+    const config = s.providerConfigs[s.provider];
+    if (!config) return null;
+    const agent =
+      AGENT_STORE.find((a) => a.id === s.activeAgentId) ?? null;
+    const agentCfg = agent ? s.agentConfigs[agent.id] : undefined;
+    return {
+      provider: s.provider,
+      config,
+      agentName: agent?.name,
+      agentDescription: agent?.description,
+      agentInstructions: agentCfg?.instructions,
+      agentSoul: agentCfg?.soul,
+      agentMemory: agentCfg?.memory,
+      agentId: agent?.id,
+    };
+  }, []);
+
+  const telegramOn = state.connectedIntegrations.includes("telegram");
+  useEffect(() => {
+    if (telegramOn) startTelegram(resolveChatOptions);
+    else stopTelegram();
+    return () => stopTelegram();
+  }, [telegramOn, resolveChatOptions]);
 
   const completeOnboarding = useCallback(
     (provider: ProviderId, integrations: string[]) => {

@@ -21,6 +21,8 @@ jobs:
       - run: npm run build
       # Agent tool-calling loop: Vault lookup → HTTP action → reply, in-app.
       - run: node scripts/tool-loop-check.mjs
+      # Telegram 2-way channel: inbound message → assistant → reply, in-app.
+      - run: node scripts/telegram-check.mjs
 
   rust:
     runs-on: ubuntu-22.04

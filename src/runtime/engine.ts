@@ -162,3 +162,18 @@ export function createEngine(): Engine {
 export function newMessageId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/**
+ * Run one assistant turn to completion and return the full text — the same
+ * engine, tools and system prompt as the chat UI, but for callers that need
+ * a whole reply rather than a stream (e.g. the Telegram channel).
+ */
+export async function runAssistant(
+  messages: ChatMessage[],
+  options: ChatOptions,
+): Promise<string> {
+  const engine = createEngine();
+  let out = "";
+  for await (const chunk of engine.chat(messages, options)) out += chunk;
+  return out;
+}
