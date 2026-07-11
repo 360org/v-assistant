@@ -1,0 +1,29 @@
+[package]
+name = "v-assistant"
+version = "0.1.0"
+description = "V Assistant — AI for everyone"
+authors = ["360org <support@vuaai.net>"]
+homepage = "https://vuaai.net"
+edition = "2021"
+
+[lib]
+name = "v_assistant_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Secure credential Vault backed by the OS keychain (macOS Keychain,
+# Windows Credential Manager, Linux Secret Service). Pure-Rust backends so
+# no system libraries are required to build.
+keyring = { version = "3", features = [
+  "apple-native",
+  "windows-native",
+  "sync-secret-service",
+  "crypto-rust",
+] }
