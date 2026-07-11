@@ -10,6 +10,7 @@ import { Chat } from "@/pages/Chat";
 import { Agents } from "@/pages/Agents";
 import { Skills } from "@/pages/Skills";
 import { Knowledge } from "@/pages/Knowledge";
+import { Vault } from "@/pages/Vault";
 import { Integrations } from "@/pages/Integrations";
 import { Settings } from "@/pages/Settings";
 
@@ -19,6 +20,7 @@ const pages: Record<View, () => JSX.Element> = {
   agents: Agents,
   skills: Skills,
   knowledge: Knowledge,
+  vault: Vault,
   integrations: Integrations,
   settings: Settings,
 };

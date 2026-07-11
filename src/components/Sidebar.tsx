@@ -2,6 +2,7 @@ import {
   Blocks,
   Bot,
   Home,
+  KeyRound,
   Library,
   MessageSquare,
   Settings,
@@ -19,6 +20,7 @@ const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "agents", label: "Agents", icon: Bot },
   { view: "skills", label: "Skills", icon: Wand2 },
   { view: "knowledge", label: "Knowledge", icon: Library },
+  { view: "vault", label: "Vault", icon: KeyRound },
   { view: "integrations", label: "Integrations", icon: Blocks },
   { view: "settings", label: "Settings", icon: Settings },
 ];

@@ -37,6 +37,7 @@ export type View =
   | "agents"
   | "skills"
   | "knowledge"
+  | "vault"
   | "integrations"
   | "settings";
 

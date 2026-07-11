@@ -166,6 +166,14 @@ export const AGENT_STORE: AgentTemplate[] = [
   },
 ];
 
+export interface IntegrationField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  secret?: boolean;
+  optional?: boolean;
+}
+
 export interface Integration {
   id: string;
   name: string;
@@ -173,6 +181,12 @@ export interface Integration {
   description: string;
   /** Shown during onboarding step 3. */
   featured: boolean;
+  /** How to reach it. `token` fields open a config form; `oauth` a login. */
+  connect: "token" | "oauth";
+  /** Config fields to collect (for `token` integrations). */
+  fields?: IntegrationField[];
+  /** Short how-to shown in the config dialog. */
+  hint?: string;
 }
 
 export const INTEGRATIONS: Integration[] = [
@@ -182,6 +196,22 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "✈️",
     description: "Chat with your assistant from Telegram, anywhere.",
     featured: true,
+    connect: "token",
+    hint: "Create a bot with @BotFather in Telegram, then paste the token it gives you.",
+    fields: [
+      {
+        key: "botToken",
+        label: "Bot token",
+        placeholder: "123456789:ABCdef...",
+        secret: true,
+      },
+      {
+        key: "chatId",
+        label: "Chat ID",
+        placeholder: "@yourchannel or 123456789",
+        optional: true,
+      },
+    ],
   },
   {
     id: "github",
@@ -189,6 +219,16 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "🐙",
     description: "Let agents read repositories and open pull requests.",
     featured: false,
+    connect: "token",
+    hint: "Create a personal access token in GitHub → Settings → Developer settings.",
+    fields: [
+      {
+        key: "token",
+        label: "Personal access token",
+        placeholder: "ghp_…",
+        secret: true,
+      },
+    ],
   },
   {
     id: "google-drive",
@@ -196,6 +236,7 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "📁",
     description: "Use your Drive documents as knowledge.",
     featured: true,
+    connect: "oauth",
   },
   {
     id: "outlook",
@@ -203,6 +244,7 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "📧",
     description: "Draft, summarize and search your email.",
     featured: false,
+    connect: "oauth",
   },
   {
     id: "slack",
@@ -210,6 +252,11 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "💼",
     description: "Bring the assistant into your team channels.",
     featured: false,
+    connect: "token",
+    hint: "Create a Slack app and copy its Bot User OAuth Token.",
+    fields: [
+      { key: "token", label: "Bot token", placeholder: "xoxb-…", secret: true },
+    ],
   },
   {
     id: "discord",
@@ -217,6 +264,11 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "🎮",
     description: "Add the assistant to your Discord server.",
     featured: false,
+    connect: "token",
+    hint: "Create a bot in the Discord Developer Portal and copy its token.",
+    fields: [
+      { key: "token", label: "Bot token", placeholder: "Bot token", secret: true },
+    ],
   },
   {
     id: "notion",
@@ -224,6 +276,16 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "📓",
     description: "Search and write to your Notion workspace.",
     featured: false,
+    connect: "token",
+    hint: "Create an internal integration in Notion and copy its secret.",
+    fields: [
+      {
+        key: "token",
+        label: "Integration secret",
+        placeholder: "secret_…",
+        secret: true,
+      },
+    ],
   },
   {
     id: "google-calendar",
@@ -231,5 +293,6 @@ export const INTEGRATIONS: Integration[] = [
     emoji: "📅",
     description: "Schedule meetings and get daily briefings.",
     featured: false,
+    connect: "oauth",
   },
 ];

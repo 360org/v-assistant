@@ -56,3 +56,95 @@ export async function vaultDelete(key: string): Promise<void> {
 export function vaultIsSecure(): boolean {
   return inDesktopShell();
 }
+
+/* ---------------------------------------------------------------------- *
+ * User credential entries
+ *
+ * A user-managed Vault: store a service's login once (URL/endpoint,
+ * username, password, API key, notes) and agents read it back to act on
+ * the user's behalf — no re-entering credentials. Each entry is one secure
+ * item; a small index lists them for the UI (secrets stay in the items).
+ * ---------------------------------------------------------------------- */
+
+export interface VaultEntry {
+  id: string;
+  /** Friendly name the user (and agents) refer to, e.g. "My WordPress". */
+  label: string;
+  /** Optional service/type hint, e.g. "wordpress", "gmail". */
+  service?: string;
+  /** Site URL or API endpoint. */
+  url?: string;
+  username?: string;
+  password?: string;
+  apiKey?: string;
+  notes?: string;
+  updatedAt: number;
+}
+
+/** Non-secret summary used to render the list. */
+export type VaultEntryMeta = Pick<VaultEntry, "id" | "label" | "service">;
+
+const INDEX_KEY = "vault-index";
+const entryKey = (id: string) => `vault-entry:${id}`;
+
+export function newVaultId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function readIndex(): Promise<VaultEntryMeta[]> {
+  const raw = await vaultGet(INDEX_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as VaultEntryMeta[];
+  } catch {
+    return [];
+  }
+}
+
+export async function listVaultEntries(): Promise<VaultEntryMeta[]> {
+  return (await readIndex()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export async function getVaultEntry(id: string): Promise<VaultEntry | null> {
+  const raw = await vaultGet(entryKey(id));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as VaultEntry;
+  } catch {
+    return null;
+  }
+}
+
+/** Create or update an entry (secret fields included), refreshing the index. */
+export async function saveVaultEntry(entry: VaultEntry): Promise<void> {
+  await vaultSet(entryKey(entry.id), JSON.stringify(entry));
+  const index = await readIndex();
+  const meta: VaultEntryMeta = {
+    id: entry.id,
+    label: entry.label,
+    service: entry.service,
+  };
+  const next = index.filter((e) => e.id !== entry.id);
+  next.push(meta);
+  await vaultSet(INDEX_KEY, JSON.stringify(next));
+}
+
+export async function deleteVaultEntry(id: string): Promise<void> {
+  await vaultDelete(entryKey(id));
+  const index = (await readIndex()).filter((e) => e.id !== id);
+  await vaultSet(INDEX_KEY, JSON.stringify(index));
+}
+
+/**
+ * Look up a stored credential by label or service (case-insensitive) — the
+ * entry point an agent uses to fetch what it needs to perform a task.
+ */
+export async function findVaultEntry(query: string): Promise<VaultEntry | null> {
+  const q = query.trim().toLowerCase();
+  const index = await readIndex();
+  const hit =
+    index.find((e) => e.label.toLowerCase() === q) ??
+    index.find((e) => (e.service ?? "").toLowerCase() === q) ??
+    index.find((e) => e.label.toLowerCase().includes(q));
+  return hit ? getVaultEntry(hit.id) : null;
+}
