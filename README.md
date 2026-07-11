@@ -85,6 +85,37 @@ cd src-tauri
 VUA_ENGINE_DIR=../scripts/engine-stub.mjs cargo run --example ipc_check
 ```
 
+## Sign-in & Credential Vault
+
+Every "Continue with …" is a real one-click login through the router
+(OpenRouter-style PKCE OAuth): the chosen vendor decides which models the
+account is pointed at (ChatGPT → `openai/*`, Claude → `anthropic/*`,
+Gemini → `google/*`), so one login reaches that vendor's models with no
+API key. First sign-in auto-creates the local user from the vendor account.
+
+How the redirect is handled depends on where the app runs:
+
+- **Desktop (Tauri)** — real OAuth via **loopback**: the native side opens a
+  throwaway `http://127.0.0.1:<port>` listener (`oauth_listen`) and the
+  system browser (`open_external`); after the user logs in, the browser
+  redirects to the loopback, the app reads the code and exchanges it for a
+  key — all without leaving the app. This is the production sign-in.
+- **Web (hosted on https)** — real OAuth via full-page redirect back to the
+  page URL.
+- **Demo build** (`VITE_DEMO=1`) — the round-trip is simulated in place, so
+  the UX is visible where real OAuth/network is unavailable.
+
+**Credential Vault.** The obtained key never sits in plaintext or in the
+UI. On the desktop it lives in the OS secret store — macOS Keychain,
+Windows Credential Manager, or the Linux Secret Service — via the `keyring`
+crate (`vault_set` / `vault_get` / `vault_delete`,
+`src-tauri/src/vault.rs`), mirroring NanoClaw's **Agent Vault**. The app
+persists only non-secret metadata; the key is stripped before anything is
+written to local storage and rehydrated from the Vault on start
+(`src/runtime/vault.ts`). On the web it falls back to a namespaced
+`localStorage`; Settings → Account shows which is in effect. An API key
+remains available under **Advanced options** as a fallback.
+
 ## Development
 
 Prerequisites: [Node.js 20+](https://nodejs.org) and, for the desktop shell,
@@ -97,11 +128,17 @@ npm install
 # Web preview (UI only, runs in the browser)
 npm run dev
 
-# Desktop app (Tauri window)
+# Desktop app with REAL login + Vault (Tauri window)
 npm run tauri dev
 
-# Production desktop build (installer/bundle per platform)
+# Production desktop build — installer/bundle per platform (.exe/.dmg/.deb)
 npm run tauri build
+```
+
+Verify the desktop OAuth loopback without a GUI:
+
+```bash
+cd src-tauri && cargo run --example oauth_loopback_check
 ```
 
 ## Project layout
