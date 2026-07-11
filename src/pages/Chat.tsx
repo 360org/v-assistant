@@ -92,6 +92,9 @@ export function Chat() {
         agentSoul: activeAgent
           ? agentConfigs[activeAgent.id]?.soul
           : undefined,
+        agentMemory: activeAgent
+          ? agentConfigs[activeAgent.id]?.memory
+          : undefined,
         agentId: activeAgent?.id,
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,

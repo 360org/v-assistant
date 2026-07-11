@@ -34,6 +34,8 @@ export interface ChatOptions {
   agentInstructions?: string;
   /** The agent's personality/voice ("soul"). */
   agentSoul?: string;
+  /** The agent's persistent memory notes. */
+  agentMemory?: string[];
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
   /** Active skill's name — shown to the model as the task it's running. */
@@ -92,6 +94,12 @@ function buildSystemPrompt(options: ChatOptions): string {
     }
     if (options.agentInstructions) {
       prompt += `\n\nHow you work (follow this process):\n${options.agentInstructions}`;
+    }
+    const memory = (options.agentMemory ?? []).filter((m) => m.trim());
+    if (memory.length) {
+      prompt +=
+        `\n\nWhat you remember about the user (use it when relevant):\n` +
+        memory.map((m) => `- ${m}`).join("\n");
     }
   }
   // The active skill's full instructions steer how the model does the task.

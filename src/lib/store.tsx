@@ -70,6 +70,8 @@ export interface AgentConfig {
   instructions?: string;
   /** The agent's personality/voice. */
   soul?: string;
+  /** Persistent memory notes the agent recalls across chats. */
+  memory?: string[];
 }
 
 /**

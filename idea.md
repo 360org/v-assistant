@@ -76,7 +76,8 @@ engine execution pending) · ⬜ planned/not started
       injected into the system prompt — verified
 - [x] **Soul**: personality/voice description that shapes replies — verified
 - [x] Agent config screen (Configure dialog: Instructions + Soul)
-- [ ] **Memory**: persistent per-agent memory across chats ⬜
+- [x] **Memory**: persistent per-agent memory notes, injected into the
+      system prompt so the agent recalls them across chats
 - [ ] **Self-improving**: learn from interactions (Hermes-style) ⬜
 - [ ] Agents read the Vault to perform real tool actions ⬜ → see §9
 

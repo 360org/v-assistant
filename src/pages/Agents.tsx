@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Download, MessageSquare, Settings2, X } from "lucide-react";
+import { Check, Download, MessageSquare, Plus, Settings2, X } from "lucide-react";
 import { AGENT_STORE, type AgentTemplate } from "@/lib/catalog";
 import { useApp, type AgentConfig } from "@/lib/store";
 import { syncAgents } from "@/runtime/nanoclaw";
@@ -136,6 +136,15 @@ function AgentConfigDialog({
 }) {
   const [instructions, setInstructions] = useState(initial.instructions ?? "");
   const [soul, setSoul] = useState(initial.soul ?? "");
+  const [memory, setMemory] = useState<string[]>(initial.memory ?? []);
+  const [newMemory, setNewMemory] = useState("");
+
+  const addMemory = () => {
+    const v = newMemory.trim();
+    if (!v) return;
+    setMemory((m) => [...m, v]);
+    setNewMemory("");
+  };
 
   return (
     <div
@@ -182,6 +191,51 @@ function AgentConfigDialog({
               placeholder="Warm, concise, a little witty. Speaks like a trusted colleague."
             />
           </label>
+
+          <div className="text-xs text-neutral-400">
+            Memory — what it remembers
+            <div className="mt-1 flex flex-col gap-1.5">
+              {memory.map((m, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-sm text-neutral-200"
+                >
+                  <span className="min-w-0 flex-1 truncate">{m}</span>
+                  <button
+                    onClick={() =>
+                      setMemory((mem) => mem.filter((_, idx) => idx !== i))
+                    }
+                    className="cursor-pointer rounded p-0.5 text-neutral-500 hover:text-red-400"
+                    title="Forget"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <input
+                  className={`${inputClass} flex-1`}
+                  value={newMemory}
+                  onChange={(e) => setNewMemory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addMemory();
+                    }
+                  }}
+                  placeholder="e.g. Always sign emails as “The V Team”."
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={addMemory}
+                  disabled={!newMemory.trim()}
+                >
+                  <Plus className="size-3.5" /> Add
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
@@ -194,6 +248,7 @@ function AgentConfigDialog({
               onSave({
                 instructions: instructions.trim() || undefined,
                 soul: soul.trim() || undefined,
+                memory: memory.length ? memory : undefined,
               })
             }
           >
