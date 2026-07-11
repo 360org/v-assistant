@@ -6,7 +6,9 @@
 //! channels) so the UI never deals with engines, containers or config
 //! files.
 
+pub mod auth;
 pub mod runtime;
+pub mod vault;
 
 use runtime::{AgentConfig, OutboundMessage, Runtime, RuntimeStatus};
 use tauri::Manager;
@@ -74,7 +76,12 @@ pub fn run() {
             runtime_send,
             runtime_receive,
             runtime_sync,
-            runtime_start_engine
+            runtime_start_engine,
+            auth::oauth_listen,
+            auth::open_external,
+            vault::vault_set,
+            vault::vault_get,
+            vault::vault_delete
         ])
         .run(tauri::generate_context!())
         .expect("error while running V Assistant");

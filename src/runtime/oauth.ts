@@ -55,11 +55,58 @@ export interface LoginResult {
   apiKey: string;
 }
 
+/** True when running inside the Tauri desktop shell. */
+function inDesktopShell(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 /**
- * Start direct sign-in with a provider. Real mode navigates to the vendor
- * and never returns (the app resumes via `completeOAuthReturn` after the
- * redirect). Demo mode simulates the round-trip and resolves with a
- * credential so the caller can finish the flow in place.
+ * Desktop sign-in via loopback redirect: the native side opens a localhost
+ * listener and the system browser, the user logs in for real, the browser
+ * redirects back to localhost, and we exchange the code for a key — all
+ * without leaving the app.
+ */
+async function desktopLogin(provider: ProviderId): Promise<LoginResult> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const { listen } = await import("@tauri-apps/api/event");
+
+  const port = await invoke<number>("oauth_listen");
+  const verifier = base64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = await s256(verifier);
+  const callback = `http://127.0.0.1:${port}`;
+
+  // Wait for the native loopback to report the redirect's code.
+  const codePromise = new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Sign-in timed out. Please try again.")),
+      300_000,
+    );
+    void listen<string>("oauth-code", (event) => {
+      clearTimeout(timeout);
+      resolve(event.payload);
+    });
+    void listen<string>("oauth-error", (event) => {
+      clearTimeout(timeout);
+      reject(new Error(event.payload));
+    });
+  });
+
+  const url =
+    `https://openrouter.ai/auth?callback_url=${encodeURIComponent(callback)}` +
+    `&code_challenge=${challenge}&code_challenge_method=S256`;
+  await invoke("open_external", { url });
+
+  const code = await codePromise;
+  const key = await exchangeCode(code, verifier);
+  return { provider, apiKey: key };
+}
+
+/**
+ * Start direct sign-in with a provider.
+ *  - Desktop shell → real loopback OAuth, resolves in place.
+ *  - Demo build → simulated round-trip, resolves in place.
+ *  - Web (hosted) → PKCE redirect that navigates away and resumes via
+ *    `completeOAuthReturn`; returns null.
  */
 export async function signIn(
   provider: ProviderId,
@@ -69,8 +116,11 @@ export async function signIn(
     await sleep(900); // "Redirecting to the provider…"
     return { provider, apiKey: "demo-key" };
   }
-  // Every direct sign-in goes through the router; the chosen vendor just
-  // decides which models the account is pointed at.
+  if (inDesktopShell()) {
+    return await desktopLogin(provider);
+  }
+  // Web: every direct sign-in goes through the router; the chosen vendor
+  // just decides which models the account is pointed at.
   await startOpenRouterLogin(context, provider);
   return null; // navigated away
 }
@@ -118,6 +168,24 @@ export async function startOpenRouterLogin(
   window.location.assign(url);
 }
 
+/** Exchange an authorization code + PKCE verifier for a user-scoped key. */
+async function exchangeCode(code: string, verifier: string): Promise<string> {
+  const response = await fetch("https://openrouter.ai/api/v1/auth/keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      code,
+      code_verifier: verifier,
+      code_challenge_method: "S256",
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Sign-in failed (HTTP ${response.status}). Please try again.`);
+  }
+  const { key } = (await response.json()) as { key: string };
+  return key;
+}
+
 /**
  * Call on app start: if the URL carries an OAuth code and a login is
  * pending, exchange it for a key. Returns null when this is a normal load.
@@ -132,22 +200,9 @@ export async function completeOAuthReturn(): Promise<OAuthReturn | null> {
     verifier: string;
     context: OAuthReturn["context"];
   };
-
-  const response = await fetch("https://openrouter.ai/api/v1/auth/keys", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      code,
-      code_verifier: pending.verifier,
-      code_challenge_method: "S256",
-    }),
-  });
   // Strip ?code=… so a reload doesn't retry the exchange.
   window.history.replaceState({}, "", window.location.pathname);
-  if (!response.ok) {
-    throw new Error(`Sign-in failed (HTTP ${response.status}). Please try again.`);
-  }
-  const { key } = (await response.json()) as { key: string };
+  const key = await exchangeCode(code, pending.verifier);
   return { provider: pending.provider, apiKey: key, context: pending.context };
 }
 

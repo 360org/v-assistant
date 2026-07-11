@@ -23,7 +23,13 @@ import {
   type OAuthReturn,
 } from "@/runtime/oauth";
 import { routedConfig } from "@/runtime/providers";
-import { getProvider } from "@/lib/catalog";
+import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
+import { getProvider, PROVIDERS } from "@/lib/catalog";
+
+/** Vault key holding a provider's secret (API key / router token). */
+function vaultKey(provider: ProviderId): string {
+  return `provider:${provider}`;
+}
 
 export type View =
   | "home"
@@ -179,13 +185,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Storage can be unavailable (sandboxed webviews, private mode) — the
-    // app must keep working without persistence.
+    // app must keep working without persistence. Secrets are never written
+    // here: the API key is stripped from each provider config and kept in
+    // the Vault instead; only "has a key" is persisted.
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const providerConfigs = Object.fromEntries(
+        Object.entries(state.providerConfigs).map(([id, cfg]) => [
+          id,
+          cfg ? { ...cfg, apiKey: cfg.apiKey ? "" : undefined } : cfg,
+        ]),
+      );
+      const safe = { ...state, providerConfigs };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
     } catch {
       /* run without persistence */
     }
   }, [state]);
+
+  // On start, rehydrate provider secrets from the Vault back into memory,
+  // where the engine reads them for a request.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = Object.keys(state.providerConfigs) as ProviderId[];
+      for (const id of ids) {
+        const key = await vaultGet(vaultKey(id));
+        if (cancelled || !key) continue;
+        setState((s) => {
+          const current = s.providerConfigs[id];
+          if (!current || current.apiKey) return s;
+          return {
+            ...s,
+            providerConfigs: {
+              ...s.providerConfigs,
+              [id]: { ...current, apiKey: key },
+            },
+          };
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const completeOnboarding = useCallback(
     (provider: ProviderId, integrations: string[]) => {
@@ -208,6 +252,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setProviderConfig = useCallback(
     (provider: ProviderId, config: ProviderConfig | null) => {
+      // The secret goes to the Vault; only the config shape stays in state.
+      if (config?.apiKey) void vaultSet(vaultKey(provider), config.apiKey);
+      else if (!config) void vaultDelete(vaultKey(provider));
       setState((s) => {
         const providerConfigs = { ...s.providerConfigs };
         if (config) providerConfigs[provider] = config;
@@ -220,6 +267,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const connectProvider = useCallback(
     async (provider: ProviderId, config: ProviderConfig) => {
+      // Stash the credential in the OS keychain, not in app storage.
+      if (config.apiKey) await vaultSet(vaultKey(provider), config.apiKey);
       setState((s) => ({
         ...s,
         provider,
@@ -344,6 +393,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       /* run without persistence */
     }
+    // Purge secrets from the Vault too.
+    for (const p of PROVIDERS) void vaultDelete(vaultKey(p.id));
     setState(initialState);
     setView("home");
   }, []);

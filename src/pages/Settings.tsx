@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { LogIn } from "lucide-react";
+import { Lock, LogIn } from "lucide-react";
+import { vaultIsSecure } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
 import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
 import { isConfigured, routedConfig } from "@/runtime/providers";
@@ -39,6 +40,12 @@ export function Settings() {
               <div className="text-xs text-neutral-500">
                 Signed in with {getProvider(user.provider).name}
                 {user.detail ? ` · ${user.detail}` : ""}
+              </div>
+              <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-600">
+                <Lock className="size-3" />
+                {vaultIsSecure()
+                  ? "Keys stored in your OS keychain (Vault)"
+                  : "Keys stored locally in this browser"}
               </div>
             </div>
             <Badge tone="green">Local user</Badge>
