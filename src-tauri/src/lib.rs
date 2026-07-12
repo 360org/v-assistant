@@ -8,6 +8,8 @@
 
 pub mod auth;
 pub mod runtime;
+#[cfg(feature = "sandbox")]
+pub mod sandbox;
 pub mod vault;
 
 use runtime::{AgentConfig, OutboundMessage, Runtime, RuntimeStatus};

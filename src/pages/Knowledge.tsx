@@ -1,13 +1,25 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useMemo, useRef, useState, type DragEvent } from "react";
 import { FileText, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { useApp } from "@/lib/store";
+import { AGENT_STORE } from "@/lib/catalog";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatBytes } from "@/lib/utils";
 
 export function Knowledge() {
-  const { knowledgeFiles, addKnowledgeFiles, removeKnowledgeFile } = useApp();
+  const {
+    knowledgeFiles,
+    addKnowledgeFiles,
+    removeKnowledgeFile,
+    activeAgentId,
+  } = useApp();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Knowledge belongs to the active role, so switching roles never mixes it.
+  const roleName = useMemo(
+    () => AGENT_STORE.find((a) => a.id === activeAgentId)?.name ?? null,
+    [activeAgentId],
+  );
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -21,10 +33,16 @@ export function Knowledge() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
-      <h1 className="text-2xl font-bold">Knowledge</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-2xl font-bold">Knowledge</h1>
+        <Badge tone={roleName ? "gold" : undefined}>
+          {roleName ? `Role: ${roleName}` : "Base assistant"}
+        </Badge>
+      </div>
       <p className="mt-1 text-neutral-400">
-        Drop in your documents and the assistant learns them automatically. No
-        indexing, no setup — it just works.
+        {roleName
+          ? `These documents belong to ${roleName} only — other roles don't see them.`
+          : "Drop in your documents and the assistant learns them automatically. Switch to a role to give that role its own separate knowledge."}
       </p>
 
       <div

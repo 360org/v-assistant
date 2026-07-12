@@ -27,6 +27,8 @@ jobs:
       - run: node scripts/schedule-check.mjs
       # Direct sign-in: code→key exchange, per-vendor routing, user creation.
       - run: node scripts/login-check.mjs
+      # Role isolation: each role's prompt carries only its own memory/knowledge.
+      - run: node scripts/isolation-check.mjs
 
   rust:
     runs-on: ubuntu-22.04
@@ -51,3 +53,7 @@ jobs:
       - name: Loopback OAuth contract test
         working-directory: src-tauri
         run: cargo run --example oauth_loopback_check
+      # Optional WASM code-sandbox (off by default for a light build).
+      - name: WASM sandbox contract test
+        working-directory: src-tauri
+        run: cargo run --features sandbox --example sandbox_check

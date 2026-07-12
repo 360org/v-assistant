@@ -119,7 +119,11 @@ interface PersistedState {
   /** NanoClaw engine skills the user has installed (channel/provider/etc). */
   installedEngineSkills: string[];
   connectedIntegrations: string[];
-  knowledgeFiles: KnowledgeFile[];
+  /**
+   * Knowledge is isolated per role: each agent id (or "general" for the base
+   * assistant) has its own bucket, so switching roles never mixes knowledge.
+   */
+  knowledgeByAgent: Record<string, KnowledgeFile[]>;
   messages: ChatMessage[];
   activeAgentId: string | null;
   customSkills: CustomSkill[];
@@ -137,18 +141,31 @@ const initialState: PersistedState = {
   agentConfigs: {},
   installedEngineSkills: [],
   connectedIntegrations: [],
-  knowledgeFiles: [],
+  knowledgeByAgent: {},
   messages: [],
   activeAgentId: null,
   customSkills: [],
   scheduledTasks: [],
 };
 
+/** Knowledge bucket for a role: an agent id, or "general" for no agent. */
+const GENERAL_KNOWLEDGE = "general";
+const knowledgeBucket = (agentId: string | null): string =>
+  agentId ?? GENERAL_KNOWLEDGE;
+
 function loadState(): PersistedState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialState;
-    return { ...initialState, ...(JSON.parse(raw) as Partial<PersistedState>) };
+    const parsed = JSON.parse(raw) as Partial<PersistedState> & {
+      knowledgeFiles?: KnowledgeFile[];
+    };
+    const merged = { ...initialState, ...parsed };
+    // Migrate the old global knowledge list into the base ("general") bucket.
+    if (parsed.knowledgeFiles && !parsed.knowledgeByAgent) {
+      merged.knowledgeByAgent = { [GENERAL_KNOWLEDGE]: parsed.knowledgeFiles };
+    }
+    return merged;
   } catch {
     return initialState;
   }
@@ -192,6 +209,8 @@ interface AppStore extends PersistedState {
   setAgentConfig: (agentId: string, patch: AgentConfig) => void;
   setActiveAgent: (agentId: string | null) => void;
   toggleIntegration: (integrationId: string) => void;
+  /** The active role's knowledge (derived from `knowledgeByAgent`). */
+  knowledgeFiles: KnowledgeFile[];
   addKnowledgeFiles: (files: { name: string; size: number }[]) => void;
   removeKnowledgeFile: (fileId: string) => void;
   setMessages: (
@@ -309,6 +328,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       agentInstructions: agentCfg?.instructions,
       agentSoul: agentCfg?.soul,
       agentMemory: agentCfg?.memory,
+      agentKnowledge: (s.knowledgeByAgent[knowledgeBucket(s.activeAgentId)] ?? [])
+        .filter((f) => f.status === "ready")
+        .map((f) => f.name),
       agentId: agent?.id,
     };
   }, []);
@@ -541,21 +563,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addedAt: now,
         status: "processing",
       }));
-      setState((s) => ({
-        ...s,
-        knowledgeFiles: [...entries, ...s.knowledgeFiles],
-      }));
+      // Files land in the active role's bucket, keeping each role's knowledge
+      // separate.
+      setState((s) => {
+        const key = knowledgeBucket(s.activeAgentId);
+        return {
+          ...s,
+          knowledgeByAgent: {
+            ...s.knowledgeByAgent,
+            [key]: [...entries, ...(s.knowledgeByAgent[key] ?? [])],
+          },
+        };
+      });
       // The runtime indexes files in the background; the user never sees
       // embeddings or vector stores — just "Processing" then "Ready".
       for (const entry of entries) {
         const delay = 1200 + Math.random() * 1800;
         setTimeout(() => {
-          setState((s) => ({
-            ...s,
-            knowledgeFiles: s.knowledgeFiles.map((f) =>
-              f.id === entry.id ? { ...f, status: "ready" } : f,
-            ),
-          }));
+          setState((s) => {
+            const key = knowledgeBucket(s.activeAgentId);
+            return {
+              ...s,
+              knowledgeByAgent: {
+                ...s.knowledgeByAgent,
+                [key]: (s.knowledgeByAgent[key] ?? []).map((f) =>
+                  f.id === entry.id ? { ...f, status: "ready" } : f,
+                ),
+              },
+            };
+          });
         }, delay);
       }
     },
@@ -563,10 +599,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const removeKnowledgeFile = useCallback((fileId: string) => {
-    setState((s) => ({
-      ...s,
-      knowledgeFiles: s.knowledgeFiles.filter((f) => f.id !== fileId),
-    }));
+    setState((s) => {
+      const key = knowledgeBucket(s.activeAgentId);
+      return {
+        ...s,
+        knowledgeByAgent: {
+          ...s.knowledgeByAgent,
+          [key]: (s.knowledgeByAgent[key] ?? []).filter((f) => f.id !== fileId),
+        },
+      };
+    });
   }, []);
 
   const setMessages = useCallback(
@@ -598,6 +640,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppStore>(
     () => ({
       ...state,
+      // The Knowledge page and Home badge show the active role's knowledge.
+      knowledgeFiles:
+        state.knowledgeByAgent[knowledgeBucket(state.activeAgentId)] ?? [],
       view,
       setView,
       chatDraft,

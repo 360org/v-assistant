@@ -91,6 +91,10 @@ engine execution pending) · ⬜ planned/not started
 ## 6. Knowledge
 
 - [x] Drag & drop files; Processing → Ready status UI
+- [x] **Knowledge is isolated per role** — each agent (or the base assistant)
+      has its own bucket; switching roles never mixes knowledge. The active
+      role's documents are injected into its prompt only. Verified
+      (`scripts/isolation-check.mjs`)
 - [ ] Real extraction (PDF/Word/Excel) → chunks ⬜
 - [ ] Retrieval fed into chat as context (RAG) ⬜
 
@@ -131,6 +135,25 @@ engine execution pending) · ⬜ planned/not started
       embedded assistant, records `lastRun` so nothing double-fires
 - [x] Results delivered to chat and pushed to Telegram when connected.
       Verified (`scripts/schedule-check.mjs`, runs in CI)
+
+## 15. Multi-role runtime (isolation + optional sandbox)
+
+Direction: keep the embedded engine — **instant start, light, safe**. No
+parallel agents; instead, many **roles** you switch between, each with its own
+isolated brain, plus an optional WASM sandbox for running agent code safely.
+
+- [x] **Role isolation**: each role has its own memory + knowledge; the
+      system prompt for a role carries only that role's context. Switching
+      roles is instant (pure state, no boot) and never mixes knowledge.
+      Verified (`scripts/isolation-check.mjs`)
+- [x] **WASM code sandbox** (`src-tauri/src/sandbox.rs`, Wasmtime): guest code
+      runs with no host imports, a memory ceiling and a fuel budget, so a
+      runaway/hostile guest is trapped, not able to harm the host. Optional
+      Cargo feature `sandbox` — **off by default to keep the build light**.
+      Verified (`examples/sandbox_check`, runs in CI with `--features sandbox`)
+- [ ] Per-role skill sets (each role loads only its own skills) ⬜
+- [ ] Sandboxed file workspace per role (WASI preopen) ⬜
+- [ ] MCP client for richer tools ⬜
 
 ## 11. Agent engine
 

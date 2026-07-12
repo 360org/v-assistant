@@ -27,3 +27,15 @@ keyring = { version = "3", features = [
   "sync-secret-service",
   "crypto-rust",
 ] }
+# Optional WASM sandbox for running agent code safely, off by default so the
+# shipped app stays lightweight and starts instantly. Enable with
+# `--features sandbox` for builds that run untrusted agent code.
+wasmtime = { version = "46.0.1", optional = true }
+
+[features]
+sandbox = ["dep:wasmtime"]
+
+# The sandbox example only builds when the feature is on.
+[[example]]
+name = "sandbox_check"
+required-features = ["sandbox"]

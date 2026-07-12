@@ -29,6 +29,7 @@ export function Chat() {
     activeSkill,
     clearActiveSkill,
     agentConfigs,
+    knowledgeFiles,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -95,6 +96,10 @@ export function Chat() {
         agentMemory: activeAgent
           ? agentConfigs[activeAgent.id]?.memory
           : undefined,
+        // Only this role's ready documents — knowledge never crosses roles.
+        agentKnowledge: knowledgeFiles
+          .filter((f) => f.status === "ready")
+          .map((f) => f.name),
         agentId: activeAgent?.id,
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,

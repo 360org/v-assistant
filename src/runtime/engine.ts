@@ -37,6 +37,8 @@ export interface ChatOptions {
   agentSoul?: string;
   /** The agent's persistent memory notes. */
   agentMemory?: string[];
+  /** Knowledge available to THIS role only (names of ready documents). */
+  agentKnowledge?: string[];
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
   /** Active skill's name — shown to the model as the task it's running. */
@@ -82,7 +84,7 @@ const demoEngine: Engine = {
 };
 
 /** The persona sent to real providers as the system prompt. */
-function buildSystemPrompt(options: ChatOptions): string {
+export function buildSystemPrompt(options: ChatOptions): string {
   let prompt =
     "You are V Assistant, a helpful personal AI assistant for everyday " +
     "work. Be concise and concrete. Always answer in the user's language.\n\n" +
@@ -108,6 +110,15 @@ function buildSystemPrompt(options: ChatOptions): string {
         `\n\nWhat you remember about the user (use it when relevant):\n` +
         memory.map((m) => `- ${m}`).join("\n");
     }
+  }
+  // Knowledge is scoped to this role only — the caller passes just the active
+  // role's documents, so one role never sees another's knowledge.
+  const knowledge = (options.agentKnowledge ?? []).filter((k) => k.trim());
+  if (knowledge.length) {
+    prompt +=
+      `\n\nKnowledge available to you in this role (do not rely on knowledge ` +
+      `from other roles):\n` +
+      knowledge.map((k) => `- ${k}`).join("\n");
   }
   // The active skill's full instructions steer how the model does the task.
   if (options.skillInstructions) {
