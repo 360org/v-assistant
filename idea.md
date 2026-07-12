@@ -85,8 +85,10 @@ engine execution pending) · ⬜ planned/not started
 - [x] Agent config screen (Configure dialog: Instructions + Soul)
 - [x] **Memory**: persistent per-agent memory notes, injected into the
       system prompt so the agent recalls them across chats
-- [ ] **Self-improving**: learn from interactions (Hermes-style) ⬜
-- [ ] Agents read the Vault to perform real tool actions ⬜ → see §9
+- [x] **Self-improving** (Hermes-style): after each exchange a role reflects
+      and saves durable facts to its **own** memory (deduped, capped); toggle
+      in Settings. Verified (`scripts/self-improve-check.mjs`)
+- [x] Agents read the Vault to perform real tool actions → see §9
 
 ## 6. Knowledge
 

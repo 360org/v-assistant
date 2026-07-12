@@ -30,6 +30,18 @@ No Docker, no separate engine, no configuration.
   (`scripts/login-check.mjs`): code→key exchange with PKCE (S256), each vendor
   routing to the right models, and local-user creation.
 
+- **Isolated switchable roles.** Knowledge and memory are now per-role: pick
+  Sales Expert and you get Sales' knowledge; switch to Marketing and it swaps
+  cleanly with no bleed. Switching is instant (pure state, no boot). Verified
+  (`scripts/isolation-check.mjs`).
+- **Self-improving memory (Hermes-style).** After each exchange a role reflects
+  and saves durable facts about the user to its own memory (deduped, capped);
+  toggle in Settings. Verified (`scripts/self-improve-check.mjs`).
+- **Optional WASM code sandbox** (`sandbox` Cargo feature, off by default so
+  the app stays light and starts instantly). Guest code runs with no host
+  imports, a memory ceiling and a fuel budget — a runaway or hostile guest is
+  trapped, never harming the host. Verified (`examples/sandbox_check`).
+
 ### Changed
 - The engine is now described as embedded and always-on; an external NanoClaw
   host is an optional advanced attachment, not a requirement for normal use.

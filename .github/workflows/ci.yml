@@ -29,6 +29,8 @@ jobs:
       - run: node scripts/login-check.mjs
       # Role isolation: each role's prompt carries only its own memory/knowledge.
       - run: node scripts/isolation-check.mjs
+      # Self-improving memory: a role learns durable facts and dedupes them.
+      - run: node scripts/self-improve-check.mjs
 
   rust:
     runs-on: ubuntu-22.04

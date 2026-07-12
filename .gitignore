@@ -15,6 +15,7 @@ scripts/.telegram-*.mjs
 scripts/.schedule-*.mjs
 scripts/.login-*.mjs
 scripts/.isolation-*.mjs
+scripts/.selfimprove-*.mjs
 
 # Editor / OS
 .DS_Store

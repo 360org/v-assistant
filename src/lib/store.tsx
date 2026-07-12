@@ -128,6 +128,8 @@ interface PersistedState {
   activeAgentId: string | null;
   customSkills: CustomSkill[];
   scheduledTasks: ScheduledTask[];
+  /** Roles learn durable facts from chats and save them to their own memory. */
+  selfImprove: boolean;
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -146,6 +148,7 @@ const initialState: PersistedState = {
   activeAgentId: null,
   customSkills: [],
   scheduledTasks: [],
+  selfImprove: true,
 };
 
 /** Knowledge bucket for a role: an agent id, or "general" for no agent. */
@@ -207,6 +210,9 @@ interface AppStore extends PersistedState {
   removeScheduledTask: (id: string) => void;
   toggleAgent: (agentId: string) => void;
   setAgentConfig: (agentId: string, patch: AgentConfig) => void;
+  /** Append newly-learned memory notes to a role (deduped, capped). */
+  addAgentMemory: (agentId: string, notes: string[]) => void;
+  setSelfImprove: (on: boolean) => void;
   setActiveAgent: (agentId: string | null) => void;
   toggleIntegration: (integrationId: string) => void;
   /** The active role's knowledge (derived from `knowledgeByAgent`). */
@@ -540,6 +546,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const MEMORY_CAP = 50;
+  const addAgentMemory = useCallback((agentId: string, notes: string[]) => {
+    if (!notes.length) return;
+    setState((s) => {
+      const cfg = s.agentConfigs[agentId] ?? {};
+      const memory = cfg.memory ?? [];
+      const seen = new Set(memory.map((m) => m.trim().toLowerCase()));
+      const fresh = notes
+        .map((n) => n.trim())
+        .filter((n) => n && !seen.has(n.toLowerCase()));
+      if (!fresh.length) return s;
+      return {
+        ...s,
+        agentConfigs: {
+          ...s.agentConfigs,
+          [agentId]: { ...cfg, memory: [...memory, ...fresh].slice(-MEMORY_CAP) },
+        },
+      };
+    });
+  }, []);
+
+  const setSelfImprove = useCallback((on: boolean) => {
+    setState((s) => ({ ...s, selfImprove: on }));
+  }, []);
+
   const setActiveAgent = useCallback((agentId: string | null) => {
     setState((s) => ({ ...s, activeAgentId: agentId }));
   }, []);
@@ -664,6 +695,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeScheduledTask,
       toggleAgent,
       setAgentConfig,
+      addAgentMemory,
+      setSelfImprove,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
@@ -694,6 +727,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeScheduledTask,
       toggleAgent,
       setAgentConfig,
+      addAgentMemory,
+      setSelfImprove,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,

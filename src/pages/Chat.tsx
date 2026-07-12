@@ -8,6 +8,7 @@ import {
   type ProviderId,
 } from "@/lib/catalog";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
+import { reflectAndLearn } from "@/runtime/selfImprove";
 import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,8 @@ export function Chat() {
     clearActiveSkill,
     agentConfigs,
     knowledgeFiles,
+    selfImprove,
+    addAgentMemory,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -81,6 +84,7 @@ export function Chat() {
     ]);
 
     setStreaming(true);
+    let replyText = "";
     try {
       for await (const chunk of engine.chat(history, {
         provider,
@@ -104,11 +108,22 @@ export function Chat() {
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,
       })) {
+        replyText += chunk;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId ? { ...m, content: m.content + chunk } : m,
           ),
         );
+      }
+      // Self-improve: the active role reflects on the exchange and saves any
+      // durable facts to its OWN memory (isolated per role). Fire-and-forget.
+      if (selfImprove && activeAgent && provider && replyText.trim()) {
+        void reflectAndLearn(
+          { user: content, assistant: replyText },
+          provider,
+          providerConfigs[provider],
+          agentConfigs[activeAgent.id]?.memory ?? [],
+        ).then((notes) => addAgentMemory(activeAgent.id, notes));
       }
     } catch (error) {
       const note = `⚠️ ${error instanceof Error ? error.message : String(error)}`;

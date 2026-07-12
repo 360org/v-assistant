@@ -20,6 +20,8 @@ export function Settings() {
     connectProvider,
     user,
     resetApp,
+    selfImprove,
+    setSelfImprove,
   } = useApp();
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
 
@@ -133,6 +135,36 @@ export function Settings() {
             );
           })}
         </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-neutral-300">Assistant</h2>
+        <Card className="mt-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Self-improving memory</div>
+            <div className="text-xs text-neutral-500">
+              Each role learns durable facts from your chats and saves them to
+              its own memory — kept separate per role.
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={selfImprove}
+            aria-label="Self-improving memory"
+            onClick={() => setSelfImprove(!selfImprove)}
+            className={cn(
+              "relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors",
+              selfImprove ? "bg-gold-400" : "bg-neutral-700",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 size-5 rounded-full bg-neutral-950 transition-all",
+                selfImprove ? "left-[22px]" : "left-0.5",
+              )}
+            />
+          </button>
+        </Card>
       </section>
 
       <section className="mt-10">
