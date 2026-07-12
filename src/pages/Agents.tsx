@@ -1,7 +1,18 @@
 import { useState } from "react";
-import { Check, Download, MessageSquare, Plus, Settings2, X } from "lucide-react";
-import { AGENT_STORE, type AgentTemplate } from "@/lib/catalog";
+import {
+  Check,
+  Download,
+  Link as LinkIcon,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Settings2,
+  Trash2,
+  X,
+} from "lucide-react";
+import { type AgentTemplate } from "@/lib/catalog";
 import { useApp, type AgentConfig } from "@/lib/store";
+import { importAgentFromUrl } from "@/runtime/agentImport";
 import { syncAgents } from "@/runtime/nanoclaw";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +30,14 @@ export function Agents() {
     setView,
     agentConfigs,
     setAgentConfig,
+    agents,
+    customAgents,
+    removeCustomAgent,
   } = useApp();
   const [installing, setInstalling] = useState<string | null>(null);
   const [configFor, setConfigFor] = useState<AgentTemplate | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const isCustom = (id: string) => customAgents.some((a) => a.id === id);
 
   const install = (id: string) => {
     // One click. No GitHub, no config — the store handles everything.
@@ -31,9 +47,9 @@ export function Agents() {
       setInstalling(null);
       // Give the engine the new agent's group (best-effort, invisible).
       void syncAgents(
-        AGENT_STORE.filter(
-          (a) => a.id === id || installedAgents.includes(a.id),
-        ).map(({ id, name, description }) => ({ id, name, description })),
+        agents
+          .filter((a) => a.id === id || installedAgents.includes(a.id))
+          .map(({ id, name, description }) => ({ id, name, description })),
       );
     }, 600);
   };
@@ -45,14 +61,21 @@ export function Agents() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
-      <h1 className="text-2xl font-bold">Agent Store</h1>
-      <p className="mt-1 text-neutral-400">
-        Ready-made experts for your work. Install, then give each one its own
-        instructions and personality.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Agent Store</h1>
+          <p className="mt-1 text-neutral-400">
+            Chuyên gia dựng sẵn cho công việc của bạn. Cài, rồi cho mỗi vai trò
+            hướng dẫn và tính cách riêng — hoặc nhập thêm từ URL.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <LinkIcon className="size-4" /> Nhập từ URL
+        </Button>
+      </div>
 
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {AGENT_STORE.map((agent) => {
+        {agents.map((agent) => {
           const installed = installedAgents.includes(agent.id);
           const configured =
             agentConfigs[agent.id]?.instructions ||
@@ -83,13 +106,23 @@ export function Agents() {
                         <span className="ml-1 size-1.5 rounded-full bg-gold-300" />
                       ) : null}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => toggleAgent(agent.id)}
-                    >
-                      <Check className="size-3.5 text-emerald-400" /> Installed
-                    </Button>
+                    {isCustom(agent.id) ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeCustomAgent(agent.id)}
+                      >
+                        <Trash2 className="size-3.5 text-red-400" /> Xóa
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => toggleAgent(agent.id)}
+                      >
+                        <Check className="size-3.5 text-emerald-400" /> Installed
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <Button
@@ -119,6 +152,92 @@ export function Agents() {
           }}
         />
       )}
+
+      {importOpen && <ImportAgentDialog onClose={() => setImportOpen(false)} />}
+    </div>
+  );
+}
+
+/** Nhập một Agent từ URL persona markdown (ví dụ "The Agency" trên GitHub). */
+function ImportAgentDialog({ onClose }: { onClose: () => void }) {
+  const { importAgent, setView } = useApp();
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const doImport = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      // Chấp nhận cả URL github "blob" — đổi sang raw để tải được nội dung.
+      const raw = url
+        .trim()
+        .replace("github.com/", "raw.githubusercontent.com/")
+        .replace("/blob/", "/");
+      const agent = await importAgentFromUrl(raw);
+      importAgent(agent);
+      setView("chat");
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Nhập Agent từ URL</h2>
+          <button
+            onClick={onClose}
+            className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800"
+            aria-label="Đóng"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-400">
+          Dán link file persona markdown (frontmatter + các mục). Ví dụ một agent
+          trong bộ{" "}
+          <span className="text-gold-300">msitarzewski/agency-agents</span>.
+        </p>
+        <input
+          className={`${inputClass} mt-3`}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://github.com/…/engineering-frontend-developer.md"
+          autoFocus
+        />
+        {error && <p className="mt-2 text-xs text-red-400">⚠️ {error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button
+            size="sm"
+            disabled={busy || url.trim() === ""}
+            onClick={() => void doImport()}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" /> Đang nhập…
+              </>
+            ) : (
+              <>
+                <Download className="size-3.5" /> Nhập & dùng
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -33,7 +33,8 @@ import {
 } from "@/runtime/knowledge";
 import { runDueTasks } from "@/runtime/scheduler";
 import { newMessageId } from "@/runtime/engine";
-import { AGENT_STORE, getProvider, PROVIDERS } from "@/lib/catalog";
+import { AGENT_STORE, getProvider, PROVIDERS, type AgentTemplate } from "@/lib/catalog";
+import type { ImportedAgent } from "@/runtime/agentImport";
 import { syncAgents, restartAgentRunner } from "@/runtime/nanoclaw";
 
 /** Vault key holding a provider's secret (API key / router token). */
@@ -140,6 +141,8 @@ interface PersistedState {
   scheduledTasks: ScheduledTask[];
   /** Roles learn durable facts from chats and save them to their own memory. */
   selfImprove: boolean;
+  /** Agents (roles) người dùng nhập từ persona markdown/URL. */
+  customAgents: ImportedAgent[];
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -159,6 +162,7 @@ const initialState: PersistedState = {
   customSkills: [],
   scheduledTasks: [],
   selfImprove: true,
+  customAgents: [],
 };
 
 /** Knowledge bucket for a role: an agent id, or "general" for no agent. */
@@ -224,6 +228,11 @@ interface AppStore extends PersistedState {
   addAgentMemory: (agentId: string, notes: string[]) => void;
   setSelfImprove: (on: boolean) => void;
   setActiveAgent: (agentId: string | null) => void;
+  /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
+  agents: AgentTemplate[];
+  /** Nhập một agent từ persona markdown → cài + kích hoạt persona. */
+  importAgent: (agent: ImportedAgent) => void;
+  removeCustomAgent: (id: string) => void;
   toggleIntegration: (integrationId: string) => void;
   /** The active role's knowledge (derived from `knowledgeByAgent`). */
   knowledgeFiles: KnowledgeFile[];
@@ -334,7 +343,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const config = s.providerConfigs[s.provider];
     if (!config) return null;
     const agent =
-      AGENT_STORE.find((a) => a.id === s.activeAgentId) ?? null;
+      [...AGENT_STORE, ...s.customAgents].find((a) => a.id === s.activeAgentId) ??
+      null;
     const agentCfg = agent ? s.agentConfigs[agent.id] : undefined;
     return {
       provider: s.provider,
@@ -585,6 +595,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, activeAgentId: agentId }));
   }, []);
 
+  // Nhập một agent từ persona markdown: lưu vào customAgents, gieo Soul +
+  // Instructions vào cấu hình vai trò, đánh dấu đã cài và chọn làm vai trò hiện tại.
+  const importAgent = useCallback((agent: ImportedAgent) => {
+    setState((s) => {
+      const customAgents = [
+        ...s.customAgents.filter((a) => a.id !== agent.id),
+        agent,
+      ];
+      const existing = s.agentConfigs[agent.id] ?? {};
+      return {
+        ...s,
+        customAgents,
+        agentConfigs: {
+          ...s.agentConfigs,
+          [agent.id]: {
+            ...existing,
+            soul: agent.soul || existing.soul,
+            instructions: agent.instructions || existing.instructions,
+          },
+        },
+        installedAgents: [...new Set([...s.installedAgents, agent.id])],
+        activeAgentId: agent.id,
+      };
+    });
+  }, []);
+
+  const removeCustomAgent = useCallback((id: string) => {
+    setState((s) => ({
+      ...s,
+      customAgents: s.customAgents.filter((a) => a.id !== id),
+      installedAgents: s.installedAgents.filter((x) => x !== id),
+      activeAgentId: s.activeAgentId === id ? null : s.activeAgentId,
+    }));
+  }, []);
+
   const toggleIntegration = useCallback((integrationId: string) => {
     setState((s) => ({
       ...s,
@@ -686,7 +731,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Synchronize agent configs to the runner's instructions.md and soul.md
   useEffect(() => {
     if (!state.installedAgents.length) return;
-    const agentsToSync = AGENT_STORE.filter((a) => state.installedAgents.includes(a.id))
+    const agentsToSync = [...AGENT_STORE, ...state.customAgents]
+      .filter((a) => state.installedAgents.includes(a.id))
       .map((a) => {
         const cfg = state.agentConfigs[a.id] ?? {};
         return {
@@ -704,13 +750,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const activeId = state.activeAgentId || "default";
-    const activeProvider = state.provider || "openai";
-    const cfg = state.providerConfigs[activeProvider] || {};
+    const activeProvider = state.provider ?? "openai";
+    const cfg =
+      (state.provider ? state.providerConfigs[state.provider] : undefined) ?? {};
     
     (async () => {
       let realKey = cfg.apiKey;
       if (!realKey && activeProvider !== "local") {
-        realKey = await vaultGet(`provider:${activeProvider}`).catch(() => undefined);
+        realKey =
+          (await vaultGet(`provider:${activeProvider}`).catch(() => null)) ??
+          undefined;
       }
       
       if (cancelled) return;
@@ -736,6 +785,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // The Knowledge page and Home badge show the active role's knowledge.
       knowledgeFiles:
         state.knowledgeByAgent[knowledgeBucket(state.activeAgentId)] ?? [],
+      // Mọi agent cài được: dựng sẵn + đã nhập (đưa về dạng AgentTemplate).
+      agents: [
+        ...AGENT_STORE,
+        ...state.customAgents.map(
+          (a): AgentTemplate => ({
+            id: a.id,
+            name: a.name,
+            emoji: a.emoji,
+            category: "Đã nhập",
+            description: a.description,
+          }),
+        ),
+      ],
       view,
       setView,
       chatDraft,
@@ -749,6 +811,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProvider,
       setProviderConfig,
       connectProvider,
+      importAgent,
+      removeCustomAgent,
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
@@ -781,6 +845,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProvider,
       setProviderConfig,
       connectProvider,
+      importAgent,
+      removeCustomAgent,
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,

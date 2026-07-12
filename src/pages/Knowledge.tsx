@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { FileText, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { useApp } from "@/lib/store";
-import { AGENT_STORE } from "@/lib/catalog";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatBytes } from "@/lib/utils";
 
@@ -11,14 +10,15 @@ export function Knowledge() {
     addKnowledgeFiles,
     removeKnowledgeFile,
     activeAgentId,
+    agents,
   } = useApp();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Knowledge belongs to the active role, so switching roles never mixes it.
   const roleName = useMemo(
-    () => AGENT_STORE.find((a) => a.id === activeAgentId)?.name ?? null,
-    [activeAgentId],
+    () => agents.find((a) => a.id === activeAgentId)?.name ?? null,
+    [agents, activeAgentId],
   );
 
   const onDrop = (e: DragEvent) => {

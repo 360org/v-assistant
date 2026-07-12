@@ -35,6 +35,8 @@ jobs:
       - run: node scripts/connector-check.mjs
       # Knowledge/RAG: real docx/xlsx/pptx/pdf extraction → chunks → retrieval.
       - run: node scripts/rag-check.mjs
+      # Nhập Agent từ persona markdown (The Agency) → Agent (soul/instructions).
+      - run: node scripts/agent-import-check.mjs
 
   agent-runner:
     runs-on: ubuntu-22.04

@@ -57,10 +57,12 @@
 - [x] Cấu hình Soul (tính cách/phong cách) per-agent
 - [x] Cấu hình Memory (bộ nhớ lâu dài) per-agent
 - [x] Cô lập vai trò: chuyển Agent không pha trộn dữ liệu
-- [ ] Import/Export file markdown cấu hình Agent (Paperclip-style configuration)
-  `[REF: NanoClaw/src/claude-md-compose.ts — compose CLAUDE.md từ nhiều fragment]`
-- [ ] Người dùng tạo nhiều file markdown để định nghĩa Agent
-  `[REF: NanoClaw/container/agent-runner/src/mcp-tools/agents.ts — agent management MCP]`
+- [x] Import file markdown cấu hình Agent (persona "The Agency") từ URL →
+      Agent (name/description/emoji/soul/instructions), cài & kích hoạt ngay.
+      `src/runtime/agentImport.ts` · test `scripts/agent-import-check.mjs`
+- [x] Người dùng nhập nhiều file markdown để định nghĩa Agent (dán URL trong
+      Agent Store → "Nhập từ URL"). Tương thích bộ msitarzewski/agency-agents (230+ agent)
+- [ ] Export cấu hình Agent ra file markdown
 
 ### 2.4 Trang Skills
 - [x] Hiển thị danh sách built-in skills (10 skills)

@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Eraser, SendHorizonal, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
-import {
-  AGENT_STORE,
-  PROVIDERS,
-  getProvider,
-  type ProviderId,
-} from "@/lib/catalog";
+import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
 import { reflectAndLearn } from "@/runtime/selfImprove";
 import { Logo } from "@/components/Logo";
@@ -33,6 +28,7 @@ export function Chat() {
     knowledgeFiles,
     selfImprove,
     addAgentMemory,
+    agents,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -41,12 +37,12 @@ export function Chat() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const activeAgent = useMemo(
-    () => AGENT_STORE.find((a) => a.id === activeAgentId) ?? null,
-    [activeAgentId],
+    () => agents.find((a) => a.id === activeAgentId) ?? null,
+    [agents, activeAgentId],
   );
   const installedAgentList = useMemo(
-    () => AGENT_STORE.filter((a) => installedAgents.includes(a.id)),
-    [installedAgents],
+    () => agents.filter((a) => installedAgents.includes(a.id)),
+    [agents, installedAgents],
   );
 
   useEffect(() => {

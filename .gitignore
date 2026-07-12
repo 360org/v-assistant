@@ -17,6 +17,7 @@ scripts/.login-*.mjs
 scripts/.isolation-*.mjs
 scripts/.selfimprove-*.mjs
 scripts/.connector-*.mjs
+scripts/.agentimport-*.mjs
 
 # Editor / OS
 .DS_Store
