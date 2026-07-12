@@ -449,7 +449,8 @@
       (inbound.db → poll loop → mock provider → outbound.db, chạy trong CI)
 - [x] Test Poll Loop — phủ bởi `e2e-check.mjs` (poll → format → query → write)
 - [x] Test SQLite IPC — phủ bởi `e2e-check.mjs` (Two-DB inbound/outbound)
-- [ ] Test Native Tools (Bash, FileRead, FileWrite, FileEdit)
+- [x] Test Native Tools (Bash, FileRead, FileWrite, FileEdit, Grep, Glob) —
+      `agent-runner/scripts/native-tools-check.mjs`
 - [ ] Test MCP Tools
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/core.test.ts]`
 - [ ] Test Vault encryption/decryption
