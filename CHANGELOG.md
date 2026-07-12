@@ -42,6 +42,12 @@ No Docker, no separate engine, no configuration.
   imports, a memory ceiling and a fuel budget — a runaway or hostile guest is
   trapped, never harming the host. Verified (`examples/sandbox_check`).
 
+- **Connectors.** A connected integration (GitHub, Notion, Slack, Discord,
+  Telegram, …) becomes a plugin the agent calls by name; the connector pulls
+  the credential from the Vault and applies each system's authentication
+  automatically. The token never passes through the model. Verified
+  (`scripts/connector-check.mjs`).
+
 ### Changed
 - The engine is now described as embedded and always-on; an external NanoClaw
   host is an optional advanced attachment, not a requirement for normal use.
