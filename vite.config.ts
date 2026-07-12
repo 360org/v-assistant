@@ -23,6 +23,9 @@ export default defineConfig({
     watch: {
       // Don't watch the Rust side of the app.
       ignored: ["**/src-tauri/**"],
+      // Poll when running in Docker (bind mounts don't emit fs events on
+      // macOS/Windows). Enabled via the dev compose's CHOKIDAR_USEPOLLING.
+      usePolling: Boolean(process.env.CHOKIDAR_USEPOLLING),
     },
   },
   // Env variables starting with TAURI_ENV_* are exposed for platform-specific builds.

@@ -14,6 +14,19 @@ npm run dev      # → http://localhost:1420
 "Continue with OpenRouter" is a real sign-in on localhost; other vendors
 route through OpenRouter's models. Credentials live in the browser here.
 
+**Docker — nothing installed on the host:**
+
+```bash
+docker compose -f docker-compose.dev.yml up
+# → open http://localhost:1420  (first run installs deps; give it ~1 min)
+```
+
+No Node or Rust on your machine — everything runs in the container. Your
+source is bind-mounted in, so editing files on the host hot-reloads the app.
+`node_modules` stays inside a named volume (container-built binaries never
+touch the host). Stop with Ctrl-C. This runs the **web** app (Vault uses
+browser storage); real sign-in with OpenRouter works on localhost.
+
 **Desktop app (the real thing, hot reload):**
 
 ```bash
@@ -22,7 +35,8 @@ npm run tauri dev
 
 Opens the actual V Assistant window. Needs the Rust toolchain and your OS
 webview libs (WebKitGTK on Linux, WebView2 on Windows, built-in on macOS).
-Credentials live in the OS keychain (Vault).
+Credentials live in the OS keychain (Vault). (The desktop window is a native
+GUI, so it can't run inside Docker — use it directly on your machine.)
 
 ## 2. Test before committing
 
