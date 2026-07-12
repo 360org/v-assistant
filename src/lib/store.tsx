@@ -26,6 +26,11 @@ import {
 import { routedConfig } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import { notifyTelegram, startTelegram, stopTelegram } from "@/runtime/telegram";
+import {
+  clearKnowledge,
+  deleteKnowledgeFile,
+  indexKnowledgeFile,
+} from "@/runtime/knowledge";
 import { runDueTasks } from "@/runtime/scheduler";
 import { newMessageId } from "@/runtime/engine";
 import { AGENT_STORE, getProvider, PROVIDERS } from "@/lib/catalog";
@@ -46,7 +51,7 @@ export type View =
   | "integrations"
   | "settings";
 
-export type KnowledgeStatus = "processing" | "ready";
+export type KnowledgeStatus = "processing" | "ready" | "error";
 
 export interface KnowledgeFile {
   id: string;
@@ -54,6 +59,10 @@ export interface KnowledgeFile {
   size: number;
   addedAt: number;
   status: KnowledgeStatus;
+  /** How many text chunks were indexed (set when status is "ready"). */
+  chunks?: number;
+  /** Why indexing failed (set when status is "error"). */
+  error?: string;
 }
 
 /** An external skill installed from a URL (raw SKILL.md, source kept). */
@@ -217,7 +226,7 @@ interface AppStore extends PersistedState {
   toggleIntegration: (integrationId: string) => void;
   /** The active role's knowledge (derived from `knowledgeByAgent`). */
   knowledgeFiles: KnowledgeFile[];
-  addKnowledgeFiles: (files: { name: string; size: number }[]) => void;
+  addKnowledgeFiles: (files: File[]) => void;
   removeKnowledgeFile: (fileId: string) => void;
   setMessages: (
     update: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
@@ -585,8 +594,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addKnowledgeFiles = useCallback(
-    (files: { name: string; size: number }[]) => {
+    (files: File[]) => {
       const now = Date.now();
+      // Capture the bucket at drop time so status updates land in the same
+      // role even if the user switches roles while a file is still indexing.
+      const agentId = stateRef.current.activeAgentId;
+      const bucket = knowledgeBucket(agentId);
       const entries: KnowledgeFile[] = files.map((f, i) => ({
         id: `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
         name: f.name,
@@ -594,42 +607,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addedAt: now,
         status: "processing",
       }));
-      // Files land in the active role's bucket, keeping each role's knowledge
-      // separate.
-      setState((s) => {
-        const key = knowledgeBucket(s.activeAgentId);
-        return {
+      setState((s) => ({
+        ...s,
+        knowledgeByAgent: {
+          ...s.knowledgeByAgent,
+          [bucket]: [...entries, ...(s.knowledgeByAgent[bucket] ?? [])],
+        },
+      }));
+      const patchFile = (id: string, patch: Partial<KnowledgeFile>) =>
+        setState((s) => ({
           ...s,
           knowledgeByAgent: {
             ...s.knowledgeByAgent,
-            [key]: [...entries, ...(s.knowledgeByAgent[key] ?? [])],
+            [bucket]: (s.knowledgeByAgent[bucket] ?? []).map((f) =>
+              f.id === id ? { ...f, ...patch } : f,
+            ),
           },
-        };
-      });
-      // The runtime indexes files in the background; the user never sees
-      // embeddings or vector stores — just "Processing" then "Ready".
-      for (const entry of entries) {
-        const delay = 1200 + Math.random() * 1800;
-        setTimeout(() => {
-          setState((s) => {
-            const key = knowledgeBucket(s.activeAgentId);
-            return {
-              ...s,
-              knowledgeByAgent: {
-                ...s.knowledgeByAgent,
-                [key]: (s.knowledgeByAgent[key] ?? []).map((f) =>
-                  f.id === entry.id ? { ...f, status: "ready" } : f,
-                ),
-              },
-            };
-          });
-        }, delay);
+        }));
+      // Real indexing: extract text → chunk → persist in the role's bucket.
+      // The user never sees the pipeline — just "Processing" then "Ready".
+      for (const [i, file] of files.entries()) {
+        const entry = entries[i];
+        void indexKnowledgeFile(agentId, entry.id, file)
+          .then((chunks) => patchFile(entry.id, { status: "ready", chunks }))
+          .catch((e) =>
+            patchFile(entry.id, {
+              status: "error",
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          );
       }
     },
     [],
   );
 
   const removeKnowledgeFile = useCallback((fileId: string) => {
+    void deleteKnowledgeFile(fileId);
     setState((s) => {
       const key = knowledgeBucket(s.activeAgentId);
       return {
@@ -662,8 +675,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       /* run without persistence */
     }
-    // Purge secrets from the Vault too.
+    // Purge secrets from the Vault and every role's indexed documents too.
     for (const p of PROVIDERS) void vaultDelete(vaultKey(p.id));
+    void clearKnowledge();
     setState(initialState);
     setView("home");
   }, []);

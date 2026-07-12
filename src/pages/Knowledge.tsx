@@ -24,10 +24,7 @@ export function Knowledge() {
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const files = Array.from(e.dataTransfer.files).map((f) => ({
-      name: f.name,
-      size: f.size,
-    }));
+    const files = Array.from(e.dataTransfer.files);
     if (files.length) addKnowledgeFiles(files);
   };
 
@@ -63,7 +60,7 @@ export function Knowledge() {
         <UploadCloud className="size-8 text-gold-300" />
         <p className="mt-3 font-medium">Drag & drop files here</p>
         <p className="mt-1 text-sm text-neutral-500">
-          PDF · Word · Excel · PowerPoint · Folders · Websites
+          PDF · Word · Excel · PowerPoint · Text · Markdown · CSV · HTML
         </p>
         <input
           ref={inputRef}
@@ -71,10 +68,7 @@ export function Knowledge() {
           multiple
           className="hidden"
           onChange={(e) => {
-            const files = Array.from(e.target.files ?? []).map((f) => ({
-              name: f.name,
-              size: f.size,
-            }));
+            const files = Array.from(e.target.files ?? []);
             if (files.length) addKnowledgeFiles(files);
             e.target.value = "";
           }}
@@ -97,12 +91,18 @@ export function Knowledge() {
                   <div className="truncate text-sm">{f.name}</div>
                   <div className="text-xs text-neutral-500">
                     {formatBytes(f.size)}
+                    {f.status === "ready" && f.chunks
+                      ? ` · ${f.chunks} sections learned`
+                      : ""}
+                    {f.status === "error" && f.error ? ` · ${f.error}` : ""}
                   </div>
                 </div>
                 {f.status === "processing" ? (
                   <Badge tone="gold">
                     <Loader2 className="size-3 animate-spin" /> Processing
                   </Badge>
+                ) : f.status === "error" ? (
+                  <Badge tone="red">Failed</Badge>
                 ) : (
                   <Badge tone="green">Ready</Badge>
                 )}

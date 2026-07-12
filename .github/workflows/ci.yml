@@ -33,6 +33,8 @@ jobs:
       - run: node scripts/self-improve-check.mjs
       # Connectors: an agent operates a system; credential auto-pulled from Vault.
       - run: node scripts/connector-check.mjs
+      # Knowledge/RAG: real docx/xlsx/pptx/pdf extraction → chunks → retrieval.
+      - run: node scripts/rag-check.mjs
 
   rust:
     runs-on: ubuntu-22.04

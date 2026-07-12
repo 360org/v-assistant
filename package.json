@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/validate-skills.mjs && tsc && vite build",
-    "check": "npm run build && node scripts/tool-loop-check.mjs && node scripts/telegram-check.mjs && node scripts/schedule-check.mjs && node scripts/login-check.mjs && node scripts/isolation-check.mjs && node scripts/self-improve-check.mjs && node scripts/connector-check.mjs",
+    "check": "npm run build && node scripts/tool-loop-check.mjs && node scripts/telegram-check.mjs && node scripts/schedule-check.mjs && node scripts/login-check.mjs && node scripts/isolation-check.mjs && node scripts/self-improve-check.mjs && node scripts/connector-check.mjs && node scripts/rag-check.mjs",
     "version:set": "node scripts/bump-version.mjs",
     "build:demo": "vite build -c vite.demo.config.ts && node scripts/inline-demo.mjs",
     "validate:skills": "node scripts/validate-skills.mjs",
@@ -25,6 +25,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.6.0"

@@ -16,6 +16,7 @@ import {
   type ProviderConfig,
 } from "./providers";
 import { buildAgentTools } from "./tools";
+import { retrieveKnowledge, type KnowledgeExcerpt } from "./knowledge";
 import { DEMO_MODE } from "./oauth";
 
 export interface ChatMessage {
@@ -39,6 +40,8 @@ export interface ChatOptions {
   agentMemory?: string[];
   /** Knowledge available to THIS role only (names of ready documents). */
   agentKnowledge?: string[];
+  /** Excerpts retrieved from this role's documents for the current question. */
+  knowledgeExcerpts?: KnowledgeExcerpt[];
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
   /** Active skill's name — shown to the model as the task it's running. */
@@ -120,6 +123,14 @@ export function buildSystemPrompt(options: ChatOptions): string {
       `from other roles):\n` +
       knowledge.map((k) => `- ${k}`).join("\n");
   }
+  // Retrieved excerpts ground the answer in the role's actual documents.
+  const excerpts = options.knowledgeExcerpts ?? [];
+  if (excerpts.length) {
+    prompt +=
+      `\n\nRelevant excerpts from this role's documents — ground your answer ` +
+      `on them and cite the document name when you use one:\n\n` +
+      excerpts.map((e) => `[${e.name}]\n${e.text}`).join("\n\n");
+  }
   // The active skill's full instructions steer how the model does the task.
   if (options.skillInstructions) {
     prompt +=
@@ -155,6 +166,16 @@ export function createEngine(): Engine {
       if (DEMO_MODE) {
         yield* demoEngine.chat(messages, options);
         return;
+      }
+      // RAG: pull the excerpts from this role's documents that best match
+      // the user's question, so the reply is grounded in their files.
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      if (lastUser) {
+        const knowledgeExcerpts = await retrieveKnowledge(
+          options.agentId ?? null,
+          lastUser.content,
+        ).catch(() => []);
+        if (knowledgeExcerpts.length) options = { ...options, knowledgeExcerpts };
       }
       const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
       if (await engineRunning()) {

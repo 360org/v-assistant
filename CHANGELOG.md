@@ -48,6 +48,16 @@ No Docker, no separate engine, no configuration.
   automatically. The token never passes through the model. Verified
   (`scripts/connector-check.mjs`).
 
+- **Knowledge that actually reads your documents (RAG).** Dropped files are
+  extracted for real — PDF (pdfjs), Word/Excel/PowerPoint (native ZIP+XML
+  parsing, no extra libraries), text/Markdown/CSV/HTML — chunked, and indexed
+  per role in IndexedDB. Each chat turn retrieves the excerpts that best match
+  the question and grounds the answer on them, citing the source document.
+  Failures surface in the UI (e.g. scanned PDFs with no text, legacy `.doc`).
+  Retrieval is lexical (tf-idf) — private by design, nothing leaves the
+  device. Verified end-to-end with real generated docx/xlsx/pptx/pdf fixtures
+  (`scripts/rag-check.mjs`).
+
 ### Changed
 - The engine is now described as embedded and always-on; an external NanoClaw
   host is an optional advanced attachment, not a requirement for normal use.
@@ -56,8 +66,8 @@ No Docker, no separate engine, no configuration.
 - The live OAuth redirect and openrouter.ai round-trip still need a manual
   check on a real desktop (CI has no browser). The sign-in *logic* around it
   is covered by `scripts/login-check.mjs`.
-- Advanced items remain planned: Knowledge extraction/RAG, self-improving
-  agents, and OAuth integrations (Drive/Outlook/Calendar).
+- Advanced items remain planned: OAuth integrations (Drive/Outlook/Calendar),
+  per-role skill sets, and an MCP client.
 
 ## [0.1.0] — 2026-07-11
 

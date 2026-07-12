@@ -97,8 +97,15 @@ engine execution pending) · ⬜ planned/not started
       has its own bucket; switching roles never mixes knowledge. The active
       role's documents are injected into its prompt only. Verified
       (`scripts/isolation-check.mjs`)
-- [ ] Real extraction (PDF/Word/Excel) → chunks ⬜
-- [ ] Retrieval fed into chat as context (RAG) ⬜
+- [x] **Real extraction → chunks**: PDF (pdfjs), Word/Excel/PowerPoint
+      (native ZIP+XML parsing, zero extra deps), text/Markdown/CSV/HTML.
+      Indexed per role in IndexedDB; extraction failures (scanned PDFs,
+      legacy `.doc`) surface in the UI. Verified with real generated
+      docx/xlsx/pptx/pdf fixtures (`scripts/rag-check.mjs`)
+- [x] **Retrieval fed into chat (RAG)**: each turn pulls the excerpts that
+      best match the question (lexical tf-idf, on-device) from the active
+      role's documents only, and grounds the reply on them with the source
+      document cited. Verified (`scripts/rag-check.mjs`)
 
 ## 7. Integrations (channels)
 

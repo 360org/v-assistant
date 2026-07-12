@@ -16,6 +16,8 @@ await build({
   platform: "node",
   outfile,
   define: { "import.meta.env": "{}" },
+  // knowledge.ts lazy-loads pdfjs for PDFs; not needed in these checks.
+  external: ["pdfjs-dist", "pdfjs-dist/build/pdf.worker.min.mjs?url"],
   logLevel: "silent",
 });
 const { buildSystemPrompt } = await import(pathToFileURL(outfile).href);

@@ -49,6 +49,7 @@ chi tiết từng tính năng nằm ở [`idea.md`](./idea.md); nhật ký phiê
 | **Quy trình dev** | `npm run check`, `version:set`, `DEVELOPMENT.md` |
 | **Docker live-dev** | `docker-compose.dev.yml` + `dev.sh` (Colima), hot-reload, không cài gì trên host |
 | **Đăng nhập thẳng vendor** | ChatGPT/Claude/Gemini kết nối trực tiếp vendor (mở trang → dán key → xong) |
+| **Knowledge thật (RAG)** | Trích xuất PDF/Word/Excel/PowerPoint thật → chunks → truy xuất theo câu hỏi, tiêm vào prompt của đúng role |
 
 ---
 
@@ -69,9 +70,10 @@ Mọi tính năng đều có **test tự động** chạy trong CI (`npm run che
 | Connectors (đọc Vault, tự áp auth) | ✅ | `scripts/connector-check.mjs` |
 | WASM code sandbox (feature tùy chọn) | ✅ | `examples/sandbox_check` |
 | Loopback OAuth (desktop) | ✅ | `examples/oauth_loopback_check` |
+| Knowledge thật: trích xuất + RAG theo role | ✅ | `scripts/rag-check.mjs` |
 
-Còn lại (chưa làm): RAG trích xuất tài liệu thật; OAuth Drive/Outlook/Calendar;
-native OAuth cho từng vendor; ký & notarize macOS.
+Còn lại (chưa làm): OAuth Drive/Outlook/Calendar; native OAuth cho từng vendor;
+per-role skill sets; MCP client; ký & notarize macOS.
 
 ---
 
@@ -86,6 +88,7 @@ Webview (React) ── UI + "bộ não" engine nhúng
    ├─ connectors.ts    plugin đọc Vault → thao tác hệ thống khác
    ├─ telegram.ts      kênh 2 chiều
    ├─ scheduler.ts     hẹn giờ tự chạy
+   ├─ knowledge.ts     trích xuất tài liệu → chunks → truy xuất (RAG per-role)
    └─ selfImprove.ts   tự học vào memory của role
 
 Rust (Tauri) ── vỏ desktop
