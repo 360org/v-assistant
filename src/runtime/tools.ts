@@ -20,6 +20,7 @@ import {
   readField,
   isSecretField,
 } from "./vault";
+import { CONNECTORS, callConnector } from "./connectors";
 
 /** An OpenAI-compatible tool the agent can call, plus its executor. */
 export interface AgentTool {
@@ -170,7 +171,49 @@ const httpRequestTool: AgentTool = {
   },
 };
 
+const connectorCallTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "connector_call",
+      description:
+        "Operate a connected system (e.g. GitHub, Notion, Slack, Discord, " +
+        "Telegram) the user linked on the Integrations page. The connector " +
+        "fetches its credential from the Vault and applies the right " +
+        "authentication automatically — you never handle the token. Known " +
+        `connectors: ${Object.keys(CONNECTORS).join(", ")}. Pass a path (the ` +
+        "connector adds the base URL and auth) or a full URL.",
+      parameters: {
+        type: "object",
+        properties: {
+          connector: {
+            type: "string",
+            description: "The connected system, e.g. \"github\" or \"notion\".",
+          },
+          method: { type: "string", description: "HTTP method (default GET)." },
+          target: {
+            type: "string",
+            description: "API path (e.g. \"/user/repos\") or a full URL.",
+          },
+          body: { type: "string", description: "Request body (JSON), if any." },
+        },
+        required: ["connector", "target"],
+      },
+    },
+  },
+  async run(args) {
+    const result = await callConnector({
+      connector: String(args.connector ?? ""),
+      method: args.method ? String(args.method) : undefined,
+      target: String(args.target ?? ""),
+      body: args.body != null ? String(args.body) : undefined,
+    });
+    const status = result.status ? `HTTP ${result.status}\n` : "";
+    return `${status}${result.body}`;
+  },
+};
+
 /** The tools every agent turn can use. */
 export function buildAgentTools(): AgentTool[] {
-  return [vaultListTool, httpRequestTool];
+  return [vaultListTool, httpRequestTool, connectorCallTool];
 }

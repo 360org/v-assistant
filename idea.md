@@ -105,6 +105,11 @@ engine execution pending) · ⬜ planned/not started
 - [x] Token-based config dialog → Vault (Telegram, GitHub, Slack, Discord, Notion)
 - [x] Telegram: bot token (+ chat id) captured and stored
 - [x] Telegram channel actually runs (send/receive) in-app → see §8
+- [x] **Connectors**: a connected integration becomes a plugin the agent
+      calls by name (`connector_call`); it pulls the credential from the Vault
+      and applies each system's auth automatically (GitHub, Notion, Slack,
+      Discord, Telegram, + generic bearer). The token never reaches the model.
+      Verified (`scripts/connector-check.mjs`)
 - [ ] OAuth integrations (Drive, Outlook, Calendar) real login ⬜
 
 ## 8. Telegram / channels — real run  ✅
