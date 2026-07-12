@@ -14,18 +14,37 @@ npm run dev      # → http://localhost:1420
 "Continue with OpenRouter" is a real sign-in on localhost; other vendors
 route through OpenRouter's models. Credentials live in the browser here.
 
-**Docker — nothing installed on the host:**
+**Docker (Colima) — nothing installed on the host:**
+
+Runtime is [Colima](https://github.com/abiosoft/colima), not Docker Desktop.
+One-time setup:
 
 ```bash
-docker compose -f docker-compose.dev.yml up
-# → open http://localhost:1420  (first run installs deps; give it ~1 min)
+brew install colima docker docker-compose
+```
+
+Then use the `dev.sh` helper — it boots Colima automatically when needed:
+
+```bash
+./dev.sh up        # start → http://localhost:1420 (first run ~1 min)
+./dev.sh logs      # follow the dev server output
+./dev.sh restart   # restart after a config change
+./dev.sh stop      # pause (keeps the container)
+./dev.sh start     # resume
+./dev.sh down      # stop and remove (keeps node_modules volume)
+./dev.sh reset     # rebuild from scratch (fresh node_modules)
+./dev.sh shell     # a shell inside the dev container
+./dev.sh status    # Colima + container status
 ```
 
 No Node or Rust on your machine — everything runs in the container. Your
 source is bind-mounted in, so editing files on the host hot-reloads the app.
-`node_modules` stays inside a named volume (container-built binaries never
-touch the host). Stop with Ctrl-C. This runs the **web** app (Vault uses
-browser storage); real sign-in with OpenRouter works on localhost.
+`node_modules` stays in a named volume (container-built binaries never touch
+the host). This runs the **web** app (Vault uses browser storage); real
+sign-in with OpenRouter works on localhost.
+
+Under the hood `dev.sh` wraps `docker compose -f docker-compose.dev.yml`, so
+you can still use Compose directly if you prefer.
 
 **Desktop app (the real thing, hot reload):**
 
