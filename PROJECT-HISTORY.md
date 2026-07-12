@@ -50,6 +50,7 @@ chi tiết từng tính năng nằm ở [`idea.md`](./idea.md); nhật ký phiê
 | **Docker live-dev** | `docker-compose.dev.yml` + `dev.sh` (Colima), hot-reload, không cài gì trên host |
 | **Đăng nhập thẳng vendor** | ChatGPT/Claude/Gemini kết nối trực tiếp vendor (mở trang → dán key → xong) |
 | **Knowledge thật (RAG)** | Trích xuất PDF/Word/Excel/PowerPoint thật → chunks → truy xuất theo câu hỏi, tiêm vào prompt của đúng role |
+| **Universal Agent Runner** | Kiến trúc độc lập SDK: tách "bộ não" & tool execution ra host process, giao tiếp qua SQLite IPC (inbound.db/outbound.db), Local Vault bảo mật, và Memory Scaffold per-agent |
 
 ---
 
@@ -77,29 +78,28 @@ per-role skill sets; MCP client; ký & notarize macOS.
 
 ---
 
-## 4. Kiến trúc hiện tại
+## 4. Kiến trúc hiện tại (Độc lập SDK - SQLite IPC)
 
 ```
-Webview (React) ── UI + "bộ não" engine nhúng
-   │  (chạy tức thì, nhẹ, không Docker)
-   ├─ engine.ts        chọn engine + dựng system prompt (cô lập role)
-   ├─ providers.ts     stream + vòng lặp tool-calling
-   ├─ tools.ts         vault_list · http_request · connector_call
-   ├─ connectors.ts    plugin đọc Vault → thao tác hệ thống khác
-   ├─ telegram.ts      kênh 2 chiều
-   ├─ scheduler.ts     hẹn giờ tự chạy
-   ├─ knowledge.ts     trích xuất tài liệu → chunks → truy xuất (RAG per-role)
-   └─ selfImprove.ts   tự học vào memory của role
+Webview (React) ── Giao diện Desktop
+   ├─ engine.ts        chọn engine & giao tiếp với SQLite IPC qua Tauri command
+   └─ nanoclaw.ts      adapter kết nối trực tiếp inbound.db/outbound.db
 
-Rust (Tauri) ── vỏ desktop
-   ├─ auth.rs      loopback OAuth
-   ├─ vault.rs     OS keychain
-   ├─ runtime.rs   hợp đồng IPC (ổ cắm engine ngoài, tùy chọn)
-   └─ sandbox.rs   WASM sandbox (feature "sandbox", off mặc định)
+Rust (Tauri) ── Vỏ Desktop & Cầu nối Tiến trình
+   ├─ main.rs          khởi tạo, quản lý vòng đời ứng dụng
+   ├─ lib.rs           tauri command handlers (runtime_send/receive/restart_runner)
+   ├─ runtime.rs       quản lý tiến trình Agent Runner & khởi tạo schema SQLite IPC
+   └─ vault.rs         V-Assistant local secure vault (mã hóa XOR, lưu vault.db)
+
+Agent Runner (Host) ── Bộ não độc lập (Node.js/TypeScript)
+   ├─ index.ts         khởi chạy, nạp cấu hình, dựng system prompt
+   ├─ poll-loop.ts     vòng lặp agentic loop tự động nhận tin & gọi công cụ (max 25 rounds)
+   ├─ db/              connection.ts & sqlite.ts quản lý Two-DB SQLite IPC
+   ├─ providers/       Gemini, OpenAI, Anthropic adapters trực tiếp (không dùng SDK)
+   ├─ native-tools/    bash, file_read/write/edit, grep, glob, http_request
+   ├─ mcp-client/      mcp-client stdio connection để chạy mcp servers ngoài
+   └─ memory/          memory-scaffold.ts tạo cấu trúc memory cô lập per-agent
 ```
-
-**Nguyên tắc**: engine chạy nhúng, khởi động tức thì. Docker/NanoClaw ngoài là
-**tùy chọn nâng cao** (qua `VUA_ENGINE_DIR`), không bắt buộc.
 
 ---
 

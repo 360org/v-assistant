@@ -89,12 +89,35 @@ async function latestOutboundId(groupId: string): Promise<number> {
 
 /** Push installed agents to the runtime so the engine has their groups. */
 export async function syncAgents(
-  agents: { id: string; name: string; description: string }[],
+  agents: { id: string; name: string; description: string; instructions?: string; soul?: string }[],
 ): Promise<void> {
   if (!inDesktopShell()) return;
   try {
     await invoke("runtime_sync", { agents });
-  } catch {
-    // Sync is best-effort; the engine rebuilds groups on next launch.
+  } catch (err) {
+    console.error("Failed to sync agents:", err);
+  }
+}
+
+/** Restart the agent runner process with new configurations. */
+export async function restartAgentRunner(
+  agentName: string,
+  provider: string,
+  apiKey?: string | null,
+  baseUrl?: string | null,
+  model?: string | null,
+): Promise<boolean> {
+  if (!inDesktopShell()) return false;
+  try {
+    return await invoke<boolean>("runtime_restart_runner", {
+      agentName,
+      provider,
+      apiKey: apiKey || null,
+      baseUrl: baseUrl || null,
+      model: model || null,
+    });
+  } catch (err) {
+    console.error("Failed to restart agent runner:", err);
+    return false;
   }
 }

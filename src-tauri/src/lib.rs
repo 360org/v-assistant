@@ -50,8 +50,29 @@ fn runtime_sync(state: tauri::State<Runtime>, agents: Vec<AgentConfig>) -> Resul
 /// Try to attach the engine; false means no engine is installed and the
 /// app stays on the built-in preview engine.
 #[tauri::command]
-fn runtime_start_engine(state: tauri::State<Runtime>) -> Result<bool, String> {
-    state.spawn_engine()
+fn runtime_start_engine(app: tauri::AppHandle, state: tauri::State<Runtime>) -> Result<bool, String> {
+    state.spawn_engine(Some(&app))
+}
+
+/// Restart the agent runner with a new agent and provider configuration.
+#[tauri::command]
+fn runtime_restart_runner(
+    state: tauri::State<Runtime>,
+    agent_name: String,
+    provider: String,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    model: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<bool, String> {
+    state.spawn_engine_with_config(
+        &agent_name,
+        &provider,
+        api_key.as_deref(),
+        base_url.as_deref(),
+        model.as_deref(),
+        Some(&app),
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -59,10 +80,18 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let dir = app.path().app_data_dir()?.join("runtime");
+            
+            // Set VUA_PROJECT_DIR dynamically in dev mode to help locate agent-runner
+            if std::env::var("VUA_PROJECT_DIR").is_err() {
+                if let Ok(cwd) = std::env::current_dir() {
+                    std::env::set_var("VUA_PROJECT_DIR", cwd);
+                }
+            }
+
             let runtime = Runtime::new(dir).map_err(std::io::Error::other)?;
             // Attach a NanoClaw engine when one is installed; otherwise the
             // UI silently falls back to the preview engine.
-            let _ = runtime.spawn_engine();
+            let _ = runtime.spawn_engine(Some(app.app_handle()));
             app.manage(runtime);
             Ok(())
         })
@@ -79,12 +108,20 @@ pub fn run() {
             runtime_receive,
             runtime_sync,
             runtime_start_engine,
+            runtime_restart_runner,
             auth::oauth_listen,
             auth::open_external,
             vault::vault_set,
             vault::vault_get,
             vault::vault_delete
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running V Assistant");
+        .build(tauri::generate_context!())
+        .expect("error while building V Assistant")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(runtime) = app_handle.try_state::<Runtime>() {
+                    runtime.stop_engine();
+                }
+            }
+        });
 }

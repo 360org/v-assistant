@@ -34,6 +34,7 @@ import {
 import { runDueTasks } from "@/runtime/scheduler";
 import { newMessageId } from "@/runtime/engine";
 import { AGENT_STORE, getProvider, PROVIDERS } from "@/lib/catalog";
+import { syncAgents, restartAgentRunner } from "@/runtime/nanoclaw";
 
 /** Vault key holding a provider's secret (API key / router token). */
 function vaultKey(provider: ProviderId): string {
@@ -681,6 +682,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(initialState);
     setView("home");
   }, []);
+
+  // Synchronize agent configs to the runner's instructions.md and soul.md
+  useEffect(() => {
+    if (!state.installedAgents.length) return;
+    const agentsToSync = AGENT_STORE.filter((a) => state.installedAgents.includes(a.id))
+      .map((a) => {
+        const cfg = state.agentConfigs[a.id] ?? {};
+        return {
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          instructions: cfg.instructions,
+          soul: cfg.soul,
+        };
+      });
+    void syncAgents(agentsToSync);
+  }, [state.installedAgents, state.agentConfigs]);
+
+  // Restart the Agent Runner whenever active agent, active provider, or provider config changes
+  useEffect(() => {
+    let cancelled = false;
+    const activeId = state.activeAgentId || "default";
+    const activeProvider = state.provider || "openai";
+    const cfg = state.providerConfigs[activeProvider] || {};
+    
+    (async () => {
+      let realKey = cfg.apiKey;
+      if (!realKey && activeProvider !== "local") {
+        realKey = await vaultGet(`provider:${activeProvider}`).catch(() => undefined);
+      }
+      
+      if (cancelled) return;
+      
+      console.log(`[store] Syncing & starting runner: agent=${activeId}, provider=${activeProvider}`);
+      await restartAgentRunner(
+        activeId,
+        activeProvider,
+        realKey || null,
+        cfg.baseUrl || null,
+        cfg.model || null
+      );
+    })();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [state.activeAgentId, state.provider, state.providerConfigs]);
 
   const value = useMemo<AppStore>(
     () => ({

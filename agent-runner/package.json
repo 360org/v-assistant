@@ -1,0 +1,25 @@
+{
+  "name": "@v-assistant/agent-runner",
+  "version": "0.1.0",
+  "description": "Universal Agent Runner — Host Process for V-Assistant",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "dev:node": "npx tsx src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "bun": ">=1.1"
+  }
+}
