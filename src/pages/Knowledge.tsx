@@ -92,7 +92,7 @@ export function Knowledge() {
                   <div className="text-xs text-neutral-500">
                     {formatBytes(f.size)}
                     {f.status === "ready" && f.chunks
-                      ? ` · ${f.chunks} sections learned`
+                      ? ` · ${f.chunks} section${f.chunks === 1 ? "" : "s"} learned`
                       : ""}
                     {f.status === "error" && f.error ? ` · ${f.error}` : ""}
                   </div>
