@@ -1,0 +1,69 @@
+# Development workflow
+
+Dev live → test → commit → cut a version. Nothing ships until it's green.
+
+## 1. Run it live
+
+**Web preview (fastest, hot reload):**
+
+```bash
+npm install     # first time
+npm run dev      # → http://localhost:1420
+```
+
+"Continue with OpenRouter" is a real sign-in on localhost; other vendors
+route through OpenRouter's models. Credentials live in the browser here.
+
+**Desktop app (the real thing, hot reload):**
+
+```bash
+npm run tauri dev
+```
+
+Opens the actual V Assistant window. Needs the Rust toolchain and your OS
+webview libs (WebKitGTK on Linux, WebView2 on Windows, built-in on macOS).
+Credentials live in the OS keychain (Vault).
+
+## 2. Test before committing
+
+One command runs the production build **and** every end-to-end check
+(agent tools, Telegram, scheduler, sign-in, role isolation, self-improve,
+connectors):
+
+```bash
+npm run check
+```
+
+Rust side (desktop shell + sandbox):
+
+```bash
+cd src-tauri
+cargo check
+cargo run --example oauth_loopback_check
+cargo run --features sandbox --example sandbox_check
+```
+
+Only commit when `npm run check` is green. CI runs the same checks on every
+push, so a red build never merges.
+
+## 3. Commit
+
+```bash
+git add -A && git commit -m "…"
+git push
+```
+
+## 4. Cut a versioned release
+
+```bash
+npm run version:set 0.1.1        # bumps package.json, tauri.conf.json, Cargo.*
+# move CHANGELOG.md "Unreleased" → "[0.1.1]"
+npm run check                    # green
+git commit -am "release: v0.1.1"
+git tag v0.1.1 && git push --tags
+```
+
+Pushing the `vX.Y.Z` tag triggers the **Release** workflow, which builds the
+installers for macOS (Apple Silicon + Intel), Windows and Linux and publishes
+them to a GitHub Release. You can also run that workflow by hand from the
+Actions tab.

@@ -13,6 +13,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/validate-skills.mjs && tsc && vite build",
+    "check": "npm run build && node scripts/tool-loop-check.mjs && node scripts/telegram-check.mjs && node scripts/schedule-check.mjs && node scripts/login-check.mjs && node scripts/isolation-check.mjs && node scripts/self-improve-check.mjs && node scripts/connector-check.mjs",
+    "version:set": "node scripts/bump-version.mjs",
     "build:demo": "vite build -c vite.demo.config.ts && node scripts/inline-demo.mjs",
     "validate:skills": "node scripts/validate-skills.mjs",
     "preview": "vite preview",
