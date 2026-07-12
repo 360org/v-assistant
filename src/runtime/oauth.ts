@@ -60,6 +60,16 @@ function inDesktopShell(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Open a URL in the user's real browser (vendor sign-in / key pages). */
+export async function openExternal(url: string): Promise<void> {
+  if (inDesktopShell()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_external", { url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 /**
  * Desktop sign-in via loopback redirect: the native side opens a localhost
  * listener and the system browser, the user logs in for real, the browser

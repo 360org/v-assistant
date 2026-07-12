@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ExternalLink, Loader2, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import { DEFAULT_MODELS, type ProviderConfig } from "@/runtime/providers";
-import { signIn } from "@/runtime/oauth";
+import { openExternal, signIn } from "@/runtime/oauth";
 import { routedConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -114,34 +114,26 @@ export function ProviderConnect({
               />
             </label>
           </div>
-        ) : (
+        ) : info.oauth ? (
           <>
-            {/* Headline: direct sign-in. */}
-            {info.oauth ? (
-              <Button
-                className="mt-4 w-full"
-                disabled={signingIn}
-                onClick={() => void login()}
-              >
-                {signingIn ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" /> Signing in…
-                  </>
-                ) : (
-                  <>
-                    <LogIn className="size-4" /> {info.loginLabel}
-                  </>
-                )}
-              </Button>
-            ) : (
-              <p className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-xs text-neutral-400">
-                One-click sign-in for {info.name} is coming once the vendor
-                opens it. For now, use an API key below — or sign in with
-                OpenRouter to reach {info.name}'s models instantly.
-              </p>
-            )}
+            {/* OpenRouter: real one-click OAuth. */}
+            <Button
+              className="mt-4 w-full"
+              disabled={signingIn}
+              onClick={() => void login()}
+            >
+              {signingIn ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Signing in…
+                </>
+              ) : (
+                <>
+                  <LogIn className="size-4" /> {info.loginLabel}
+                </>
+              )}
+            </Button>
 
-            {/* Advanced: API key path. */}
+            {/* Advanced: API key fallback. */}
             <button
               onClick={() => setAdvanced((a) => !a)}
               className="mt-4 flex w-full cursor-pointer items-center justify-between text-xs text-neutral-400 hover:text-neutral-200"
@@ -175,18 +167,42 @@ export function ProviderConnect({
                     placeholder={DEFAULT_MODELS[provider]}
                   />
                 </label>
-                {info.keyUrl && (
-                  <a
-                    href={info.keyUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-gold-300 hover:underline"
-                  >
-                    Get an API key <ExternalLink className="size-3" />
-                  </a>
-                )}
               </div>
             )}
+          </>
+        ) : (
+          <>
+            {/* Direct to the vendor: open it → sign in → copy the key → paste
+                it back. Connects straight to the vendor's own API. */}
+            <Button
+              variant="secondary"
+              className="mt-4 w-full"
+              onClick={() => info.keyUrl && void openExternal(info.keyUrl)}
+            >
+              <ExternalLink className="size-4" /> Open {info.name} to get your key
+            </Button>
+            <div className="mt-3 flex flex-col gap-3">
+              <label className="text-xs text-neutral-400">
+                Paste your {info.name} key
+                <input
+                  className={`${inputClass} mt-1`}
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Paste the key here"
+                  autoFocus
+                />
+              </label>
+              <label className="text-xs text-neutral-400">
+                Model (optional)
+                <input
+                  className={`${inputClass} mt-1`}
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder={DEFAULT_MODELS[provider]}
+                />
+              </label>
+            </div>
           </>
         )}
 
@@ -202,9 +218,9 @@ export function ProviderConnect({
             <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            {(isLocal || advanced) && (
+            {(isLocal || advanced || !info.oauth) && (
               <Button size="sm" disabled={!valid} onClick={save}>
-                {isLocal ? "Connect" : "Save key"}
+                {info.oauth ? "Save key" : "Connect"}
               </Button>
             )}
           </div>
