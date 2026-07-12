@@ -1,96 +1,87 @@
-# Changelog
+# Nhật ký thay đổi (Changelog)
 
-All notable changes to V Assistant are recorded here. The format follows
-[Keep a Changelog](https://keepachangelog.com/); versions use
+Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng theo
+[Keep a Changelog](https://keepachangelog.com/); phiên bản theo
 [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [Chưa phát hành]
 
-The app now runs its agent engine **in-app** — install, sign in, and use.
-No Docker, no separate engine, no configuration.
+App giờ chạy engine agent **ngay trong ứng dụng** — cài, đăng nhập, dùng.
+Không Docker, không engine tách rời, không cấu hình.
 
-### Added
-- **Agents act using the Vault.** An in-app tool-calling loop lets agents run
-  real tools: `vault_list` (discover stored logins — names and field names
-  only, never secret values) and `http_request` (perform actions such as
-  posting to a blog or calling an API). Secrets are referenced by placeholder
-  `{{vault:Name.field}}` and substituted locally, so passwords and keys never
-  enter the model. Verified end-to-end (`scripts/tool-loop-check.mjs`).
-- **Telegram, 2-way, in-app.** Paste the @BotFather token and message the bot;
-  it replies using the same assistant (provider + agent + Vault tools). The
-  channel reads the token from the Vault, long-polls Telegram, and starts and
-  stops with the integration. Provider/agent switches take effect live.
-  Verified end-to-end (`scripts/telegram-check.mjs`).
-- **Scheduled tasks that actually run.** A once-a-minute tick runs every due,
-  enabled task through the assistant and delivers the result to chat and (when
-  connected) to Telegram. Recognises daily / weekday / named-day / hourly /
-  monthly schedules with an "at HH:MM" time. Verified
-  (`scripts/schedule-check.mjs`).
-- **CI coverage** for all of the above, plus the direct sign-in logic
-  (`scripts/login-check.mjs`): code→key exchange with PKCE (S256), each vendor
-  routing to the right models, and local-user creation.
+### Thêm mới
+- **Agent thao tác qua Vault.** Vòng lặp tool-calling trong app cho phép agent
+  chạy công cụ thật: `vault_list` (liệt kê thông tin đăng nhập đã lưu — chỉ tên
+  và tên field, không bao giờ lộ giá trị bí mật) và `http_request` (thực hiện
+  hành động như đăng bài blog hoặc gọi API). Bí mật được tham chiếu bằng
+  placeholder `{{vault:Tên.field}}` và thay tại chỗ, nên mật khẩu/khóa không bao
+  giờ lọt vào model. Đã kiểm chứng đầu-cuối (`scripts/tool-loop-check.mjs`).
+- **Telegram 2 chiều trong app.** Dán token của @BotFather rồi nhắn cho bot; bot
+  trả lời bằng chính trợ lý đó (provider + agent + công cụ Vault). Kênh đọc token
+  từ Vault, long-poll Telegram, tự bật/tắt theo integration. Đổi provider/agent
+  có hiệu lực ngay. Đã kiểm chứng (`scripts/telegram-check.mjs`).
+- **Việc hẹn giờ chạy thật.** Mỗi phút kiểm tra một lần, chạy mọi task đến hạn
+  qua trợ lý và giao kết quả vào chat và (nếu đã kết nối) Telegram. Nhận biết lịch
+  hằng ngày / ngày trong tuần / thứ chỉ định / mỗi giờ / hằng tháng với giờ
+  "at HH:MM". Đã kiểm chứng (`scripts/schedule-check.mjs`).
+- **CI phủ toàn bộ** các mục trên, cộng logic đăng nhập trực tiếp
+  (`scripts/login-check.mjs`): đổi code→key bằng PKCE (S256), định tuyến đúng
+  model từng vendor, và tạo user local.
+- **Vai trò cô lập, chuyển tức thì.** Knowledge và memory giờ tách theo từng vai
+  trò: chọn Sales Expert thì có kiến thức của Sales; chuyển sang Marketing thì
+  đổi sạch, không lẫn. Chuyển vai trò tức thì (thuần state, không khởi động lại).
+  Đã kiểm chứng (`scripts/isolation-check.mjs`).
+- **Bộ nhớ tự học (kiểu Hermes).** Sau mỗi lượt, vai trò tự suy ngẫm và lưu các
+  sự thật bền vững về người dùng vào bộ nhớ riêng của mình (khử trùng lặp, có giới
+  hạn); có công tắc trong Settings. Đã kiểm chứng (`scripts/self-improve-check.mjs`).
+- **WASM sandbox chạy code (tùy chọn)** (feature Cargo `sandbox`, tắt mặc định để
+  app nhẹ và khởi động tức thì). Code guest chạy không có host import, có trần bộ
+  nhớ và ngân sách fuel — code chạy loạn hay độc hại đều bị chặn, không hại máy
+  host. Đã kiểm chứng (`examples/sandbox_check`).
+- **Connectors.** Một integration đã kết nối (GitHub, Notion, Slack, Discord,
+  Telegram, …) trở thành plugin agent gọi theo tên; connector tự lấy credential
+  từ Vault và tự áp đúng cơ chế xác thực của từng hệ thống. Token không bao giờ
+  đi qua model. Đã kiểm chứng (`scripts/connector-check.mjs`).
+- **Knowledge đọc tài liệu thật (RAG).** File thả vào được trích xuất thật — PDF
+  (pdfjs), Word/Excel/PowerPoint (parse ZIP+XML gốc, không cần thư viện ngoài),
+  text/Markdown/CSV/HTML — chia chunk và lập chỉ mục theo từng vai trò trong
+  IndexedDB. Mỗi lượt chat truy xuất các đoạn khớp câu hỏi nhất và trả lời dựa
+  trên đó, có trích nguồn. Lỗi hiện rõ trên UI (ví dụ PDF scan không có text,
+  `.doc` cũ). Truy xuất theo từ khóa (tf-idf) — riêng tư, không gì rời khỏi máy.
+  Đã kiểm chứng đầu-cuối với file docx/xlsx/pptx/pdf thật (`scripts/rag-check.mjs`).
 
-- **Isolated switchable roles.** Knowledge and memory are now per-role: pick
-  Sales Expert and you get Sales' knowledge; switch to Marketing and it swaps
-  cleanly with no bleed. Switching is instant (pure state, no boot). Verified
-  (`scripts/isolation-check.mjs`).
-- **Self-improving memory (Hermes-style).** After each exchange a role reflects
-  and saves durable facts about the user to its own memory (deduped, capped);
-  toggle in Settings. Verified (`scripts/self-improve-check.mjs`).
-- **Optional WASM code sandbox** (`sandbox` Cargo feature, off by default so
-  the app stays light and starts instantly). Guest code runs with no host
-  imports, a memory ceiling and a fuel budget — a runaway or hostile guest is
-  trapped, never harming the host. Verified (`examples/sandbox_check`).
+### Thay đổi
+- Engine giờ được mô tả là nhúng và luôn sẵn sàng; một NanoClaw host bên ngoài là
+  phần gắn thêm nâng cao tùy chọn, không bắt buộc cho sử dụng thông thường.
 
-- **Connectors.** A connected integration (GitHub, Notion, Slack, Discord,
-  Telegram, …) becomes a plugin the agent calls by name; the connector pulls
-  the credential from the Vault and applies each system's authentication
-  automatically. The token never passes through the model. Verified
-  (`scripts/connector-check.mjs`).
-
-- **Knowledge that actually reads your documents (RAG).** Dropped files are
-  extracted for real — PDF (pdfjs), Word/Excel/PowerPoint (native ZIP+XML
-  parsing, no extra libraries), text/Markdown/CSV/HTML — chunked, and indexed
-  per role in IndexedDB. Each chat turn retrieves the excerpts that best match
-  the question and grounds the answer on them, citing the source document.
-  Failures surface in the UI (e.g. scanned PDFs with no text, legacy `.doc`).
-  Retrieval is lexical (tf-idf) — private by design, nothing leaves the
-  device. Verified end-to-end with real generated docx/xlsx/pptx/pdf fixtures
-  (`scripts/rag-check.mjs`).
-
-### Changed
-- The engine is now described as embedded and always-on; an external NanoClaw
-  host is an optional advanced attachment, not a requirement for normal use.
-
-### Known / not yet automated
-- The live OAuth redirect and openrouter.ai round-trip still need a manual
-  check on a real desktop (CI has no browser). The sign-in *logic* around it
-  is covered by `scripts/login-check.mjs`.
-- Advanced items remain planned: OAuth integrations (Drive/Outlook/Calendar),
-  per-role skill sets, and an MCP client.
+### Đã biết / chưa tự động hóa
+- Vòng OAuth redirect thật và round-trip qua openrouter.ai vẫn cần kiểm tra tay
+  trên desktop thật (CI không có trình duyệt). Phần *logic* đăng nhập đã được phủ
+  bởi `scripts/login-check.mjs`.
+- Các mục nâng cao còn trong kế hoạch: OAuth integrations (Drive/Outlook/Calendar),
+  bộ skill riêng theo vai trò, và MCP client.
 
 ## [0.1.0] — 2026-07-11
 
-First installable release for macOS, Windows and Linux.
+Bản cài đặt đầu tiên cho macOS, Windows và Linux.
 
-### Added
-- **Onboarding & sign-in:** login-first flow with one-click "Continue with
-  ChatGPT / Claude / Gemini / OpenRouter" via OpenRouter PKCE OAuth (no API
-  key needed); API key available under Advanced options. First sign-in
-  auto-creates the local user from the vendor account.
-- **AI providers:** real streaming chat over Anthropic, Google Gemini and
-  OpenAI-compatible APIs (OpenRouter / OpenAI / local servers); one-click
-  provider switching.
-- **Credential Vault:** secrets stored in the OS keychain on desktop; entries
-  with default and typed custom fields (text, password, number, URL, email,
-  date, date & time) with matching icons.
-- **Skills:** built-in, spec-compliant [Agent Skills](https://agentskills.io);
-  install any skill from a URL; the active skill's instructions steer the chat.
-  NanoClaw engine-skills catalog (channels/providers/capabilities).
-- **Agents:** installable agent store; per-agent Instructions, Soul and
-  Memory, injected into the system prompt.
-- **Knowledge, Integrations, Scheduled tasks, Settings** pages; Telegram
-  bot-token configuration; responsive layout; brand logo and app icons.
-- **Desktop shell (Tauri):** loopback OAuth, OS-keychain Vault, runtime
-  service; CI (frontend + Rust) and a release workflow producing installers
-  for macOS (arm64/x64), Windows and Linux.
+### Thêm mới
+- **Onboarding & đăng nhập:** luồng login-first với 1-click "Continue with
+  ChatGPT / Claude / Gemini / OpenRouter" qua OpenRouter PKCE OAuth (không cần
+  API key); API key có sẵn trong Advanced options. Lần đăng nhập đầu tự tạo user
+  local từ tài khoản vendor.
+- **AI providers:** chat streaming thật qua Anthropic, Google Gemini và các API
+  tương thích OpenAI (OpenRouter / OpenAI / server nội bộ); đổi provider 1-click.
+- **Credential Vault:** bí mật lưu trong OS keychain trên desktop; entry có field
+  mặc định và field tùy chỉnh có kiểu (text, password, number, URL, email, date,
+  datetime) kèm icon tương ứng.
+- **Skills:** [Agent Skills](https://agentskills.io) chuẩn, dựng sẵn; cài skill từ
+  URL; skill đang chạy điều hướng cuộc chat. Có catalog engine-skills của NanoClaw
+  (channels/providers/capabilities).
+- **Agents:** agent store cài được; Instructions, Soul và Memory riêng từng agent,
+  tiêm vào system prompt.
+- Các trang **Knowledge, Integrations, Scheduled, Settings**; cấu hình bot-token
+  Telegram; giao diện responsive; logo thương hiệu và icon ứng dụng.
+- **Vỏ desktop (Tauri):** loopback OAuth, Vault qua OS-keychain, runtime service;
+  CI (frontend + Rust) và workflow phát hành tạo installer cho macOS (arm64/x64),
+  Windows và Linux.

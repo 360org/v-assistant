@@ -1,178 +1,145 @@
 # V Assistant
 
-**AI for everyone — install in 2 minutes, use immediately.**
+**AI cho mọi người — cài trong 2 phút, dùng được ngay.**
 
-> Download → Install → Login → Connect → Start AI
+> Tải → Cài → Đăng nhập → Kết nối → Bắt đầu
 
-V Assistant is a desktop AI assistant for everyday people. No configuration,
-no terminal, no Docker, no API keys (when the provider supports OAuth). The
-user only sees: **Chat, Agents, Knowledge, Integrations** — everything else
-runs in the background.
+V Assistant là trợ lý AI để bàn cho người dùng phổ thông. Không cấu hình, không
+terminal, không Docker, không API key (khi provider hỗ trợ OAuth). Người dùng chỉ
+thấy: **Chat, Agents, Knowledge, Integrations** — mọi thứ khác chạy ẩn phía sau.
 
-## Features
+## Tính năng
 
-- **2-minute onboarding** — sign in with the AI account you already have
-  (ChatGPT, Claude, Gemini, OpenRouter, or Local AI), optionally connect an
-  app, start chatting.
-- **Chat** — a clean, familiar chat with streaming replies. Switch AI
-  provider with one click, at any time.
-- **Agent Store** — ready-made experts (ERP, Sales, Marketing, SEO, Customer
-  Care, HR, Accounting, Legal, …). One click to install, ready to chat.
-- **Knowledge** — drag & drop PDF, Word, Excel, PowerPoint or folders. The
-  runtime handles processing automatically; the user never sees indexing,
-  embeddings or vector stores.
-- **Integrations** — one **Connect** button per service: Telegram, GitHub,
-  Google Drive, Outlook, Slack, Discord, Notion, Google Calendar.
+- **Onboarding 2 phút** — đăng nhập bằng tài khoản AI sẵn có (ChatGPT, Claude,
+  Gemini, OpenRouter hoặc Local AI), tùy chọn kết nối một ứng dụng, rồi chat ngay.
+- **Chat** — giao diện chat quen thuộc, trả lời streaming. Đổi provider 1-click bất kỳ lúc nào.
+- **Agent Store** — các chuyên gia dựng sẵn (ERP, Sales, Marketing, SEO, CSKH, HR,
+  Kế toán, Pháp lý, …). Cài 1 click, chat ngay. Mỗi vai trò có **bộ nhớ & kiến thức
+  riêng, không lẫn**.
+- **Knowledge** — kéo-thả PDF, Word, Excel, PowerPoint. Trích xuất và lập chỉ mục
+  tự động (RAG cục bộ theo vai trò); người dùng không thấy embedding hay vector store.
+- **Vault** — kho credential; agent tự lấy ra dùng nhưng chỉ thấy *tên*, không thấy
+  giá trị bí mật.
+- **Integrations** — mỗi dịch vụ một nút **Connect**: Telegram, GitHub, Google Drive,
+  Outlook, Slack, Discord, Notion, Google Calendar.
+- **Scheduled** — hẹn giờ để agent tự chạy và trả kết quả. **Self-improving** — agent
+  tự học và ghi nhớ theo thời gian.
 
-## Tech stack
+## Công nghệ
 
-| Layer   | Choice                                                |
-| ------- | ----------------------------------------------------- |
+| Tầng | Lựa chọn |
+| ---- | -------- |
 | Desktop | [Tauri 2](https://v2.tauri.app) (Windows/macOS/Linux) |
-| UI      | React + TailwindCSS + shadcn-style components + Framer Motion |
-| Core    | AI Runtime Service (`src/runtime/engine.ts` ↔ `src-tauri/src/lib.rs`) |
+| Giao diện | React + TailwindCSS + component kiểu shadcn + Framer Motion |
+| Engine nhúng | AI Runtime Service (`src/runtime/*`) — chạy trong webview |
+| Agent Runner | Host process độc lập SDK (`agent-runner/`, Node/Bun) — SQLite IPC |
+| Vỏ desktop | Rust (`src-tauri/`) — OAuth loopback, Vault, quản lý runtime |
 
-### Architecture
+### Kiến trúc
 
 ```
-+-----------------------------------+
-|         V Assistant Desktop       |
-|-----------------------------------|
-| React UI                          |
-| Tauri                             |
-+-------------------+---------------+
-                    |
-           AI Runtime Service        src-tauri/src/runtime.rs
-                    |
-        ipc/inbound.db · ipc/outbound.db   (SQLite queues, one writer each)
-                    |
-             NanoClaw Engine         host process + per-agent containers
-                    |
-      +-------------+-------------+
-      |             |             |
- GPT/Claude     Telegram      Knowledge
- Gemini         WhatsApp      Files
++-----------------------------------------------+
+|              V Assistant Desktop              |
+|-----------------------------------------------|
+| React UI  ──  Engine nhúng (src/runtime/*)    |  chạy tức thì, không Docker
+| Vỏ Tauri (Rust)                               |
++-----------------------+-----------------------+
+                        |  SQLite IPC (inbound.db / outbound.db)
+                        v
+        Universal Agent Runner (agent-runner/)     host process, độc lập SDK
+        ├─ poll loop · providers trực tiếp          (Gemini/OpenAI/Anthropic)
+        ├─ native tools (bash/file/grep/glob/http)
+        ├─ MCP client · memory scaffold · vault
 ```
 
-The UI talks only to the **AI Runtime Service**. The engine behind it is
-[NanoClaw](https://github.com/nanocoai/nanoclaw) — and it is an
-implementation detail, never surfaced to the user. The desktop app speaks
-NanoClaw's native channel contract, making V Assistant just another channel
-alongside WhatsApp or Telegram:
+Có **hai tầng engine**: engine **nhúng** (webview) chạy sẵn tức thì cho chat/tools/
+Telegram/scheduler/RAG; **Universal Agent Runner** là bộ não độc lập SDK (như NanoClaw
+nhưng không Docker) mà app đang chuyển tiếp sang, giao tiếp qua hai hàng đợi SQLite.
+Tên NanoClaw không bao giờ hiện ra UI.
 
-- **Chat & Agents → NanoClaw groups.** Each installed agent is materialized
-  as a `groups/<agent-id>/` folder with a generated `CLAUDE.md`; plain chat
-  is the `main` group. Messages flow through the two SQLite queues
-  (`runtime_send` / `runtime_receive` Tauri commands).
-- **Skills → NanoClaw skills.** The `skills/` directory (standard Agent
-  Skills format) is copied into the runtime dir for containers to mount.
-- **Integrations → NanoClaw connector channels.** Telegram, WhatsApp,
-  Discord, Slack etc. are NanoClaw channel modules; the Connect button is
-  the front door to installing and pairing them.
-- **Providers → engine credentials.** Keys live at the engine's proxy layer
-  (Agent Vault), never in agent containers and never in the UI.
+## Đăng nhập & Vault
 
-Point `VUA_ENGINE_DIR` at an engine entry script to attach a real engine
-(`scripts/engine-stub.mjs` is a dev stand-in that echoes; a NanoClaw
-checkout with the desktop channel is the real thing). Without an engine the
-app silently falls back to the built-in preview engine, so every flow —
-onboarding, streaming chat, provider switching, agent install, knowledge,
-integrations — stays fully navigable offline. The seam can be exercised
-end-to-end without Docker or credentials:
+Mỗi nút "Continue with …":
 
-```bash
-cd src-tauri
-VUA_ENGINE_DIR=../scripts/engine-stub.mjs cargo run --example ipc_check
-```
+- **OpenRouter** — đăng nhập 1-click thật qua router (PKCE OAuth); một lần login là
+  chạm được GPT/Claude/Gemini và hàng trăm model, không cần API key.
+- **ChatGPT / Claude / Gemini** — nối thẳng vendor: mở trang key của vendor → dán key
+  → kết nối trực tiếp API vendor (không qua OpenRouter).
+- Lần đăng nhập đầu tự tạo user local từ tài khoản vendor.
 
-## Sign-in & Credential Vault
+Redirect xử lý tùy nơi chạy:
 
-Every "Continue with …" is a real one-click login through the router
-(OpenRouter-style PKCE OAuth): the chosen vendor decides which models the
-account is pointed at (ChatGPT → `openai/*`, Claude → `anthropic/*`,
-Gemini → `google/*`), so one login reaches that vendor's models with no
-API key. First sign-in auto-creates the local user from the vendor account.
+- **Desktop (Tauri)** — OAuth thật qua **loopback** `http://127.0.0.1:<port>` +
+  trình duyệt hệ thống; đây là luồng đăng nhập production.
+- **Web (https)** — OAuth thật qua redirect toàn trang.
 
-How the redirect is handled depends on where the app runs:
+**Vault.** Key không bao giờ nằm dạng plaintext hay trên UI. Trên desktop lưu trong
+kho bí mật của OS (macOS Keychain / Windows Credential Manager / Linux Secret Service)
+qua `src-tauri/src/vault.rs`; app chỉ lưu metadata không nhạy cảm. Trên web fallback về
+`localStorage` có namespace. API key vẫn có sẵn trong **Advanced options**.
 
-- **Desktop (Tauri)** — real OAuth via **loopback**: the native side opens a
-  throwaway `http://127.0.0.1:<port>` listener (`oauth_listen`) and the
-  system browser (`open_external`); after the user logs in, the browser
-  redirects to the loopback, the app reads the code and exchanges it for a
-  key — all without leaving the app. This is the production sign-in.
-- **Web (hosted on https)** — real OAuth via full-page redirect back to the
-  page URL.
-- **Demo build** (`VITE_DEMO=1`) — the round-trip is simulated in place, so
-  the UX is visible where real OAuth/network is unavailable.
+## Phát triển
 
-**Credential Vault.** The obtained key never sits in plaintext or in the
-UI. On the desktop it lives in the OS secret store — macOS Keychain,
-Windows Credential Manager, or the Linux Secret Service — via the `keyring`
-crate (`vault_set` / `vault_get` / `vault_delete`,
-`src-tauri/src/vault.rs`), mirroring NanoClaw's **Agent Vault**. The app
-persists only non-secret metadata; the key is stripped before anything is
-written to local storage and rehydrated from the Vault on start
-(`src/runtime/vault.ts`). On the web it falls back to a namespaced
-`localStorage`; Settings → Account shows which is in effect. An API key
-remains available under **Advanced options** as a fallback.
-
-## Development
-
-Prerequisites: [Node.js 20+](https://nodejs.org) and, for the desktop shell,
-the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/)
-(Rust + platform toolchain).
+Yêu cầu: [Node.js 20+](https://nodejs.org) và, cho vỏ desktop, các
+[yêu cầu Tauri 2](https://v2.tauri.app/start/prerequisites/) (Rust + toolchain nền tảng).
 
 ```bash
 npm install
 
-# Web preview (UI only, runs in the browser)
+# Web preview (chỉ UI, chạy trong trình duyệt)
 npm run dev
 
-# Desktop app with REAL login + Vault (Tauri window)
+# Chạy live bằng Docker/Colima — không cài gì trên host
+./dev.sh up
+
+# App desktop với login + Vault thật (cửa sổ Tauri)
 npm run tauri dev
 
-# Production desktop build — installer/bundle per platform (.exe/.dmg/.deb)
+# Build desktop production — installer từng nền tảng (.exe/.dmg/.deb)
 npm run tauri build
 ```
 
-Verify the desktop OAuth loopback without a GUI:
+Kiểm thử (xem [`DEVELOPMENT.md`](./DEVELOPMENT.md) để biết quy trình đầy đủ):
 
 ```bash
+npm run check                     # build + toàn bộ test frontend
+cd agent-runner && npm run check  # typecheck + e2e (poll loop + IPC) + native tools
 cd src-tauri && cargo run --example oauth_loopback_check
 ```
 
-## Project layout
+## Cấu trúc dự án
 
 ```
-src/                  React UI
-  pages/              Home, Chat, Agents, Skills, Knowledge, Integrations, Settings
-  components/         Sidebar + shadcn-style UI primitives
-  lib/                App store (persisted), catalogs, skills loader, utils
-  runtime/            AI Runtime Service boundary (engine interface + demo engine)
-skills/               Agent Skills (one directory per skill, see below)
-src-tauri/            Tauri 2 shell (Rust)
+src/                  Giao diện React
+  pages/              Home, Chat, Agents, Skills, Knowledge, Vault, Scheduled, Integrations, Settings
+  components/         Sidebar + UI primitive kiểu shadcn
+  lib/                App store (lưu bền), catalog, skills loader, utils
+  runtime/            Engine nhúng: engine, providers, tools, connectors, telegram,
+                      scheduler, knowledge (RAG), selfImprove, vault, oauth
+skills/               Agent Skills (mỗi skill một thư mục)
+agent-runner/         Universal Agent Runner (host độc lập SDK): poll loop, SQLite IPC,
+                      providers, native-tools, mcp-client, memory, vault
+src-tauri/            Vỏ Tauri 2 (Rust): auth, vault, runtime, sandbox (WASM tùy chọn)
 ```
 
 ## Skills
 
-Every skill in the app is a standard [Agent Skills](https://agentskills.io)
-directory under `skills/<name>/SKILL.md`: YAML frontmatter with the
-spec-required `name` and `description`, app display fields under `metadata`
-(`vua-`-prefixed keys), and a markdown body with the instructions the engine
-follows when the skill runs. The UI loads them at build time
-(`src/lib/skills.ts`) — adding a skill is adding a folder, no code changes.
+Mỗi skill là một thư mục [Agent Skills](https://agentskills.io) chuẩn tại
+`skills/<tên>/SKILL.md`: frontmatter YAML với `name` và `description` theo chuẩn, các
+field hiển thị dưới `metadata` (khóa tiền tố `vua-`), và phần body markdown chứa hướng
+dẫn engine chạy khi skill hoạt động. Thêm skill = thêm một thư mục, không cần sửa code.
 
 ```bash
-npm run validate:skills   # checks every skill against the Agent Skills spec
+npm run validate:skills   # kiểm tra mọi skill theo chuẩn Agent Skills
 ```
 
-Validation also runs automatically as part of `npm run build`.
+Kiểm tra này cũng tự chạy trong `npm run build`.
 
-## Product principle
+## Nguyên tắc sản phẩm
 
-> If someone who has never used AI can download, install and start using it
-> in under 2 minutes without reading any documentation, we've met the bar.
+> Nếu một người chưa từng dùng AI có thể tải, cài và bắt đầu dùng trong dưới 2 phút mà
+> không cần đọc tài liệu nào, thì ta đã đạt chuẩn.
 
-## Author
+## Tác giả
 
 **360org** · [vuaai.net](https://vuaai.net) · [support@vuaai.net](mailto:support@vuaai.net)

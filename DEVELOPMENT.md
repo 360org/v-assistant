@@ -1,73 +1,80 @@
-# Development workflow
+# Quy trình phát triển
 
-Dev live → test → commit → cut a version. Nothing ships until it's green.
+Chạy live → test → commit → cắt phiên bản. Không có gì được phát hành khi chưa xanh.
 
-## 1. Run it live
+## 1. Chạy live
 
-**Web preview (fastest, hot reload):**
+**Web preview (nhanh nhất, hot reload):**
 
 ```bash
-npm install     # first time
+npm install     # lần đầu
 npm run dev      # → http://localhost:1420
 ```
 
-"Continue with OpenRouter" is a real sign-in on localhost; other vendors
-route through OpenRouter's models. Credentials live in the browser here.
+"Continue with OpenRouter" là đăng nhập thật trên localhost; các vendor khác định
+tuyến qua model của OpenRouter. Ở đây credential nằm trong trình duyệt.
 
-**Docker (Colima) — nothing installed on the host:**
+**Docker (Colima) — không cài gì trên máy host:**
 
-Runtime is [Colima](https://github.com/abiosoft/colima), not Docker Desktop.
-One-time setup:
+Runtime là [Colima](https://github.com/abiosoft/colima), không phải Docker Desktop.
+Cài một lần:
 
 ```bash
 brew install colima docker docker-compose
 ```
 
-Then use the `dev.sh` helper — it boots Colima automatically when needed:
+Rồi dùng script `dev.sh` — nó tự khởi động Colima khi cần:
 
 ```bash
-./dev.sh up        # start → http://localhost:1420 (first run ~1 min)
-./dev.sh logs      # follow the dev server output
-./dev.sh restart   # restart after a config change
-./dev.sh stop      # pause (keeps the container)
-./dev.sh start     # resume
-./dev.sh down      # stop and remove (keeps node_modules volume)
-./dev.sh reset     # rebuild from scratch (fresh node_modules)
-./dev.sh shell     # a shell inside the dev container
-./dev.sh status    # Colima + container status
+./dev.sh up        # bật → http://localhost:1420 (lần đầu ~1 phút)
+./dev.sh logs      # xem log dev server
+./dev.sh restart   # restart sau khi đổi cấu hình
+./dev.sh stop      # tạm dừng (giữ container)
+./dev.sh start     # chạy lại
+./dev.sh down      # dừng và xóa (giữ volume node_modules)
+./dev.sh reset     # dựng lại từ đầu (node_modules mới)
+./dev.sh shell     # mở shell trong container dev
+./dev.sh status    # trạng thái Colima + container
 ```
 
-No Node or Rust on your machine — everything runs in the container. Your
-source is bind-mounted in, so editing files on the host hot-reloads the app.
-`node_modules` stays in a named volume (container-built binaries never touch
-the host). This runs the **web** app (Vault uses browser storage); real
-sign-in with OpenRouter works on localhost.
+Không cần Node hay Rust trên máy — mọi thứ chạy trong container. Source được
+bind-mount vào, nên sửa file trên host là app hot-reload ngay. `node_modules` nằm
+trong volume riêng (binary build trong container không đụng vào host). Cái này chạy
+bản **web** (Vault dùng bộ nhớ trình duyệt); đăng nhập thật với OpenRouter chạy
+được trên localhost.
 
-Under the hood `dev.sh` wraps `docker compose -f docker-compose.dev.yml`, so
-you can still use Compose directly if you prefer.
+Bên dưới, `dev.sh` bọc `docker compose -f docker-compose.dev.yml`, nên anh vẫn có
+thể dùng Compose trực tiếp nếu thích.
 
-**Desktop app (the real thing, hot reload):**
+**App desktop (bản thật, hot reload):**
 
 ```bash
 npm run tauri dev
 ```
 
-Opens the actual V Assistant window. Needs the Rust toolchain and your OS
-webview libs (WebKitGTK on Linux, WebView2 on Windows, built-in on macOS).
-Credentials live in the OS keychain (Vault). (The desktop window is a native
-GUI, so it can't run inside Docker — use it directly on your machine.)
+Mở đúng cửa sổ V Assistant thật. Cần Rust toolchain và thư viện webview của OS
+(WebKitGTK trên Linux, WebView2 trên Windows, có sẵn trên macOS). Credential nằm
+trong OS keychain (Vault). (Cửa sổ desktop là GUI native nên không chạy trong
+Docker được — dùng trực tiếp trên máy.)
 
-## 2. Test before committing
+## 2. Test trước khi commit
 
-One command runs the production build **and** every end-to-end check
-(agent tools, Telegram, scheduler, sign-in, role isolation, self-improve,
-connectors):
+Một lệnh chạy cả build production **và** toàn bộ kiểm thử đầu-cuối (agent tools,
+Telegram, scheduler, đăng nhập, cô lập vai trò, self-improve, connectors, RAG):
 
 ```bash
 npm run check
 ```
 
-Rust side (desktop shell + sandbox):
+Phía Agent Runner (backend độc lập):
+
+```bash
+cd agent-runner
+npm install
+npm run check    # typecheck + e2e (poll loop + SQLite IPC) + native tools
+```
+
+Phía Rust (vỏ desktop + sandbox):
 
 ```bash
 cd src-tauri
@@ -76,8 +83,8 @@ cargo run --example oauth_loopback_check
 cargo run --features sandbox --example sandbox_check
 ```
 
-Only commit when `npm run check` is green. CI runs the same checks on every
-push, so a red build never merges.
+Chỉ commit khi `npm run check` xanh. CI chạy đúng các kiểm thử này mỗi lần push,
+nên một bản đỏ không bao giờ được merge.
 
 ## 3. Commit
 
@@ -86,17 +93,16 @@ git add -A && git commit -m "…"
 git push
 ```
 
-## 4. Cut a versioned release
+## 4. Cắt một phiên bản phát hành
 
 ```bash
-npm run version:set 0.1.1        # bumps package.json, tauri.conf.json, Cargo.*
-# move CHANGELOG.md "Unreleased" → "[0.1.1]"
-npm run check                    # green
+npm run version:set 0.1.1        # đổi version ở package.json, tauri.conf.json, Cargo.*
+# chuyển mục "Chưa phát hành" trong CHANGELOG.md → "[0.1.1]"
+npm run check                    # xanh
 git commit -am "release: v0.1.1"
 git tag v0.1.1 && git push --tags
 ```
 
-Pushing the `vX.Y.Z` tag triggers the **Release** workflow, which builds the
-installers for macOS (Apple Silicon + Intel), Windows and Linux and publishes
-them to a GitHub Release. You can also run that workflow by hand from the
-Actions tab.
+Đẩy tag `vX.Y.Z` sẽ kích hoạt workflow **Release** — nó build installer cho macOS
+(Apple Silicon + Intel), Windows và Linux rồi đăng lên một GitHub Release. Anh cũng
+có thể chạy workflow đó bằng tay từ tab Actions.
