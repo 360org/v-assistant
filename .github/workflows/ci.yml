@@ -36,6 +36,20 @@ jobs:
       # Knowledge/RAG: real docx/xlsx/pptx/pdf extraction → chunks → retrieval.
       - run: node scripts/rag-check.mjs
 
+  agent-runner:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: agent-runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      # Typecheck + end-to-end: inbound.db → poll loop → provider → outbound.db.
+      - run: npm run check
+
   rust:
     runs-on: ubuntu-22.04
     steps:

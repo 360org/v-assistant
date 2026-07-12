@@ -50,8 +50,8 @@ function sleep(ms: number): Promise<void> {
 export interface PollLoopConfig {
   provider: AgentProvider;
   providerName: string;
-  systemContext?: {
-    instructions?: string;
+  systemContext: {
+    instructions: string;
   };
   /** Optional stop signal for testing */
   signal?: AbortSignal;

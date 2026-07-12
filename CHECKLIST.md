@@ -445,11 +445,10 @@
 ### 14.2 Test cần thêm
 - [ ] Test Universal LLM Client (mock server mỗi provider)
   `[REF: NanoClaw/container/agent-runner/src/providers/mock.ts — mock provider]`
-- [ ] Test Agent Loop Executor (end-to-end)
-  `[REF: NanoClaw/container/agent-runner/src/integration.test.ts — 23362 bytes]`
-- [ ] Test Poll Loop
-  `[REF: NanoClaw/container/agent-runner/src/poll-loop.test.ts — 17856 bytes]`
-- [ ] Test SQLite IPC
+- [x] Test Agent Loop Executor (end-to-end) — `agent-runner/scripts/e2e-check.mjs`
+      (inbound.db → poll loop → mock provider → outbound.db, chạy trong CI)
+- [x] Test Poll Loop — phủ bởi `e2e-check.mjs` (poll → format → query → write)
+- [x] Test SQLite IPC — phủ bởi `e2e-check.mjs` (Two-DB inbound/outbound)
 - [ ] Test Native Tools (Bash, FileRead, FileWrite, FileEdit)
 - [ ] Test MCP Tools
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/core.test.ts]`
