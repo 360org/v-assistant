@@ -553,7 +553,21 @@ async function* streamGemini(
       })),
     }),
   });
-  await raiseForStatus(response);
+  try {
+    await raiseForStatus(response);
+  } catch (error) {
+    if (
+      error instanceof ProviderHttpError &&
+      error.status === 403 &&
+      /insufficient authentication scopes/i.test(error.message)
+    ) {
+      throw new ProviderHttpError(
+        403,
+        "Gemini authorization is missing the required scope. Reconnect Gemini and approve the updated permission request.",
+      );
+    }
+    throw error;
+  }
   for await (const data of sseData(response)) {
     try {
       const text =

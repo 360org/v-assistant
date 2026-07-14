@@ -116,6 +116,9 @@ export const OAUTH_CONFIGS = {
     tokenUrl: "https://oauth2.googleapis.com/token",
     scopes: [
       "https://www.googleapis.com/auth/cloud-platform",
+      // Required by Gemini Developer API when authenticating with an OAuth
+      // bearer token rather than an AI Studio API key.
+      "https://www.googleapis.com/auth/generative-language.retriever",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
     ],

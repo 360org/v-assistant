@@ -452,6 +452,8 @@
 - [x] On exhausted 429/529 retries, fail over this request to another configured
       vendor; OpenRouter is always the final fallback. Keep the user's selected
       provider unchanged and never switch after text has started streaming.
+- [x] Request Gemini's Generative Language OAuth scope and show a reconnect
+      action when a previously issued token returns insufficient scopes (403).
       Request-ID diagnostics remain a follow-up.
 
 ---

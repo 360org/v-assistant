@@ -210,7 +210,11 @@ globalThis.mockLocalStorage = {
   setItem: (k, v) => globalThis.mockStorageStore.set(k, String(v)),
   removeItem: (k) => globalThis.mockStorageStore.delete(k),
 };
-export { completeOAuthReturn, fetchVendorAccount } from "../src/runtime/oauth.ts";
+export {
+  completeOAuthReturn,
+  fetchVendorAccount,
+  OAUTH_CONFIGS,
+} from "../src/runtime/oauth.ts";
 export {
   routedConfig,
   loginConfig,
@@ -323,6 +327,10 @@ const gemRun = await drainLogin("gemini", "ya29.TOKEN");
 check("Gemini subscription → Bearer header (not x-goog-api-key)",
   gemRun.headers.Authorization === "Bearer ya29.TOKEN" &&
   !("x-goog-api-key" in gemRun.headers));
+check("Gemini OAuth → requests Generative Language API scope",
+  mod.OAUTH_CONFIGS.gemini.scopes.includes(
+    "https://www.googleapis.com/auth/generative-language.retriever",
+  ));
 
 const openAICallsBeforeRateLimit = openAIChatCalls;
 openAIRateLimitResponses = 1;
