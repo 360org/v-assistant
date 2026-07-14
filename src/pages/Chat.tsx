@@ -99,6 +99,7 @@ export function Chat() {
       for await (const chunk of engine.chat(history, {
         provider,
         config: providerConfigs[provider],
+        providerConfigs,
         agentName: activeAgent?.name,
         agentDescription: activeAgent?.description,
         agentInstructions: activeAgent

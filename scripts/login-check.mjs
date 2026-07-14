@@ -189,7 +189,14 @@ globalThis.mockLocalStorage = {
   removeItem: (k) => globalThis.mockStorageStore.delete(k),
 };
 export { completeOAuthReturn, fetchVendorAccount } from "../src/runtime/oauth.ts";
-export { routedConfig, loginConfig, streamProvider, ROUTED_MODELS, SUBSCRIPTION_MODELS } from "../src/runtime/providers.ts";
+export {
+  routedConfig,
+  loginConfig,
+  streamProvider,
+  streamProviderWithFallback,
+  ROUTED_MODELS,
+  SUBSCRIPTION_MODELS,
+} from "../src/runtime/providers.ts";
 `;
 writeFileSync("scripts/.login-entry.mjs", entry);
 const outfile = "scripts/.login-bundle.mjs";
@@ -294,6 +301,42 @@ const gemRun = await drainLogin("gemini", "ya29.TOKEN");
 check("Gemini subscription → Bearer header (not x-goog-api-key)",
   gemRun.headers.Authorization === "Bearer ya29.TOKEN" &&
   !("x-goog-api-key" in gemRun.headers));
+
+// 5. After Claude has exhausted its bounded retries, keep the selected
+// provider in the UI but route this turn through another configured vendor.
+// OpenRouter is intentionally last in the fallback order.
+async function drainFallback(configs) {
+  let out = "";
+  for await (const chunk of mod.streamProviderWithFallback(
+    "claude",
+    configs,
+    "system",
+    [{ id: "1", role: "user", content: "hi", createdAt: 0 }],
+  )) {
+    out += chunk;
+  }
+  return out.replace("model=", "");
+}
+
+const callsBeforeVendorFailover = anthropicMessageCalls;
+anthropicRateLimitResponses = 3;
+const geminiFallbackModel = await drainFallback({
+  claude: mod.loginConfig("claude", "sk-ant-oat01-TOKEN"),
+  gemini: mod.loginConfig("gemini", "ya29.TOKEN"),
+  openrouter: mod.loginConfig("openrouter", "sk-or-user"),
+});
+check("Claude rate limit → retries before switching vendor",
+  anthropicMessageCalls === callsBeforeVendorFailover + 3);
+check("Claude rate limit → falls back to configured Gemini",
+  geminiFallbackModel === mod.SUBSCRIPTION_MODELS.gemini);
+
+anthropicRateLimitResponses = 3;
+const openRouterFallbackModel = await drainFallback({
+  claude: mod.loginConfig("claude", "sk-ant-oat01-TOKEN"),
+  openrouter: mod.loginConfig("openrouter", "sk-or-user"),
+});
+check("Claude rate limit → OpenRouter is the final configured fallback",
+  openRouterFallbackModel === mod.ROUTED_MODELS.openrouter);
 
 // OpenRouter login stays a router key (central subscription), not a native call.
 const orCfg = mod.loginConfig("openrouter", "sk-or-user");

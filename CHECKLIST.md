@@ -448,6 +448,9 @@
       IPC path; keep the webview engine as a fallback only.
 - [x] Add bounded Anthropic retry with exponential backoff and `Retry-After`
       support for transient 429/529 responses in both webview and Runner.
+- [x] On exhausted 429/529 retries, fail over this request to another configured
+      vendor; OpenRouter is always the final fallback. Keep the user's selected
+      provider unchanged and never switch after text has started streaming.
       Request-ID diagnostics remain a follow-up.
 
 ---

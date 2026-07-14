@@ -34,6 +34,34 @@ export interface ProviderConfig {
   oauth?: boolean;
 }
 
+export type ProviderConfigs = Partial<Record<ProviderId, ProviderConfig>>;
+
+/** Direct vendors are attempted in this order; OpenRouter is always last. */
+export const RATE_LIMIT_FALLBACK_ORDER: readonly ProviderId[] = [
+  "claude",
+  "chatgpt",
+  "gemini",
+  "openrouter",
+];
+
+export class ProviderHttpError extends Error {
+  constructor(
+    readonly status: number,
+    detail: string,
+  ) {
+    super(`Provider error (${status}): ${detail}`);
+    this.name = "ProviderHttpError";
+  }
+}
+
+export function isRateLimitError(error: unknown): boolean {
+  if (error instanceof ProviderHttpError) {
+    return error.status === 429 || error.status === 529;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:^|\D)(?:429|529)(?:\D|$)/.test(message);
+}
+
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o-mini",
   claude: "claude-sonnet-5",
@@ -222,6 +250,48 @@ export async function* streamProvider(
   }
 }
 
+/**
+ * Sends one turn through the selected provider, then switches only when that
+ * provider is rate limited before it has produced any visible response.
+ */
+export async function* streamProviderWithFallback(
+  provider: ProviderId,
+  configs: ProviderConfigs,
+  system: string,
+  messages: ChatMessage[],
+  tools: AgentTool[] = [],
+  options: { skipPrimary?: boolean } = {},
+): AsyncGenerator<string> {
+  const candidates = options.skipPrimary
+    ? RATE_LIMIT_FALLBACK_ORDER.filter((candidate) => candidate !== provider)
+    : [provider, ...RATE_LIMIT_FALLBACK_ORDER.filter((candidate) => candidate !== provider)];
+  let firstRateLimitError: unknown;
+
+  for (const candidate of candidates) {
+    if (candidate === "local") continue;
+    const config = configs[candidate];
+    const hasGlobalOpenRouterKey =
+      candidate === "openrouter" && Boolean(await vaultGet("provider:openrouter"));
+    if (!config?.apiKey && !hasGlobalOpenRouterKey) continue;
+
+    let emitted = false;
+    try {
+      for await (const chunk of streamProvider(candidate, config ?? {}, system, messages, tools)) {
+        emitted = true;
+        yield chunk;
+      }
+      return;
+    } catch (error) {
+      // Do not splice replies from two vendors, or retry after a tool might
+      // already have run. A 429 before output is safe to reroute.
+      if (emitted || !isRateLimitError(error)) throw error;
+      firstRateLimitError ??= error;
+    }
+  }
+
+  throw firstRateLimitError ?? new Error("No configured provider is available for this request.");
+}
+
 /** Reads an SSE response body and yields each `data:` payload. */
 async function* sseData(response: Response): AsyncGenerator<string> {
   const reader = response.body!.getReader();
@@ -249,7 +319,7 @@ async function raiseForStatus(response: Response): Promise<void> {
   } catch {
     detail = response.statusText;
   }
-  throw new Error(`Provider error (${response.status}): ${detail}`);
+  throw new ProviderHttpError(response.status, detail);
 }
 
 function retryAfterMs(response: Response, attempt: number): number {

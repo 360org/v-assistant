@@ -12,8 +12,10 @@
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import {
   isConfigured,
-  streamProvider,
+  isRateLimitError,
+  streamProviderWithFallback,
   type ProviderConfig,
+  type ProviderConfigs,
 } from "./providers";
 import { buildAgentTools } from "./tools";
 import { retrieveKnowledge, type KnowledgeExcerpt } from "./knowledge";
@@ -30,6 +32,8 @@ export interface ChatOptions {
   provider: ProviderId;
   /** Credentials for the provider; real calls happen when present. */
   config?: ProviderConfig;
+  /** Other connected providers eligible for rate-limit failover. */
+  providerConfigs?: ProviderConfigs;
   agentName?: string;
   agentDescription?: string;
   /** The agent's configured workflow/process instructions. */
@@ -143,15 +147,24 @@ export function buildSystemPrompt(options: ChatOptions): string {
 }
 
 /** Streams from the selected provider's real API. */
+async function* streamFromProviders(
+  messages: ChatMessage[],
+  options: ChatOptions,
+  skipPrimary = false,
+): AsyncGenerator<string> {
+  yield* streamProviderWithFallback(
+    options.provider,
+    { ...options.providerConfigs, [options.provider]: options.config ?? {} },
+    buildSystemPrompt(options),
+    messages,
+    buildAgentTools(),
+    { skipPrimary },
+  );
+}
+
 const providerEngine: Engine = {
   async *chat(messages, options) {
-    yield* streamProvider(
-      options.provider,
-      options.config!,
-      buildSystemPrompt(options),
-      messages,
-      buildAgentTools(),
-    );
+    yield* streamFromProviders(messages, options);
   },
 };
 
@@ -181,8 +194,24 @@ export function createEngine(): Engine {
       }
       const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
       if (await engineRunning()) {
-        yield* nanoclawEngine.chat(messages, options);
-        return;
+        let runnerEmitted = false;
+        try {
+          for await (const chunk of nanoclawEngine.chat(messages, options)) {
+            runnerEmitted = true;
+            yield chunk;
+          }
+          return;
+        } catch (error) {
+          if (
+            runnerEmitted ||
+            !isRateLimitError(error) ||
+            !isConfigured(options.provider, options.config, options.hasSubscription)
+          ) {
+            throw error;
+          }
+          yield* streamFromProviders(messages, options, true);
+          return;
+        }
       }
       if (isConfigured(options.provider, options.config, options.hasSubscription)) {
         yield* providerEngine.chat(messages, options);

@@ -417,6 +417,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return {
       provider: s.provider,
       config,
+      providerConfigs: s.providerConfigs,
       agentName: agent?.name,
       agentDescription: agent?.description,
       agentInstructions: agentCfg?.instructions,
