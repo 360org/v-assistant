@@ -24,6 +24,10 @@ export function Skills() {
     removeCustomSkill,
     installedEngineSkills,
     toggleEngineSkill,
+    activeAgentId,
+    agentConfigs,
+    agents,
+    setView,
   } = useApp();
   const [configFor, setConfigFor] = useState<EngineSkill | null>(null);
 
@@ -42,6 +46,17 @@ export function Skills() {
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const activeAgent = useMemo(() => {
+    return agents.find((a) => a.id === activeAgentId) ?? null;
+  }, [agents, activeAgentId]);
+
+  const isSkillEnabled = (skillId: string) => {
+    if (!activeAgentId) return true;
+    const config = agentConfigs[activeAgentId];
+    if (!config || !config.skills) return true;
+    return config.skills.includes(skillId);
+  };
+
   const custom = useMemo(
     () =>
       customSkills.flatMap((c) => {
@@ -53,6 +68,14 @@ export function Skills() {
       }),
     [customSkills],
   );
+
+  const filteredCustom = useMemo(() => {
+    return custom.filter(({ template }) => isSkillEnabled(template.id));
+  }, [custom, activeAgentId, agentConfigs]);
+
+  const filteredSkills = useMemo(() => {
+    return SKILLS.filter((skill) => isSkillEnabled(skill.id));
+  }, [activeAgentId, agentConfigs]);
 
   const installFromUrl = async () => {
     const target = url.trim();
@@ -89,6 +112,23 @@ export function Skills() {
         blanks — no prompt writing needed.
       </p>
 
+      {activeAgent && (
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-gold-400/10 border border-gold-400/20 px-4 py-2.5 text-xs text-gold-300">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{activeAgent.emoji}</span>
+            <span>
+              Đang hiển thị kỹ năng cho vai trò <strong>{activeAgent.name}</strong>. Chỉ những kỹ năng được bật trong cấu hình vai trò mới xuất hiện tại đây.
+            </span>
+          </div>
+          <button
+            onClick={() => setView("agents")}
+            className="font-medium underline hover:text-gold-200"
+          >
+            Cấu hình vai trò
+          </button>
+        </div>
+      )}
+
       {/* Install any standard Agent Skill (SKILL.md) from a URL. */}
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <input
@@ -110,68 +150,74 @@ export function Skills() {
       {error && <p className="mt-2 text-xs text-red-400">⚠️ {error}</p>}
 
       <h2 className="mt-8 text-lg font-semibold">Task skills</h2>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {custom.map(({ template, source }) => (
-          <Card key={source} className="flex flex-col">
-            <div className="flex items-start justify-between">
-              <span className="text-3xl">{template.emoji}</span>
-              <Badge tone="gold">Custom</Badge>
-            </div>
-            <h3 className="mt-3 font-semibold">{template.name}</h3>
-            <p className="mt-1 flex-1 text-sm text-neutral-400">
-              {template.description}
-            </p>
-            <div className="mt-4 flex gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() =>
-                  useSkill(template.prompt || template.description, {
-                    name: template.name,
-                    instructions: template.instructions,
-                  })
-                }
-              >
-                <Wand2 className="size-3.5" /> Use
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => removeCustomSkill(source)}
-                title="Remove"
-              >
-                <Trash2 className="size-3.5 text-red-400" />
-              </Button>
-            </div>
-          </Card>
-        ))}
-        {SKILLS.map((skill) => (
-          <Card key={skill.id} className="flex flex-col">
-            <div className="flex items-start justify-between">
-              <span className="text-3xl">{skill.emoji}</span>
-              <Badge>{skill.category}</Badge>
-            </div>
-            <h3 className="mt-3 font-semibold">{skill.name}</h3>
-            <p className="mt-1 flex-1 text-sm text-neutral-400">
-              {skill.description}
-            </p>
-            <div className="mt-4">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() =>
-                  useSkill(skill.prompt, {
-                    name: skill.name,
-                    instructions: skill.instructions,
-                  })
-                }
-              >
-                <Wand2 className="size-3.5" /> Use
-              </Button>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {(filteredCustom.length > 0 || filteredSkills.length > 0) ? (
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {filteredCustom.map(({ template, source }) => (
+            <Card key={source} className="flex flex-col">
+              <div className="flex items-start justify-between">
+                <span className="text-3xl">{template.emoji}</span>
+                <Badge tone="gold">Custom</Badge>
+              </div>
+              <h3 className="mt-3 font-semibold">{template.name}</h3>
+              <p className="mt-1 flex-1 text-sm text-neutral-400">
+                {template.description}
+              </p>
+              <div className="mt-4 flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    useSkill(template.prompt || template.description, {
+                      name: template.name,
+                      instructions: template.instructions,
+                    })
+                  }
+                >
+                  <Wand2 className="size-3.5" /> Use
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => removeCustomSkill(source)}
+                  title="Remove"
+                >
+                  <Trash2 className="size-3.5 text-red-400" />
+                </Button>
+              </div>
+            </Card>
+          ))}
+          {filteredSkills.map((skill) => (
+            <Card key={skill.id} className="flex flex-col">
+              <div className="flex items-start justify-between">
+                <span className="text-3xl">{skill.emoji}</span>
+                <Badge>{skill.category}</Badge>
+              </div>
+              <h3 className="mt-3 font-semibold">{skill.name}</h3>
+              <p className="mt-1 flex-1 text-sm text-neutral-400">
+                {skill.description}
+              </p>
+              <div className="mt-4">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    useSkill(skill.prompt, {
+                      name: skill.name,
+                      instructions: skill.instructions,
+                    })
+                  }
+                >
+                  <Wand2 className="size-3.5" /> Use
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-dashed border-neutral-800 p-8 text-center text-sm text-neutral-500">
+          Không có kỹ năng nào được bật cho vai trò này. Bạn có thể bật chúng trong cấu hình vai trò.
+        </div>
+      )}
 
       {/* NanoClaw engine skills — channels, providers, capabilities. */}
       <div className="mt-12">

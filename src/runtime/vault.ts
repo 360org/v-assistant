@@ -21,6 +21,21 @@ export async function vaultSet(key: string, value: string): Promise<void> {
     return;
   }
   try {
+    const res = await fetch("/api/vault", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    });
+    if (res.ok) {
+      try {
+        localStorage.setItem(WEB_PREFIX + key, value);
+      } catch {}
+      return;
+    }
+  } catch {
+    /* server API failed, proceed to localStorage */
+  }
+  try {
     localStorage.setItem(WEB_PREFIX + key, value);
   } catch {
     /* preview without persistence */
@@ -33,10 +48,31 @@ export async function vaultGet(key: string): Promise<string | null> {
     return (await invoke<string | null>("vault_get", { key })) ?? null;
   }
   try {
-    return localStorage.getItem(WEB_PREFIX + key);
+    const res = await fetch(`/api/vault?key=${encodeURIComponent(key)}`);
+    if (res.ok) {
+      const data = (await res.json()) as { value: string | null };
+      if (data && typeof data === "object" && "value" in data && data.value !== null) {
+        try {
+          localStorage.setItem(WEB_PREFIX + key, data.value);
+        } catch {}
+        return data.value;
+      }
+    }
   } catch {
-    return null;
+    /* server API failed, proceed to localStorage */
   }
+  try {
+    const localVal = localStorage.getItem(WEB_PREFIX + key);
+    if (localVal) {
+      void fetch("/api/vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value: localVal }),
+      }).catch(() => {});
+      return localVal;
+    }
+  } catch {}
+  return null;
 }
 
 export async function vaultDelete(key: string): Promise<void> {
@@ -46,10 +82,23 @@ export async function vaultDelete(key: string): Promise<void> {
     return;
   }
   try {
-    localStorage.removeItem(WEB_PREFIX + key);
+    const res = await fetch("/api/vault", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value: null }),
+    });
+    if (res.ok) {
+      try {
+        localStorage.removeItem(WEB_PREFIX + key);
+      } catch {}
+      return;
+    }
   } catch {
-    /* no-op */
+    /* server API failed, proceed to localStorage */
   }
+  try {
+    localStorage.removeItem(WEB_PREFIX + key);
+  } catch {}
 }
 
 /** True when running inside the Tauri desktop shell (OS keychain available). */

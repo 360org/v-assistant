@@ -12,6 +12,8 @@
 import type { ProviderId } from "@/lib/catalog";
 import type { ChatMessage } from "./engine";
 import type { AgentTool } from "./tools";
+import { devUrl } from "./proxy";
+import { vaultGet } from "./vault";
 
 /** Safety bound on the tool-calling loop (tool → result → model → …). */
 const MAX_TOOL_ROUNDS = 6;
@@ -26,7 +28,7 @@ export interface ProviderConfig {
 
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o-mini",
-  claude: "claude-sonnet-5",
+  claude: "claude-3-5-sonnet-20241022",
   gemini: "gemini-2.5-flash",
   openrouter: "openrouter/auto",
   local: "llama3.2",
@@ -42,8 +44,8 @@ export const ROUTER_BASE_URL = "https://openrouter.ai/api/v1";
  */
 export const ROUTED_MODELS: Record<ProviderId, string> = {
   chatgpt: "openai/gpt-4o-mini",
-  claude: "anthropic/claude-3.5-sonnet",
-  gemini: "google/gemini-2.0-flash-001",
+  claude: "anthropic/claude-sonnet-4-5",
+  gemini: "google/gemini-flash-1.5",
   openrouter: "openrouter/auto",
   local: "",
 };
@@ -53,17 +55,22 @@ export function routedConfig(
   provider: ProviderId,
   apiKey: string,
 ): ProviderConfig {
-  return { apiKey, baseUrl: ROUTER_BASE_URL, model: ROUTED_MODELS[provider] };
+  return {
+    apiKey,
+    baseUrl: provider === "openrouter" ? ROUTER_BASE_URL : undefined,
+    model: ROUTED_MODELS[provider],
+  };
 }
 
 /** True when the config is complete enough to make real calls. */
 export function isConfigured(
   provider: ProviderId,
   config: ProviderConfig | undefined,
+  hasSubscription: boolean = false,
 ): boolean {
-  if (!config) return false;
-  if (provider === "local") return Boolean(config.baseUrl);
-  return Boolean(config.apiKey);
+  if (provider === "local") return Boolean(config?.baseUrl);
+  if (hasSubscription) return true;
+  return Boolean(config?.apiKey);
 }
 
 export async function* streamProvider(
@@ -73,14 +80,26 @@ export async function* streamProvider(
   messages: ChatMessage[],
   tools: AgentTool[] = [],
 ): AsyncGenerator<string> {
-  const model = config.model || DEFAULT_MODELS[provider];
+  const activeConfig = { ...config };
+
+  // Fallback to global subscription if no specific API key is set for this provider
+  if (provider !== "local" && !activeConfig.apiKey) {
+    const subKey = await vaultGet("provider:openrouter");
+    if (subKey) {
+      activeConfig.apiKey = subKey;
+      activeConfig.baseUrl = ROUTER_BASE_URL;
+      activeConfig.model = config.model || ROUTED_MODELS[provider];
+    }
+  }
+
+  const model = activeConfig.model || DEFAULT_MODELS[provider];
   // A base URL means OpenAI-compatible transport: the router (direct
   // sign-in for any vendor) or a Local AI server. Native vendor APIs are
   // only used when a raw key is supplied without a base URL.
-  if (config.baseUrl) {
+  if (activeConfig.baseUrl) {
     yield* streamOpenAICompat(
-      config.baseUrl.replace(/\/$/, ""),
-      config.apiKey,
+      devUrl(activeConfig.baseUrl.replace(/\/$/, "")),
+      activeConfig.apiKey,
       model,
       system,
       messages,
@@ -90,15 +109,15 @@ export async function* streamProvider(
   }
   switch (provider) {
     case "claude":
-      yield* streamAnthropic(config.apiKey!, model, system, messages);
+      yield* streamAnthropic(activeConfig.apiKey!, model, system, messages);
       return;
     case "gemini":
-      yield* streamGemini(config.apiKey!, model, system, messages);
+      yield* streamGemini(activeConfig.apiKey!, model, system, messages);
       return;
     case "openrouter":
       yield* streamOpenAICompat(
-        "https://openrouter.ai/api/v1",
-        config.apiKey,
+        devUrl("https://openrouter.ai/api/v1"),
+        activeConfig.apiKey,
         model,
         system,
         messages,
@@ -107,8 +126,8 @@ export async function* streamProvider(
       return;
     case "chatgpt":
       yield* streamOpenAICompat(
-        "https://api.openai.com/v1",
-        config.apiKey,
+        devUrl("https://api.openai.com/v1"),
+        activeConfig.apiKey,
         model,
         system,
         messages,
@@ -117,8 +136,8 @@ export async function* streamProvider(
       return;
     case "local":
       yield* streamOpenAICompat(
-        config.baseUrl!.replace(/\/$/, ""),
-        config.apiKey,
+        activeConfig.baseUrl!.replace(/\/$/, ""),
+        activeConfig.apiKey,
         model,
         system,
         messages,
@@ -276,14 +295,22 @@ async function* streamAnthropic(
   system: string,
   messages: ChatMessage[],
 ): AsyncGenerator<string> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const isOAuth = apiKey.startsWith("sk-ant-oauth0");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+  if (isOAuth) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+    headers["anthropic-beta"] = "oauth-2025-04-20";
+  } else {
+    headers["x-api-key"] = apiKey;
+  }
+
+  const response = await fetch(devUrl("https://api.anthropic.com/v1/messages"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers,
     body: JSON.stringify({
       model,
       max_tokens: 4096,
@@ -311,15 +338,23 @@ async function* streamGemini(
   system: string,
   messages: ChatMessage[],
 ): AsyncGenerator<string> {
-  const url =
+  const url = devUrl(
     `https://generativelanguage.googleapis.com/v1beta/models/` +
-    `${model}:streamGenerateContent?alt=sse`;
+    `${model}:streamGenerateContent?alt=sse`,
+  );
+  const isOAuth = apiKey.startsWith("ya29.");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (isOAuth) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  } else {
+    headers["x-goog-api-key"] = apiKey;
+  }
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
+    headers,
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: messages.map((m) => ({

@@ -46,11 +46,55 @@ function sseStream(text) {
     },
   });
 }
+function sseAnthropic(text) {
+  return new ReadableStream({
+    start(controller) {
+      const enc = new TextEncoder();
+      controller.enqueue(
+        enc.encode(`data: ${JSON.stringify({ type: "content_block_delta", delta: { text } })}\n\n`)
+      );
+      controller.close();
+    },
+  });
+}
+function sseGemini(text) {
+  return new ReadableStream({
+    start(controller) {
+      const enc = new TextEncoder();
+      controller.enqueue(
+        enc.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\n\n`)
+      );
+      controller.close();
+    },
+  });
+}
 globalThis.fetch = async (url, init) => {
   const u = String(url);
+  console.log("FETCHING URL:", u);
   if (u.includes("/api/v1/auth/keys")) {
     exchangeSaw = JSON.parse(init.body);
     return new Response(JSON.stringify({ key: "sk-user-key" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (u.includes("/oauth/token") || u.includes("/token")) {
+    const params = new URLSearchParams(init.body);
+    exchangeSaw = {
+      code: params.get("code"),
+      code_verifier: params.get("code_verifier"),
+      code_challenge_method: "S256",
+    };
+    return new Response(JSON.stringify({ access_token: "sk-user-key", id_token: "mock-id-token" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (u.includes("/api/claude_cli/bootstrap")) {
+    return new Response(JSON.stringify({ oauth_account: { account_email: "test@claude.ai" } }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (u.includes("/userinfo")) {
+    return new Response(JSON.stringify({ email: "test@gemini.ai", name: "Gemini Tester" }), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -59,6 +103,16 @@ globalThis.fetch = async (url, init) => {
       JSON.stringify({ data: { label: "My OpenRouter", limit: 10, usage: 2.5 } }),
       { headers: { "Content-Type": "application/json" } },
     );
+  }
+  if (u.includes("/v1/messages")) {
+    return new Response(sseAnthropic("model=anthropic/claude-sonnet-5"), {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  }
+  if (u.includes("streamGenerateContent")) {
+    return new Response(sseGemini("model=google/gemini-3.5-flash"), {
+      headers: { "Content-Type": "text/event-stream" },
+    });
   }
   if (u.includes("/chat/completions")) {
     // Echo the requested model so we can assert per-vendor routing.
@@ -131,7 +185,7 @@ check("OpenRouter login → auto", (await modelFor("openrouter")).includes("auto
 const account = await mod.fetchVendorAccount("gemini", "sk-user-key");
 check(
   "local user created from account",
-  account?.label === "My OpenRouter" && account.detail?.includes("credit"),
+  account?.label === "test@gemini.ai" && account.detail === "Gemini Tester",
 );
 
 rmSync("scripts/.login-entry.mjs", { force: true });

@@ -29,6 +29,7 @@ export function Chat() {
     selfImprove,
     addAgentMemory,
     agents,
+    user,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -103,6 +104,7 @@ export function Chat() {
         agentId: activeAgent?.id,
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,
+        hasSubscription: Boolean(user && providerConfigs["openrouter"]?.apiKey),
       })) {
         replyText += chunk;
         setMessages((prev) =>

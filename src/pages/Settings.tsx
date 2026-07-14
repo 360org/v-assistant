@@ -85,7 +85,8 @@ export function Settings() {
         </p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {PROVIDERS.map((p) => {
-            const connected = isConfigured(p.id, providerConfigs[p.id]);
+            const hasSubscription = Boolean(user && providerConfigs["openrouter"]?.apiKey);
+            const connected = isConfigured(p.id, providerConfigs[p.id], hasSubscription);
             return (
               <button
                 key={p.id}
@@ -218,6 +219,7 @@ export function Settings() {
         <ProviderConnect
           provider={connectFor}
           initial={providerConfigs[connectFor]}
+          hasSubscription={Boolean(user && providerConfigs["openrouter"]?.apiKey)}
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
             if (config) void connectProvider(connectFor, config);

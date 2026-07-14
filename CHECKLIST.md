@@ -69,7 +69,7 @@
 - [x] Cài đặt skill từ URL (raw SKILL.md)
 - [x] Validate skills khi build (`validate-skills.mjs`)
 - [x] Inject skill instructions vào prompt Agent Runner (cần cập nhật cho IPC)
-- [ ] Per-role skill sets (mỗi Agent có bộ skill riêng)
+- [x] Per-role skill sets (mỗi Agent có bộ skill riêng)
   `[REF: NanoClaw/src/group-skills.ts — quản lý skill per-group]`
 
 ### 2.5 Trang Knowledge
@@ -101,6 +101,9 @@
 ### 2.9 Trang Settings & Onboarding
 - [x] Chọn AI provider, cấu hình model, API Key / Base URL
 - [x] Onboarding: OAuth login, local user, bỏ qua Welcome lần sau
+- [x] Đồng bộ hóa React state & Vault lưu trên host qua Vite API dev middleware (tránh mất kết nối khi đổi trình duyệt)
+- [x] Tự động tải thẳng vào trang Chat (thay vì Home) khi onboarded = true
+- [x] Quản lý phiên đăng nhập và yêu cầu đăng nhập lại khi session hết hạn
 - [ ] Theme / Language settings
 - [ ] Data export / import
 

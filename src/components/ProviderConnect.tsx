@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ChevronDown, ExternalLink, Loader2, LogIn, X } from "lucide-react";
+import { Check, ChevronDown, Copy, ExternalLink, Loader2, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
-import { DEFAULT_MODELS, type ProviderConfig } from "@/runtime/providers";
+import { DEFAULT_MODELS, type ProviderConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { openExternal, signIn } from "@/runtime/oauth";
 import { routedConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,14 @@ const inputClass =
 export function ProviderConnect({
   provider,
   initial,
+  hasSubscription = false,
   onSave,
   onClose,
   context = "settings",
 }: {
   provider: ProviderId;
   initial?: ProviderConfig;
+  hasSubscription?: boolean;
   onSave: (config: ProviderConfig | null) => void;
   onClose: () => void;
   context?: "onboarding" | "settings";
@@ -40,18 +42,61 @@ export function ProviderConnect({
   // Advanced (key) section: open by default when editing an existing
   // key-based connection or when the provider has no direct sign-in.
   const [advanced, setAdvanced] = useState(
-    Boolean(initial?.apiKey) || (!info.oauth && !isLocal),
+    Boolean(initial?.apiKey) || (!info.oauth && !isLocal && !hasSubscription),
   );
   const [signingIn, setSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  // Manual fallback: when popup is blocked the UI shows auth URL + paste input
+  const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
+  const [manualCallbackUrl, setManualCallbackUrl] = useState("");
+  const [copied, setCopied] = useState(false);
 
-  const valid = isLocal ? baseUrl.trim() !== "" : apiKey.trim() !== "";
+  // If subscription is active, we don't require an API key to connect (it fallback to OpenRouter)
+  const valid = isLocal
+    ? baseUrl.trim() !== ""
+    : (hasSubscription || apiKey.trim() !== "");
+
+  const copyAuthUrl = () => {
+    if (!manualAuthUrl) return;
+    void navigator.clipboard.writeText(manualAuthUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const submitManualCallback = () => {
+    try {
+      const url = new URL(manualCallbackUrl.trim());
+      const code = url.searchParams.get("code") || url.searchParams.get("token");
+      const error = url.searchParams.get("error");
+      if (error) { setLoginError(url.searchParams.get("error_description") || error); return; }
+      if (!code) { setLoginError("No authorization code found in URL."); return; }
+      // Let signIn complete via exchangeCode — inject code via BroadcastChannel
+      const ch = new BroadcastChannel("v_assistant_oauth");
+      ch.postMessage({
+        code,
+        state: new URL(manualCallbackUrl.trim()).searchParams.get("state"),
+        fullUrl: manualCallbackUrl.trim(),
+      });
+      ch.close();
+    } catch {
+      setLoginError("Invalid URL — please paste the full callback URL.");
+    }
+  };
 
   const login = async () => {
     setSigningIn(true);
+    setLoginError(null);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
     try {
-      const result = await signIn(provider, context);
+      const result = await signIn(provider, context, (url) => {
+        setManualAuthUrl(url);
+      });
       // Demo mode returns a credential in place; real mode navigated away.
       if (result) onSave(routedConfig(result.provider, result.apiKey));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLoginError(msg);
     } finally {
       setSigningIn(false);
     }
@@ -60,7 +105,7 @@ export function ProviderConnect({
   const save = () => {
     onSave({
       apiKey: apiKey.trim() || undefined,
-      baseUrl: isLocal ? baseUrl.trim() : undefined,
+      baseUrl: isLocal ? baseUrl.trim() : (hasSubscription && !apiKey.trim() ? ROUTER_BASE_URL : undefined),
       model: model.trim() || undefined,
     });
   };
@@ -116,7 +161,19 @@ export function ProviderConnect({
           </div>
         ) : info.oauth ? (
           <>
-            {/* OpenRouter: real one-click OAuth. */}
+            {/* Global Subscription active alert */}
+            {hasSubscription && (
+              <div className="mt-4 rounded-xl border border-gold-500/20 bg-gold-500/5 p-3 text-xs text-gold-300">
+                <div className="font-semibold flex items-center gap-1.5 text-gold-200">
+                  <Check className="size-4 text-gold-400" /> Active Subscription
+                </div>
+                <p className="mt-1 text-neutral-400 leading-relaxed">
+                  V-Assistant has active central subscription. You can click <strong>Connect</strong> below to route this model through it, or sign in to this vendor.
+                </p>
+              </div>
+            )}
+
+            {/* OAuth Login button */}
             <Button
               className="mt-4 w-full"
               disabled={signingIn}
@@ -132,6 +189,38 @@ export function ProviderConnect({
                 </>
               )}
             </Button>
+
+            {/* Login error message */}
+            {loginError && (
+              <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+                ⚠️ {loginError}
+              </div>
+            )}
+
+            {/* Manual URL paste fallback (popup was blocked / closed early) */}
+            {manualAuthUrl && (
+              <div className="mt-3 rounded-xl border border-neutral-700 bg-neutral-950/60 p-3 flex flex-col gap-3">
+                <p className="text-xs font-medium text-neutral-300">Step 1: Open this URL in your browser</p>
+                <div className="flex gap-2">
+                  <input readOnly value={manualAuthUrl}
+                    className={`${inputClass} font-mono text-[10px] !py-1`} />
+                  <Button variant="secondary" size="sm" onClick={copyAuthUrl}>
+                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                  </Button>
+                </div>
+                <p className="text-xs font-medium text-neutral-300">Step 2: Paste the callback URL here</p>
+                <p className="text-[11px] text-neutral-500">After sign-in, copy the full URL from your browser's address bar.</p>
+                <input
+                  className={`${inputClass} font-mono text-[10px] !py-1`}
+                  placeholder={`${window.location.origin}/callback?code=...`}
+                  value={manualCallbackUrl}
+                  onChange={(e) => setManualCallbackUrl(e.target.value)}
+                />
+                <Button onClick={submitManualCallback} disabled={!manualCallbackUrl.trim()}>
+                  Connect
+                </Button>
+              </div>
+            )}
 
             {/* Advanced: API key fallback. */}
             <button
@@ -170,10 +259,58 @@ export function ProviderConnect({
               </div>
             )}
           </>
+        ) : hasSubscription ? (
+          <>
+            {/* Global Subscription is active: notify user they are covered. */}
+            <div className="mt-4 rounded-xl border border-gold-500/20 bg-gold-500/5 p-3 text-xs text-gold-300">
+              <div className="font-semibold flex items-center gap-1.5 text-gold-200">
+                <Check className="size-4 text-gold-400" /> Active Subscription
+              </div>
+              <p className="mt-1 text-neutral-400 leading-relaxed">
+                V-Assistant will automatically route your requests through the central subscription. No API key required.
+              </p>
+            </div>
+
+            {/* Advanced options for custom API key override. */}
+            <button
+              onClick={() => setAdvanced((a) => !a)}
+              className="mt-4 flex w-full cursor-pointer items-center justify-between text-xs text-neutral-400 hover:text-neutral-200"
+            >
+              Custom API key (Advanced)
+              <ChevronDown
+                className={cn(
+                  "size-4 transition-transform",
+                  advanced && "rotate-180",
+                )}
+              />
+            </button>
+            {advanced && (
+              <div className="mt-3 flex flex-col gap-3 border-t border-neutral-800 pt-3">
+                <label className="text-xs text-neutral-400">
+                  Override with your own {info.name} API key
+                  <input
+                    className={`${inputClass} mt-1`}
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-…"
+                  />
+                </label>
+                <label className="text-xs text-neutral-400">
+                  Model override (optional)
+                  <input
+                    className={`${inputClass} mt-1`}
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    placeholder={DEFAULT_MODELS[provider]}
+                  />
+                </label>
+              </div>
+            )}
+          </>
         ) : (
           <>
-            {/* Direct to the vendor: open it → sign in → copy the key → paste
-                it back. Connects straight to the vendor's own API. */}
+            {/* Direct to the vendor (no subscription, no oauth): open page → copy key → paste key. */}
             <Button
               variant="secondary"
               className="mt-4 w-full"
@@ -218,9 +355,9 @@ export function ProviderConnect({
             <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            {(isLocal || advanced || !info.oauth) && (
+            {(isLocal || advanced || !info.oauth || hasSubscription) && (
               <Button size="sm" disabled={!valid} onClick={save}>
-                {info.oauth ? "Save key" : "Connect"}
+                {initial ? "Save" : "Connect"}
               </Button>
             )}
           </div>

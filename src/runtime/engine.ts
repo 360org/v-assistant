@@ -48,6 +48,8 @@ export interface ChatOptions {
   skillName?: string;
   /** Active skill's full SKILL.md instructions, injected as guidance. */
   skillInstructions?: string;
+  /** True when the user has an active global subscription (OpenRouter key in Vault) */
+  hasSubscription?: boolean;
 }
 
 export interface Engine {
@@ -182,7 +184,7 @@ export function createEngine(): Engine {
         yield* nanoclawEngine.chat(messages, options);
         return;
       }
-      if (isConfigured(options.provider, options.config)) {
+      if (isConfigured(options.provider, options.config, options.hasSubscription)) {
         yield* providerEngine.chat(messages, options);
         return;
       }

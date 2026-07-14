@@ -24,8 +24,14 @@ import { cn } from "@/lib/utils";
 type Step = "welcome" | "login" | "connect";
 
 export function Onboarding() {
-  const { completeOnboarding, connectProvider, oauthReturn, oauthError } =
-    useApp();
+  const {
+    completeOnboarding,
+    connectProvider,
+    oauthReturn,
+    oauthError,
+    user,
+    providerConfigs,
+  } = useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [provider, setProvider] = useState<ProviderId | null>(null);
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
@@ -208,6 +214,7 @@ export function Onboarding() {
         <ProviderConnect
           provider={connectFor}
           context="onboarding"
+          hasSubscription={Boolean(user && providerConfigs["openrouter"]?.apiKey)}
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
             if (config) void connectProvider(connectFor, config);

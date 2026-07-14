@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { SKILLS, parseSkillMd, toTemplate } from "@/lib/skills";
 import {
   Check,
   Download,
@@ -258,6 +259,44 @@ function AgentConfigDialog({
   const [memory, setMemory] = useState<string[]>(initial.memory ?? []);
   const [newMemory, setNewMemory] = useState("");
 
+  const { customSkills } = useApp();
+
+  const allSkills = useMemo(() => {
+    const builtIn = SKILLS.map((s) => ({
+      id: s.id,
+      name: s.name,
+      emoji: s.emoji,
+      description: s.description,
+    }));
+    const custom = customSkills.flatMap((c) => {
+      try {
+        const t = toTemplate(parseSkillMd(c.raw));
+        return [{
+          id: t.id,
+          name: t.name,
+          emoji: t.emoji,
+          description: t.description,
+        }];
+      } catch {
+        return [];
+      }
+    });
+    return [...builtIn, ...custom];
+  }, [customSkills]);
+
+  const [enabledSkills, setEnabledSkills] = useState<string[]>(() => {
+    if (initial.skills) return initial.skills;
+    const builtInIds = SKILLS.map((s) => s.id);
+    const customIds = customSkills.flatMap((c) => {
+      try {
+        return [parseSkillMd(c.raw).name];
+      } catch {
+        return [];
+      }
+    });
+    return [...builtInIds, ...customIds];
+  });
+
   const addMemory = () => {
     const v = newMemory.trim();
     if (!v) return;
@@ -355,6 +394,47 @@ function AgentConfigDialog({
               </div>
             </div>
           </div>
+          <div className="text-xs text-neutral-400">
+            Skills — enabled capabilities
+            <div className="mt-2 grid grid-cols-1 gap-2 max-h-48 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+              {allSkills.map((s) => {
+                const checked = enabledSkills.includes(s.id);
+                return (
+                  <label
+                    key={s.id}
+                    className="flex cursor-pointer items-start gap-2.5 rounded-lg p-1.5 hover:bg-neutral-900"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setEnabledSkills((prev) => [...prev, s.id]);
+                        } else {
+                          setEnabledSkills((prev) => prev.filter((id) => id !== s.id));
+                        }
+                      }}
+                      className="mt-0.5 rounded border-neutral-700 bg-neutral-900 text-gold-500 focus:ring-0 focus:ring-offset-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-200">
+                        <span>{s.emoji}</span>
+                        <span>{s.name}</span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-neutral-500 leading-normal line-clamp-1">
+                        {s.description}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+              {allSkills.length === 0 && (
+                <div className="text-center text-xs text-neutral-600 py-2">
+                  No skills installed.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
@@ -368,6 +448,7 @@ function AgentConfigDialog({
                 instructions: instructions.trim() || undefined,
                 soul: soul.trim() || undefined,
                 memory: memory.length ? memory : undefined,
+                skills: enabledSkills,
               })
             }
           >

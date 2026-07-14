@@ -23,7 +23,7 @@ import {
   fetchVendorAccount,
   type OAuthReturn,
 } from "@/runtime/oauth";
-import { routedConfig } from "@/runtime/providers";
+import { routedConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import { notifyTelegram, startTelegram, stopTelegram } from "@/runtime/telegram";
 import {
@@ -87,6 +87,8 @@ export interface AgentConfig {
   soul?: string;
   /** Persistent memory notes the agent recalls across chats. */
   memory?: string[];
+  /** Enabled skill IDs/names for this agent. */
+  skills?: string[];
 }
 
 /**
@@ -249,11 +251,90 @@ const AppContext = createContext<AppStore | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(loadState);
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>("chat");
   const [chatDraft, setChatDraft] = useState<string | null>(null);
   const [activeSkill, setActiveSkill] = useState<ActiveSkill | null>(null);
   const [oauthReturn, setOauthReturn] = useState<OAuthReturn | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
+
+  // Dev server synchronization + vault rehydrate: run sequentially to avoid
+  // race conditions. Host state is loaded first (contains provider metadata
+  // like model names, but apiKey is always ""), then vault keys are read and
+  // injected into providerConfigs, guaranteeing the engine always has real
+  // credentials in memory.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // Step 1: Load host state (dev server only, non-Tauri browsers)
+      if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+        try {
+          const res = await fetch("/api/state");
+          if (res.ok) {
+            const hostState = await res.json();
+            if (hostState && typeof hostState === "object" && Object.keys(hostState).length > 0) {
+              if (cancelled) return;
+              setState((s) => {
+                const mergedConfigs = { ...s.providerConfigs };
+                if (hostState.providerConfigs) {
+                  for (const [id, cfg] of Object.entries(hostState.providerConfigs)) {
+                    mergedConfigs[id as ProviderId] = {
+                      ...(cfg as ProviderConfig),
+                      // Never overwrite an already-loaded in-memory key
+                      apiKey: s.providerConfigs[id as ProviderId]?.apiKey || (cfg as ProviderConfig).apiKey || "",
+                    };
+                  }
+                }
+                return {
+                  ...s,
+                  ...hostState,
+                  providerConfigs: mergedConfigs,
+                };
+              });
+            }
+          }
+        } catch {
+          /* dev server not available, proceed */
+        }
+      }
+
+      // Step 2: Rehydrate provider secrets from the Vault back into memory.
+      // This MUST run after hostState is merged, so vault keys always win
+      // over the empty apiKey:"" values from persisted state.
+      if (cancelled) return;
+      const ids = Object.keys(
+        // Re-read current state to get the merged providerConfigs
+        (() => { let s: PersistedState | undefined; setState(cur => { s = cur; return cur; }); return s!; })().providerConfigs,
+      ) as ProviderId[];
+
+      for (const id of ids) {
+        if (cancelled) break;
+        const key = await vaultGet(vaultKey(id));
+        if (cancelled || !key) continue;
+        setState((s) => {
+          const current = s.providerConfigs[id];
+          if (!current) return s;
+          // Always write the vault key — it's the authoritative source.
+          // Also ensure baseUrl is set for routed models (format "vendor/model"):
+          // if the model contains '/' and no baseUrl, it was signed in through
+          // the router, so attach the router base URL so requests reach
+          // OpenRouter instead of a native vendor API.
+          const isRoutedModel = current.model?.includes("/") && id !== "local";
+          const baseUrl = current.baseUrl || (isRoutedModel ? ROUTER_BASE_URL : undefined);
+          return {
+            ...s,
+            providerConfigs: {
+              ...s.providerConfigs,
+              [id]: { ...current, apiKey: key, ...(baseUrl ? { baseUrl } : {}) },
+            },
+          };
+        });
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Returning from a provider's sign-in page: finish the code exchange and
   // store the credential, then let the UI (onboarding/settings) continue.
@@ -297,39 +378,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       const safe = { ...state, providerConfigs };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
+
+      // Also sync state to host dev server if running in standard browser dev mode
+      if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+        void fetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(safe),
+        }).catch(() => {});
+      }
     } catch {
       /* run without persistence */
     }
   }, [state]);
-
-  // On start, rehydrate provider secrets from the Vault back into memory,
-  // where the engine reads them for a request.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const ids = Object.keys(state.providerConfigs) as ProviderId[];
-      for (const id of ids) {
-        const key = await vaultGet(vaultKey(id));
-        if (cancelled || !key) continue;
-        setState((s) => {
-          const current = s.providerConfigs[id];
-          if (!current || current.apiKey) return s;
-          return {
-            ...s,
-            providerConfigs: {
-              ...s.providerConfigs,
-              [id]: { ...current, apiKey: key },
-            },
-          };
-        });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // Run once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Telegram channel: while it's connected, run the 2-way bridge so the user
   // can chat with their assistant from Telegram. It resolves the current
