@@ -14,7 +14,7 @@ import {
 } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
 import { signIn } from "@/runtime/oauth";
-import { routedConfig } from "@/runtime/providers";
+import { loginConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
@@ -62,7 +62,7 @@ export function Onboarding() {
         // routes the chosen vendor's models through the router key.
         await connectProvider(
           result.provider,
-          routedConfig(result.provider, result.apiKey),
+          loginConfig(result.provider, result.apiKey),
         );
         setProvider(result.provider);
         setStep("connect");

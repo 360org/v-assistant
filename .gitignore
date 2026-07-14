@@ -19,6 +19,10 @@ scripts/.selfimprove-*.mjs
 scripts/.connector-*.mjs
 scripts/.agentimport-*.mjs
 
+# Dev-mode state/vault sync files — hold real API keys, never commit
+.vua_state_dev.json
+.vua_vault_dev.json
+
 # Editor / OS
 .DS_Store
 *.local

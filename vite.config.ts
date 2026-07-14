@@ -140,6 +140,20 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/proxy\/anthropic/, ""),
         secure: true,
+        // Browsers attach Origin to same-origin POSTs too. Anthropic treats an
+        // inbound Origin as a browser CORS call and rejects it with 401 when the
+        // org disables CORS ("CORS requests are not allowed for this
+        // Organization"). This request leaves from the dev server, not the page,
+        // so drop the browser-only headers before forwarding.
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            proxyReq.removeHeader("origin");
+            proxyReq.removeHeader("referer");
+            proxyReq.removeHeader("sec-fetch-mode");
+            proxyReq.removeHeader("sec-fetch-site");
+            proxyReq.removeHeader("sec-fetch-dest");
+          });
+        },
       },
       "/proxy/openai": {
         target: "https://api.openai.com",

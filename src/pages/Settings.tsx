@@ -3,7 +3,7 @@ import { Lock, LogIn } from "lucide-react";
 import { vaultIsSecure } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
 import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
-import { isConfigured, routedConfig } from "@/runtime/providers";
+import { isConfigured, loginConfig } from "@/runtime/providers";
 import { signIn } from "@/runtime/oauth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,7 @@ export function Settings() {
                   if (r)
                     void connectProvider(
                       r.provider,
-                      routedConfig(r.provider, r.apiKey),
+                      loginConfig(r.provider, r.apiKey),
                     );
                 })
               }

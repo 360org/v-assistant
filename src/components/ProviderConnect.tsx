@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Check, ChevronDown, Copy, ExternalLink, Loader2, LogIn, X } from "lucide-react";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import { DEFAULT_MODELS, type ProviderConfig, ROUTER_BASE_URL } from "@/runtime/providers";
-import { openExternal, signIn } from "@/runtime/oauth";
-import { routedConfig } from "@/runtime/providers";
+import { needsManualCallback, openExternal, signIn } from "@/runtime/oauth";
+import { loginConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +93,7 @@ export function ProviderConnect({
         setManualAuthUrl(url);
       });
       // Demo mode returns a credential in place; real mode navigated away.
-      if (result) onSave(routedConfig(result.provider, result.apiKey));
+      if (result) onSave(loginConfig(result.provider, result.apiKey));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setLoginError(msg);
@@ -209,10 +209,18 @@ export function ProviderConnect({
                   </Button>
                 </div>
                 <p className="text-xs font-medium text-neutral-300">Step 2: Paste the callback URL here</p>
-                <p className="text-[11px] text-neutral-500">After sign-in, copy the full URL from your browser's address bar.</p>
+                <p className="text-[11px] text-neutral-500">
+                  {needsManualCallback(provider)
+                    ? `After you approve, the browser lands on a page that fails to load — that is expected. Copy the whole URL from its address bar (it contains ?code=…) and paste it below.`
+                    : `After sign-in, copy the full URL from your browser's address bar.`}
+                </p>
                 <input
                   className={`${inputClass} font-mono text-[10px] !py-1`}
-                  placeholder={`${window.location.origin}/callback?code=...`}
+                  placeholder={
+                    needsManualCallback(provider)
+                      ? "http://localhost:443/callback?code=..."
+                      : `${window.location.origin}/callback?code=...`
+                  }
                   value={manualCallbackUrl}
                   onChange={(e) => setManualCallbackUrl(e.target.value)}
                 />

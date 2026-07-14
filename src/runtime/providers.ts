@@ -24,11 +24,17 @@ export interface ProviderConfig {
   baseUrl?: string;
   /** Model override; each provider has a sensible default. */
   model?: string;
+  /**
+   * The apiKey is a vendor subscription OAuth token (not a raw API key), so
+   * inference must use `Authorization: Bearer` + the vendor's OAuth beta
+   * header instead of the normal key header. Set by subscription sign-in.
+   */
+  oauth?: boolean;
 }
 
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o-mini",
-  claude: "claude-3-5-sonnet-20241022",
+  claude: "claude-sonnet-5",
   gemini: "gemini-2.5-flash",
   openrouter: "openrouter/auto",
   local: "llama3.2",
@@ -62,6 +68,73 @@ export function routedConfig(
   };
 }
 
+/**
+ * Native model each vendor subscription sign-in talks to — a real vendor
+ * model id (no "vendor/" prefix), so requests go straight to the vendor's
+ * own API with the subscription OAuth token rather than through the router.
+ */
+export const SUBSCRIPTION_MODELS: Record<ProviderId, string> = {
+  chatgpt: "gpt-4o",
+  claude: "claude-sonnet-5",
+  gemini: "gemini-2.5-flash",
+  openrouter: "openrouter/auto",
+  local: "",
+};
+
+/**
+ * Config for a "Continue with <vendor>" subscription sign-in.
+ *  - OpenRouter → the router key (one login → every model).
+ *  - Claude / Gemini → the vendor's own subscription OAuth token, used
+ *    natively (Bearer + OAuth beta header) against the vendor API.
+ *
+ * No model is pinned here on purpose: a pinned id is persisted forever and goes
+ * stale when the vendor retires it (that is how a saved `claude-sonnet-4-…`
+ * kept producing 404s). The model is resolved per request from
+ * SUBSCRIPTION_MODELS instead, so updating that map is enough. The user can
+ * still override it under Advanced options.
+ */
+export function loginConfig(
+  provider: ProviderId,
+  apiKey: string,
+): ProviderConfig {
+  if (provider === "openrouter") return routedConfig(provider, apiKey);
+  return { apiKey, oauth: true };
+}
+
+/** The model a config resolves to when the user has not overridden it. */
+export function defaultModelFor(
+  provider: ProviderId,
+  config: ProviderConfig | undefined,
+): string {
+  if (config?.oauth) return SUBSCRIPTION_MODELS[provider] || DEFAULT_MODELS[provider];
+  return DEFAULT_MODELS[provider];
+}
+
+/** Models offered in the chat picker, per provider. Local AI has no fixed
+ *  catalogue — the user names the model their own server serves. */
+export const MODELS: Record<ProviderId, { id: string; name: string }[]> = {
+  claude: [
+    { id: "claude-sonnet-5", name: "Claude Sonnet 5" },
+    { id: "claude-opus-4-8", name: "Claude Opus 4.8" },
+    { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
+  ],
+  chatgpt: [
+    { id: "gpt-4o", name: "GPT-4o" },
+    { id: "gpt-4o-mini", name: "GPT-4o mini" },
+  ],
+  gemini: [
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+  ],
+  openrouter: [
+    { id: "openrouter/auto", name: "Auto (best available)" },
+    { id: "anthropic/claude-sonnet-5", name: "Claude Sonnet 5" },
+    { id: "openai/gpt-4o", name: "GPT-4o" },
+    { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+  ],
+  local: [],
+};
+
 /** True when the config is complete enough to make real calls. */
 export function isConfigured(
   provider: ProviderId,
@@ -92,7 +165,7 @@ export async function* streamProvider(
     }
   }
 
-  const model = activeConfig.model || DEFAULT_MODELS[provider];
+  const model = activeConfig.model || defaultModelFor(provider, activeConfig);
   // A base URL means OpenAI-compatible transport: the router (direct
   // sign-in for any vendor) or a Local AI server. Native vendor APIs are
   // only used when a raw key is supplied without a base URL.
@@ -109,10 +182,10 @@ export async function* streamProvider(
   }
   switch (provider) {
     case "claude":
-      yield* streamAnthropic(activeConfig.apiKey!, model, system, messages);
+      yield* streamAnthropic(activeConfig.apiKey!, model, system, messages, activeConfig.oauth);
       return;
     case "gemini":
-      yield* streamGemini(activeConfig.apiKey!, model, system, messages);
+      yield* streamGemini(activeConfig.apiKey!, model, system, messages, activeConfig.oauth);
       return;
     case "openrouter":
       yield* streamOpenAICompat(
@@ -294,12 +367,28 @@ async function* streamAnthropic(
   model: string,
   system: string,
   messages: ChatMessage[],
+  oauth = false,
 ): AsyncGenerator<string> {
-  const isOAuth = apiKey.startsWith("sk-ant-oauth0");
+  // Subscription OAuth token → Bearer + OAuth beta header; raw key → x-api-key.
+  // The config flag is authoritative; the prefix check is a fallback for keys
+  // rehydrated without the flag.
+  // ponytail: header shape follows Anthropic's OAuth flow, but a Claude
+  // subscription token is minted for Claude Code and the API may reject a
+  // foreign system prompt — needs a live smoke test with a real token.
+  const isOAuth = oauth || apiKey.startsWith("sk-ant-oat");
+  const url = devUrl("https://api.anthropic.com/v1/messages");
+  // A relative URL means devUrl rewrote it onto the dev proxy, so the request
+  // leaves from the server, not the browser. Only announce direct browser
+  // access when we really are the browser: the header makes Anthropic enforce
+  // the org's CORS setting, and orgs with CORS disabled answer 401
+  // ("CORS requests are not allowed for this Organization").
+  const throughProxy = !url.startsWith("http");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "anthropic-version": "2023-06-01",
-    "anthropic-dangerous-direct-browser-access": "true",
+    ...(throughProxy
+      ? {}
+      : { "anthropic-dangerous-direct-browser-access": "true" }),
   };
   if (isOAuth) {
     headers["Authorization"] = `Bearer ${apiKey}`;
@@ -308,7 +397,7 @@ async function* streamAnthropic(
     headers["x-api-key"] = apiKey;
   }
 
-  const response = await fetch(devUrl("https://api.anthropic.com/v1/messages"), {
+  const response = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -337,12 +426,16 @@ async function* streamGemini(
   model: string,
   system: string,
   messages: ChatMessage[],
+  oauth = false,
 ): AsyncGenerator<string> {
   const url = devUrl(
     `https://generativelanguage.googleapis.com/v1beta/models/` +
     `${model}:streamGenerateContent?alt=sse`,
   );
-  const isOAuth = apiKey.startsWith("ya29.");
+  // ponytail: Google access tokens (ya29.…) authenticate as Bearer, but a
+  // Gemini-CLI cloud-platform token targets the Code Assist API, not this
+  // generativelanguage endpoint — needs a live smoke test with a real token.
+  const isOAuth = oauth || apiKey.startsWith("ya29.");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };

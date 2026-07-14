@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Eraser, SendHorizonal, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
+import { MODELS, defaultModelFor } from "@/runtime/providers";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
 import { reflectAndLearn } from "@/runtime/selfImprove";
 import { Logo } from "@/components/Logo";
@@ -22,6 +23,7 @@ export function Chat() {
     chatDraft,
     consumeChatDraft,
     providerConfigs,
+    setProviderConfig,
     activeSkill,
     clearActiveSkill,
     agentConfigs,
@@ -34,6 +36,17 @@ export function Chat() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+
+  // The model actually used for the next message: the user's override, or the
+  // provider's current default (subscription sign-ins pin nothing).
+  const activeConfig = provider ? providerConfigs[provider] : undefined;
+  const activeModel = provider
+    ? activeConfig?.model || defaultModelFor(provider, activeConfig)
+    : "";
+  const modelChoices = provider ? MODELS[provider] : [];
+  const modelLabel =
+    modelChoices.find((m) => m.id === activeModel)?.name || activeModel;
   const bottomRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -175,9 +188,54 @@ export function Chat() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {/* Model picker — which model of the active provider answers next. */}
+          {modelChoices.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setModelPickerOpen((o) => !o);
+                  setPickerOpen(false);
+                }}
+                className="flex max-w-[10rem] cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-400 hover:bg-neutral-800"
+                title={activeModel}
+              >
+                <span className="truncate">{modelLabel}</span>
+                <ChevronDown className="size-3.5 shrink-0" />
+              </button>
+              {modelPickerOpen && (
+                <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
+                  {modelChoices.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        if (!provider) return;
+                        setProviderConfig(provider, {
+                          ...providerConfigs[provider],
+                          model: m.id,
+                        });
+                        setModelPickerOpen(false);
+                      }}
+                      className={cn(
+                        "block w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs hover:bg-neutral-800",
+                        activeModel === m.id ? "text-gold-300" : "text-neutral-300",
+                      )}
+                    >
+                      {m.name}
+                      <span className="block font-mono text-[10px] text-neutral-500">
+                        {m.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="relative">
             <button
-              onClick={() => setPickerOpen((o) => !o)}
+              onClick={() => {
+                setPickerOpen((o) => !o);
+                setModelPickerOpen(false);
+              }}
               className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
             >
               {provider ? getProvider(provider).name : "Provider"}

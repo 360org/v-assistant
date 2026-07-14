@@ -17,16 +17,52 @@ import { pathToFileURL } from "node:url";
 import { writeFileSync, rmSync } from "node:fs";
 
 // --- Shims: browser globals the web sign-in path touches --------------------
-const store = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
-  removeItem: (k) => store.delete(k),
+globalThis.mockStorageStore = new Map();
+const mockLocalStorage = {
+  getItem: (k) => globalThis.mockStorageStore.get(k) || null,
+  setItem: (k, v) => globalThis.mockStorageStore.set(k, String(v)),
+  removeItem: (k) => globalThis.mockStorageStore.delete(k),
 };
-globalThis.window = {
+
+try {
+  globalThis.localStorage = mockLocalStorage;
+} catch {
+  Object.defineProperty(globalThis, "localStorage", {
+    value: mockLocalStorage,
+    configurable: true,
+    writable: true,
+  });
+}
+
+const mockWindow = {
   location: { search: "?code=AUTH_CODE_123", pathname: "/", origin: "https://app" },
   history: { replaceState: () => {} },
 };
+
+if (typeof globalThis.window === "undefined") {
+  globalThis.window = mockWindow;
+} else {
+  try {
+    Object.defineProperty(globalThis.window, "location", {
+      value: mockWindow.location,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis.window, "history", {
+      value: mockWindow.history,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    // Fallback if window is read-only but location property is writable
+    try {
+      globalThis.window.location = mockWindow.location;
+      globalThis.window.history = mockWindow.history;
+    } catch {
+      /* ignore if completely frozen */
+    }
+  }
+}
 
 // --- Stub OpenRouter + the router chat endpoint via a fetch interceptor -----
 let exchangeSaw = null;
@@ -68,6 +104,7 @@ function sseGemini(text) {
     },
   });
 }
+let lastInferenceHeaders = null;
 globalThis.fetch = async (url, init) => {
   const u = String(url);
   console.log("FETCHING URL:", u);
@@ -105,12 +142,15 @@ globalThis.fetch = async (url, init) => {
     );
   }
   if (u.includes("/v1/messages")) {
-    return new Response(sseAnthropic("model=anthropic/claude-sonnet-5"), {
+    lastInferenceHeaders = init.headers || {};
+    const model = JSON.parse(init.body).model;
+    return new Response(sseAnthropic(`model=${model}`), {
       headers: { "Content-Type": "text/event-stream" },
     });
   }
   if (u.includes("streamGenerateContent")) {
-    return new Response(sseGemini("model=google/gemini-3.5-flash"), {
+    lastInferenceHeaders = init.headers || {};
+    return new Response(sseGemini(`model=${u.split("/models/")[1].split(":")[0]}`), {
       headers: { "Content-Type": "text/event-stream" },
     });
   }
@@ -126,8 +166,20 @@ globalThis.fetch = async (url, init) => {
 
 // --- Bundle the real modules ------------------------------------------------
 const entry = `
+globalThis.mockWindow = {
+  location: { search: "?code=AUTH_CODE_123", pathname: "/", origin: "https://app" },
+  history: { replaceState: () => {} },
+  open: () => ({ closed: false }),
+  addEventListener: () => {},
+  removeEventListener: () => {},
+};
+globalThis.mockLocalStorage = {
+  getItem: (k) => globalThis.mockStorageStore.get(k) || null,
+  setItem: (k, v) => globalThis.mockStorageStore.set(k, String(v)),
+  removeItem: (k) => globalThis.mockStorageStore.delete(k),
+};
 export { completeOAuthReturn, fetchVendorAccount } from "../src/runtime/oauth.ts";
-export { routedConfig, streamProvider, ROUTED_MODELS } from "../src/runtime/providers.ts";
+export { routedConfig, loginConfig, streamProvider, ROUTED_MODELS, SUBSCRIPTION_MODELS } from "../src/runtime/providers.ts";
 `;
 writeFileSync("scripts/.login-entry.mjs", entry);
 const outfile = "scripts/.login-bundle.mjs";
@@ -137,7 +189,11 @@ await build({
   format: "esm",
   platform: "node",
   outfile,
-  define: { "import.meta.env": "{}" },
+  define: {
+    "import.meta.env": "{}",
+    "window": "mockWindow",
+    "localStorage": "mockLocalStorage",
+  },
   logLevel: "silent",
 });
 const mod = await import(pathToFileURL(outfile).href);
@@ -148,14 +204,14 @@ const check = (name, cond) => {
   if (!cond) pass = false;
 };
 
-// 1. Sign-in return: pending verifier for "Continue with Claude" → key.
-store.set(
+// 1. Sign-in return: pending verifier for "Continue with OpenRouter" → key.
+globalThis.mockStorageStore.set(
   "v-assistant-oauth-pending",
-  JSON.stringify({ provider: "claude", verifier: "VERIFIER_XYZ", context: "onboarding" }),
+  JSON.stringify({ provider: "openrouter", verifier: "VERIFIER_XYZ", context: "onboarding" }),
 );
 const result = await mod.completeOAuthReturn();
 check("code exchanged for a user key", result?.apiKey === "sk-user-key");
-check("vendor preserved through login", result?.provider === "claude");
+check("vendor preserved through login", result?.provider === "openrouter");
 check(
   "PKCE fields sent (code_verifier + S256)",
   exchangeSaw?.code === "AUTH_CODE_123" &&
@@ -187,6 +243,48 @@ check(
   "local user created from account",
   account?.label === "test@gemini.ai" && account.detail === "Gemini Tester",
 );
+
+// 4. Subscription vendor sign-in (loginConfig): the vendor's own OAuth token
+//    is used NATIVELY (Bearer + OAuth beta) against the vendor API — NOT the
+//    router. This is the "login with your subscription" path (SPEC §1).
+async function drainLogin(provider, token) {
+  lastInferenceHeaders = null;
+  let out = "";
+  for await (const chunk of mod.streamProvider(
+    provider,
+    mod.loginConfig(provider, token),
+    "system",
+    [{ id: "1", role: "user", content: "hi", createdAt: 0 }],
+  )) {
+    out += chunk;
+  }
+  return { model: out.replace("model=", ""), headers: lastInferenceHeaders || {} };
+}
+
+const claudeCfg = mod.loginConfig("claude", "sk-ant-oat01-TOKEN");
+// The model is deliberately NOT pinned into the saved config — a pinned id goes
+// stale when the vendor retires the model. It is resolved per request instead.
+check("Claude subscription → oauth flag set, no model pinned",
+  claudeCfg.oauth === true && claudeCfg.model === undefined);
+check("Claude subscription → resolves to a native model id (no router prefix)",
+  !mod.SUBSCRIPTION_MODELS.claude.includes("/"));
+const claudeRun = await drainLogin("claude", "sk-ant-oat01-TOKEN");
+check("Claude subscription → hits vendor model natively",
+  claudeRun.model === mod.SUBSCRIPTION_MODELS.claude);
+check("Claude subscription → Bearer + OAuth beta header (not x-api-key)",
+  claudeRun.headers.Authorization === "Bearer sk-ant-oat01-TOKEN" &&
+  claudeRun.headers["anthropic-beta"] === "oauth-2025-04-20" &&
+  !("x-api-key" in claudeRun.headers));
+
+const gemRun = await drainLogin("gemini", "ya29.TOKEN");
+check("Gemini subscription → Bearer header (not x-goog-api-key)",
+  gemRun.headers.Authorization === "Bearer ya29.TOKEN" &&
+  !("x-goog-api-key" in gemRun.headers));
+
+// OpenRouter login stays a router key (central subscription), not a native call.
+const orCfg = mod.loginConfig("openrouter", "sk-or-user");
+check("OpenRouter login → router baseUrl (central subscription)",
+  orCfg.baseUrl?.includes("openrouter.ai") && orCfg.oauth !== true);
 
 rmSync("scripts/.login-entry.mjs", { force: true });
 rmSync(outfile, { force: true });

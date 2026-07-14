@@ -23,7 +23,7 @@ import {
   fetchVendorAccount,
   type OAuthReturn,
 } from "@/runtime/oauth";
-import { routedConfig, ROUTER_BASE_URL } from "@/runtime/providers";
+import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import { notifyTelegram, startTelegram, stopTelegram } from "@/runtime/telegram";
 import {
@@ -321,11 +321,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // OpenRouter instead of a native vendor API.
           const isRoutedModel = current.model?.includes("/") && id !== "local";
           const baseUrl = current.baseUrl || (isRoutedModel ? ROUTER_BASE_URL : undefined);
+          // Subscription sign-ins used to pin a model id into the saved config.
+          // Those ids go stale when the vendor retires the model (a saved
+          // `claude-sonnet-4-…` answered 404), so drop them and let the current
+          // default apply. A model the user typed themselves is never pinned
+          // this way, so it survives.
+          const { model, ...rest } = current;
+          const next = current.oauth ? rest : current;
           return {
             ...s,
             providerConfigs: {
               ...s.providerConfigs,
-              [id]: { ...current, apiKey: key, ...(baseUrl ? { baseUrl } : {}) },
+              [id]: { ...next, apiKey: key, ...(baseUrl ? { baseUrl } : {}) },
             },
           };
         });
@@ -345,7 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Sets config (routed to the chosen vendor) + creates the local user.
         await connectProvider(
           result.provider,
-          routedConfig(result.provider, result.apiKey),
+          loginConfig(result.provider, result.apiKey),
         );
         setOauthReturn(result);
       })

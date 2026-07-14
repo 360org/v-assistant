@@ -70,12 +70,26 @@ async function s256(verifier: string): Promise<string> {
   return base64url(new Uint8Array(digest));
 }
 
-function randomBase64url(bytes = 48): string {
+/**
+ * PKCE verifier / CSRF state, sized exactly like 9router's `generatePKCE`
+ * (32 random bytes → 43 base64url chars each). The vendor OAuth clients are
+ * picky: a shorter state made claude.ai reject the request with "Invalid
+ * request format", so keep these byte counts in sync with 9router.
+ */
+const PKCE_BYTES = 32;
+
+function randomBase64url(bytes = PKCE_BYTES): string {
   return base64url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
 // ─── OAuth configs (static) ───────────────────────────────────────────────────
 
+// Subscription sign-in với client OAuth của CLI chính chủ (Claude Code /
+// Gemini CLI) — quyết định sản phẩm của PO ngày 2026-07-14: user đăng nhập
+// bằng subscription sẵn có, không dán API key (idea.md §A, SPEC §1).
+// ponytail: client không phải do vendor cấp cho V-Assistant — vendor có thể
+// thu hồi/chặn bất kỳ lúc nào; hướng nâng cấp là chuyển OAuth về 9router
+// server-side (CHECKLIST §4.2).
 export const OAUTH_CONFIGS = {
   openrouter: {
     authorizeUrl: "https://openrouter.ai/auth",
@@ -95,6 +109,8 @@ export const OAUTH_CONFIGS = {
   },
   gemini: {
     clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+    // Gemini CLI's public installed-app credential (published in Google's own
+    // gemini-cli repo) — not a confidential secret by design.
     clientSecret: "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",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
@@ -106,21 +122,44 @@ export const OAUTH_CONFIGS = {
     usePkce: false,   // Gemini standard OAuth, no PKCE — per 9router gemini.js
     usePopup: true,
   },
-  chatgpt: {
-    // ChatGPT OAuth requires an officially registered OpenAI client ID.
-    // Direct OAuth is not available yet; use OpenRouter (which supports GPT)
-    // or paste an API key from platform.openai.com.
-    disabled: true,
-  },
 } as const;
 
 // ─── Callback URL helper ──────────────────────────────────────────────────────
 
-/** The redirect_uri we pass to providers — must exactly match the whitelisted URI in the OAuth Client config. */
-function callbackUrl(): string {
-  // Vì 9router đang pass redirect_uri là localhost:443 (do chạy https)
-  // và Client ID này chỉ whitelist localhost:443 / 8080.
-  return "http://localhost:443/callback";
+/**
+ * The redirect_uri per provider. It is NOT free-form: each vendor OAuth client
+ * only accepts redirect URIs registered against it.
+ *
+ *  - OpenRouter: public PKCE, no client registration → the app's own /callback
+ *    route (main.tsx) works, and the popup relays the code back automatically.
+ *    This is the only true 1-click flow.
+ *
+ *  - Claude: the Claude Code client whitelists only a fixed set of loopback
+ *    URIs (`http://localhost:443/callback` is the one 9router uses and the one
+ *    proven to work here). Any other port — including the app's own 1420 — is
+ *    rejected by claude.ai with "Authorization failed / Invalid request
+ *    format". Nothing listens on 443, so after the user approves, the browser
+ *    lands on an unreachable page whose address bar carries `?code=…`; the user
+ *    pastes that URL back into the app (see ProviderConnect's manual fallback).
+ *
+ *  - Gemini: Google installed-app clients accept any loopback port, so the
+ *    app's own /callback works and the popup relays automatically.
+ *
+ * ponytail: 443 is a magic number inherited from the vendor's whitelist, not a
+ * choice. Hard-coding it is the only thing that works today; the durable fix is
+ * to move vendor OAuth server-side into 9router (CHECKLIST §4.2).
+ */
+const CLAUDE_REDIRECT_URI = "http://localhost:443/callback";
+
+function callbackUrl(provider: ProviderId): string {
+  if (provider === "claude") return CLAUDE_REDIRECT_URI;
+  return `${window.location.origin}/callback`;
+}
+
+/** True when the vendor redirects somewhere the app cannot listen on, so the
+ *  user has to paste the callback URL back in by hand. */
+export function needsManualCallback(provider: ProviderId): boolean {
+  return provider === "claude";
 }
 
 // ─── Auth URL builders ────────────────────────────────────────────────────────
@@ -202,22 +241,15 @@ async function exchangeCode(
   }
 
   if (provider === "claude") {
-    // Handle code that may include state after # (per 9router claude.js)
+    // The returned code may carry state after '#' (per 9router claude.js).
     let authCode = code;
     let codeState = "";
     if (authCode.includes("#")) {
-      const parts = authCode.split("#");
-      authCode = parts[0];
-      codeState = parts[1] || "";
+      [authCode, codeState = ""] = authCode.split("#");
     }
-
-    // Claude token exchange uses JSON body — per 9router
     const response = await fetch(devUrl("https://api.anthropic.com/v1/oauth/token"), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         code: authCode,
         state: codeState || state,
@@ -229,7 +261,7 @@ async function exchangeCode(
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Claude token exchange failed (HTTP ${response.status}): ${text}`);
+      throw new Error(`Claude sign-in failed (HTTP ${response.status}): ${text}`);
     }
     const data = await response.json();
     const token = data.access_token || data.refresh_token;
@@ -239,7 +271,6 @@ async function exchangeCode(
 
   if (provider === "gemini") {
     const conf = OAUTH_CONFIGS.gemini;
-    // Gemini uses form-urlencoded (standard OAuth2)
     const response = await fetch(devUrl("https://oauth2.googleapis.com/token"), {
       method: "POST",
       headers: {
@@ -256,10 +287,12 @@ async function exchangeCode(
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Gemini token exchange failed (HTTP ${response.status}): ${text}`);
+      throw new Error(`Gemini sign-in failed (HTTP ${response.status}): ${text}`);
     }
     const data = await response.json();
-    return data.access_token || data.refresh_token || "";
+    const token = data.access_token || data.refresh_token;
+    if (!token) throw new Error("No access_token in Gemini OAuth response.");
+    return token;
   }
 
   throw new Error(`Exchange not implemented for provider: ${provider}`);
@@ -279,10 +312,16 @@ interface CallbackPayload {
 /**
  * Open OAuth popup and wait for callback via postMessage / BroadcastChannel / localStorage.
  * Resolves with the OAuth code (or rejects on error / timeout).
+ *
+ * `manualCallback` providers (Claude) redirect to a port nothing listens on, so
+ * the popup necessarily ends on a failed page the user closes after copying the
+ * URL. Closing it there is the normal path, not an error — so we must not reject
+ * on popup close, or the pasted URL arrives after nobody is listening.
  */
 function waitForPopupCallback(
   authUrl: string,
   expectedState: string,
+  manualCallback = false,
 ): Promise<CallbackPayload> {
   return new Promise((resolve, reject) => {
     const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -353,12 +392,16 @@ function waitForPopupCallback(
       } catch { /* ignore */ }
     }
 
-    // Detect popup closed without completing
-    const pollInterval = setInterval(() => {
-      if (popup && popup.closed && !settled) {
-        settle(new Error("Sign-in window was closed before completing. Please try again."));
-      }
-    }, 1000);
+    // Detect popup closed without completing. Skipped for manual-callback
+    // providers, where closing the popup is part of the normal flow and the
+    // code still arrives later via the pasted URL.
+    const pollInterval = manualCallback
+      ? undefined
+      : setInterval(() => {
+          if (popup && popup.closed && !settled) {
+            settle(new Error("Sign-in window was closed before completing. Please try again."));
+          }
+        }, 1000);
 
     // Timeout
     const timeout = setTimeout(() => {
@@ -366,7 +409,7 @@ function waitForPopupCallback(
     }, TIMEOUT_MS);
 
     function cleanup() {
-      clearInterval(pollInterval);
+      if (pollInterval !== undefined) clearInterval(pollInterval);
       clearTimeout(timeout);
       window.removeEventListener("message", msgHandler);
       window.removeEventListener("storage", storageHandler);
@@ -382,9 +425,13 @@ async function desktopLogin(provider: ProviderId): Promise<LoginResult> {
   const { listen } = await import("@tauri-apps/api/event");
 
   const port = await invoke<number>("oauth_listen");
-  const verifier = randomBase64url(48);
-  const state = randomBase64url(16);
-  const redirect = `http://127.0.0.1:${port}`;
+  const verifier = randomBase64url();
+  const state = randomBase64url();
+  // Must match the loopback redirect the vendor OAuth clients whitelist:
+  // `http://localhost:<port>/callback` (host `localhost`, path `/callback`).
+  // Using 127.0.0.1 or omitting /callback makes claude.ai reject the request
+  // as "Invalid request format" (matches 9router's proven flow).
+  const redirect = `http://localhost:${port}/callback`;
 
   const codePromise = new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(
@@ -395,8 +442,8 @@ async function desktopLogin(provider: ProviderId): Promise<LoginResult> {
     void listen<string>("oauth-error", (event) => { clearTimeout(timeout); reject(new Error(event.payload)); });
   });
 
-  if (provider === "chatgpt") {
-    throw new Error("Direct ChatGPT sign-in is not available yet. Use OpenRouter or paste an API key.");
+  if (!(provider in OAUTH_CONFIGS)) {
+    throw new Error(`Direct sign-in for ${provider} is not available. Use another provider or paste an API key.`);
   }
 
   const url = await buildAuthUrl(provider, redirect, verifier, state);
@@ -438,11 +485,10 @@ export async function signIn(
     return { provider, apiKey: "demo-key" };
   }
 
-  if (provider === "chatgpt" || provider === "local") {
+  if (!(provider in OAUTH_CONFIGS)) {
     throw new Error(
-      provider === "chatgpt"
-        ? "Direct ChatGPT sign-in is not available yet. Use 'Continue with OpenRouter' (supports GPT) or paste an API key."
-        : "Local provider does not use OAuth.",
+      `Provider ${provider} does not support subscription sign-in yet. ` +
+      `Please paste an API key under Advanced options.`
     );
   }
 
@@ -451,16 +497,20 @@ export async function signIn(
   }
 
   // Web flow: popup + callback relay
-  const verifier = randomBase64url(48);
-  const state = randomBase64url(16);
-  const redirect = callbackUrl();
+  const verifier = randomBase64url();
+  const state = randomBase64url();
+  const redirect = callbackUrl(provider);
 
   const authUrl = await buildAuthUrl(provider, redirect, verifier, state);
 
   // Emit authUrl so caller can show manual fallback
   onAuthUrl?.(authUrl);
 
-  const payload = await waitForPopupCallback(authUrl, state);
+  const payload = await waitForPopupCallback(
+    authUrl,
+    state,
+    needsManualCallback(provider),
+  );
   const code = payload.code || payload.token || "";
   if (!code) throw new Error("No authorization code received.");
 
@@ -498,7 +548,7 @@ export async function completeOAuthReturn(): Promise<OAuthReturn | null> {
     pending.provider,
     code,
     pending.verifier,
-    callbackUrl(),
+    callbackUrl(pending.provider),
     pending.state,
   );
   return { provider: pending.provider, apiKey: key, context: pending.context };
