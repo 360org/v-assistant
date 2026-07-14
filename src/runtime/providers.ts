@@ -17,7 +17,7 @@ import { vaultGet } from "./vault";
 
 /** Safety bound on the tool-calling loop (tool → result → model → …). */
 const MAX_TOOL_ROUNDS = 6;
-const MAX_ANTHROPIC_RETRIES = 2;
+const MAX_RATE_LIMIT_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 500;
 
 export interface ProviderConfig {
@@ -334,14 +334,14 @@ function retryAfterMs(response: Response, attempt: number): number {
   return DEFAULT_RETRY_DELAY_MS * 2 ** attempt;
 }
 
-async function fetchAnthropicWithRetry(
+async function fetchWithRateLimitRetry(
   url: string,
   init: RequestInit,
 ): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     const response = await fetch(url, init);
     const retryable = response.status === 429 || response.status === 529;
-    if (!retryable || attempt === MAX_ANTHROPIC_RETRIES) return response;
+    if (!retryable || attempt === MAX_RATE_LIMIT_RETRIES) return response;
 
     await new Promise<void>((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
   }
@@ -377,7 +377,7 @@ async function* streamOpenAICompat(
   ];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await fetchWithRateLimitRetry(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -494,7 +494,7 @@ async function* streamAnthropic(
     headers["x-api-key"] = apiKey;
   }
 
-  const response = await fetchAnthropicWithRetry(url, {
+  const response = await fetchWithRateLimitRetry(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -542,7 +542,7 @@ async function* streamGemini(
     headers["x-goog-api-key"] = apiKey;
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithRateLimitRetry(url, {
     method: "POST",
     headers,
     body: JSON.stringify({

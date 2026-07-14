@@ -19,7 +19,32 @@ function log(msg: string): void {
   console.error(`[provider/gemini] ${msg}`);
 }
 
-function createGeminiProvider(options: ProviderOptions): AgentProvider {
+const MAX_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 500;
+
+function retryAfterMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+
+    const retryAt = Date.parse(retryAfter);
+    if (!Number.isNaN(retryAt)) return Math.max(0, retryAt - Date.now());
+  }
+  return DEFAULT_RETRY_DELAY_MS * 2 ** attempt;
+}
+
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, init);
+    const retryable = response.status === 429 || response.status === 529;
+    if (!retryable || attempt === MAX_RETRIES) return response;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
+  }
+}
+
+export function createGeminiProvider(options: ProviderOptions): AgentProvider {
   const apiKey = options.apiKey || '';
   const model = options.model || 'gemini-2.5-flash';
   const baseUrl = (options.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
@@ -79,7 +104,7 @@ function createGeminiProvider(options: ProviderOptions): AgentProvider {
         yield { type: 'init', continuation: '' };
 
         try {
-          const response = await fetch(url, {
+          const response = await fetchWithRetry(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),

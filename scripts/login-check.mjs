@@ -107,6 +107,10 @@ function sseGemini(text) {
 let lastInferenceHeaders = null;
 let anthropicMessageCalls = 0;
 let anthropicRateLimitResponses = 0;
+let openAIChatCalls = 0;
+let openAIRateLimitResponses = 0;
+let geminiCalls = 0;
+let geminiRateLimitResponses = 0;
 globalThis.fetch = async (url, init) => {
   const u = String(url);
   console.log("FETCHING URL:", u);
@@ -159,12 +163,30 @@ globalThis.fetch = async (url, init) => {
     });
   }
   if (u.includes("streamGenerateContent")) {
+    geminiCalls++;
+    if (geminiRateLimitResponses > 0) {
+      geminiRateLimitResponses--;
+      return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "0" },
+      });
+    }
     lastInferenceHeaders = init.headers || {};
     return new Response(sseGemini(`model=${u.split("/models/")[1].split(":")[0]}`), {
       headers: { "Content-Type": "text/event-stream" },
     });
   }
   if (u.includes("/chat/completions")) {
+    if (u.includes("/proxy/openai/")) {
+      openAIChatCalls++;
+      if (openAIRateLimitResponses > 0) {
+        openAIRateLimitResponses--;
+        return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+          status: 429,
+          headers: { "Content-Type": "application/json", "Retry-After": "0" },
+        });
+      }
+    }
     // Echo the requested model so we can assert per-vendor routing.
     const model = JSON.parse(init.body).model;
     return new Response(sseStream(`model=${model}`), {
@@ -301,6 +323,25 @@ const gemRun = await drainLogin("gemini", "ya29.TOKEN");
 check("Gemini subscription → Bearer header (not x-goog-api-key)",
   gemRun.headers.Authorization === "Bearer ya29.TOKEN" &&
   !("x-goog-api-key" in gemRun.headers));
+
+const openAICallsBeforeRateLimit = openAIChatCalls;
+openAIRateLimitResponses = 1;
+for await (const _chunk of mod.streamProvider(
+  "chatgpt",
+  { apiKey: "sk-test" },
+  "system",
+  [{ id: "1", role: "user", content: "hi", createdAt: 0 }],
+)) {
+  // Draining the stream verifies the retried request reaches a full response.
+}
+check("ChatGPT → retries one 429 response",
+  openAIChatCalls === openAICallsBeforeRateLimit + 2);
+
+const geminiCallsBeforeRateLimit = geminiCalls;
+geminiRateLimitResponses = 1;
+await drainLogin("gemini", "ya29.TOKEN");
+check("Gemini → retries one 429 response",
+  geminiCalls === geminiCallsBeforeRateLimit + 2);
 
 // 5. After Claude has exhausted its bounded retries, keep the selected
 // provider in the UI but route this turn through another configured vendor.

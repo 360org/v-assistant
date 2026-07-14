@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "dev:node": "npx tsx src/index.ts",
-    "test": "tsx scripts/e2e-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/anthropic-retry-check.mjs",
-    "check": "tsc --noEmit && tsx scripts/e2e-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/anthropic-retry-check.mjs",
+    "test": "tsx scripts/e2e-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
+    "check": "tsc --noEmit && tsx scripts/e2e-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
