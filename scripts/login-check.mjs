@@ -105,6 +105,8 @@ function sseGemini(text) {
   });
 }
 let lastInferenceHeaders = null;
+let anthropicMessageCalls = 0;
+let anthropicRateLimitResponses = 0;
 globalThis.fetch = async (url, init) => {
   const u = String(url);
   console.log("FETCHING URL:", u);
@@ -142,6 +144,14 @@ globalThis.fetch = async (url, init) => {
     );
   }
   if (u.includes("/v1/messages")) {
+    anthropicMessageCalls++;
+    if (anthropicRateLimitResponses > 0) {
+      anthropicRateLimitResponses--;
+      return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "0" },
+      });
+    }
     lastInferenceHeaders = init.headers || {};
     const model = JSON.parse(init.body).model;
     return new Response(sseAnthropic(`model=${model}`), {
@@ -268,9 +278,13 @@ check("Claude subscription → oauth flag set, no model pinned",
   claudeCfg.oauth === true && claudeCfg.model === undefined);
 check("Claude subscription → resolves to a native model id (no router prefix)",
   !mod.SUBSCRIPTION_MODELS.claude.includes("/"));
+const callsBeforeRateLimit = anthropicMessageCalls;
+anthropicRateLimitResponses = 1;
 const claudeRun = await drainLogin("claude", "sk-ant-oat01-TOKEN");
 check("Claude subscription → hits vendor model natively",
   claudeRun.model === mod.SUBSCRIPTION_MODELS.claude);
+check("Claude subscription → retries one 429 response",
+  anthropicMessageCalls === callsBeforeRateLimit + 2);
 check("Claude subscription → Bearer + OAuth beta header (not x-api-key)",
   claudeRun.headers.Authorization === "Bearer sk-ant-oat01-TOKEN" &&
   claudeRun.headers["anthropic-beta"] === "oauth-2025-04-20" &&

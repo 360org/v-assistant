@@ -434,6 +434,24 @@
 
 ---
 
+### Audit remediation (2026-07-14)
+
+- [ ] Replace the XOR vault cipher with AES-256-GCM and a per-device key or
+      user-provided master password; migrate existing `vault.db` entries.
+- [ ] Bind every Vault credential and connector token to an allowlisted origin
+      before resolving placeholders or attaching authorization headers.
+- [ ] Add a command gate, per-agent filesystem allowlist, egress policy, and
+      audit trail before enabling host tools for general users.
+- [ ] Bundle the Agent Runner in Tauri resources; production must not depend on
+      the checkout, `npx`, or a developer-installed Node runtime.
+- [ ] Move Telegram, scheduled jobs, and RAG execution behind the host/Runner
+      IPC path; keep the webview engine as a fallback only.
+- [x] Add bounded Anthropic retry with exponential backoff and `Retry-After`
+      support for transient 429/529 responses in both webview and Runner.
+      Request-ID diagnostics remain a follow-up.
+
+---
+
 ## 14. Testing & CI/CD
 
 ### 14.1 Test hiện có
@@ -441,6 +459,7 @@
 - [x] `scripts/telegram-check.mjs` — Telegram 2 chiều
 - [x] `scripts/schedule-check.mjs` — Scheduled tasks
 - [x] `scripts/login-check.mjs` — Luồng đăng nhập
+      + Claude 429 retry regression
 - [x] `scripts/isolation-check.mjs` — Cô lập vai trò
 - [x] `scripts/self-improve-check.mjs` — Self-improving memory
 - [x] `scripts/connector-check.mjs` — Connectors
@@ -456,6 +475,8 @@
 - [x] Test SQLite IPC — phủ bởi `e2e-check.mjs` (Two-DB inbound/outbound)
 - [x] Test Native Tools (Bash, FileRead, FileWrite, FileEdit, Grep, Glob) —
       `agent-runner/scripts/native-tools-check.mjs`
+- [x] Test Anthropic transient retry —
+      `agent-runner/scripts/anthropic-retry-check.mjs`
 - [ ] Test MCP Tools
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/core.test.ts]`
 - [ ] Test Vault encryption/decryption

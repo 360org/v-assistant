@@ -17,6 +17,8 @@ import { vaultGet } from "./vault";
 
 /** Safety bound on the tool-calling loop (tool → result → model → …). */
 const MAX_TOOL_ROUNDS = 6;
+const MAX_ANTHROPIC_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 500;
 
 export interface ProviderConfig {
   apiKey?: string;
@@ -250,6 +252,31 @@ async function raiseForStatus(response: Response): Promise<void> {
   throw new Error(`Provider error (${response.status}): ${detail}`);
 }
 
+function retryAfterMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+
+    const retryAt = Date.parse(retryAfter);
+    if (!Number.isNaN(retryAt)) return Math.max(0, retryAt - Date.now());
+  }
+  return DEFAULT_RETRY_DELAY_MS * 2 ** attempt;
+}
+
+async function fetchAnthropicWithRetry(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, init);
+    const retryable = response.status === 429 || response.status === 529;
+    if (!retryable || attempt === MAX_ANTHROPIC_RETRIES) return response;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
+  }
+}
+
 /** One accumulated tool call as it streams in fragments. */
 interface PendingToolCall {
   id: string;
@@ -397,7 +424,7 @@ async function* streamAnthropic(
     headers["x-api-key"] = apiKey;
   }
 
-  const response = await fetch(url, {
+  const response = await fetchAnthropicWithRetry(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
