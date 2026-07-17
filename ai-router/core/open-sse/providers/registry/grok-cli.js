@@ -15,13 +15,13 @@ export default {
   aliases: ["grok-build", "gb"],
   uiAlias: "gcli",
   display: {
-    name: "Grok CLI (Grok Build)",
+    name: "Grok Build (SuperGrok subscription)",
     icon: "auto_awesome",
     color: "#1DA1F2",
     textIcon: "GC",
     website: "https://x.ai",
     notice: {
-      text: "Sign in with your xAI / Grok account via device code. Uses Grok Build subscription credits (cli-chat-proxy.grok.com).",
+      text: "Sign in with SuperGrok or X Premium+ via device code. Uses the Grok Build subscription route, not an xAI API key.",
       signupUrl: "https://grok.com/supergrok",
     },
   },

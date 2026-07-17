@@ -4,7 +4,7 @@
  * Tools run directly on the host OS (no Docker container).
  * Each tool implements: name, description, input_schema, execute().
  */
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import type { ToolDefinition, ToolResult } from '../providers/types.js';
@@ -13,44 +13,24 @@ function log(msg: string): void {
   console.error(`[native-tools] ${msg}`);
 }
 
+const WORKSPACE_ROOT = path.resolve(
+  process.env.VUA_AGENT_WORKSPACE || path.join(process.env.VUA_DATA_DIR || '/tmp/v-assistant', 'workspace'),
+);
+const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
+
+function workspacePath(input: string): string {
+  const resolved = path.resolve(WORKSPACE_ROOT, input);
+  if (resolved !== WORKSPACE_ROOT && !resolved.startsWith(`${WORKSPACE_ROOT}${path.sep}`)) {
+    throw new Error('Access denied: agent tools are restricted to the assigned workspace');
+  }
+  return resolved;
+}
+
 /** A native tool with its definition and executor */
 export interface NativeTool {
   definition: ToolDefinition;
   execute(args: Record<string, unknown>): Promise<string>;
 }
-
-// --- Bash Tool ---
-const bashTool: NativeTool = {
-  definition: {
-    name: 'bash',
-    description: 'Execute a shell command on the host OS. Use for running scripts, installing packages, checking status, etc.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        command: { type: 'string', description: 'The shell command to execute' },
-        timeout_ms: { type: 'number', description: 'Timeout in milliseconds (default: 30000)' },
-      },
-      required: ['command'],
-    },
-  },
-  async execute(args): Promise<string> {
-    const command = args.command as string;
-    const timeout = (args.timeout_ms as number) || 30000;
-    log(`Executing: ${command}`);
-    try {
-      const output = execSync(command, {
-        timeout,
-        encoding: 'utf8',
-        maxBuffer: 1024 * 1024, // 1MB
-        shell: '/bin/sh',
-      });
-      return output || '(no output)';
-    } catch (err: unknown) {
-      const e = err as { status?: number; stderr?: string; stdout?: string; message?: string };
-      return `Exit code: ${e.status || 1}\nstderr: ${e.stderr || ''}\nstdout: ${e.stdout || ''}\n${e.message || ''}`.trim();
-    }
-  },
-};
 
 // --- FileRead Tool ---
 const fileReadTool: NativeTool = {
@@ -68,7 +48,7 @@ const fileReadTool: NativeTool = {
     },
   },
   async execute(args): Promise<string> {
-    const filePath = args.path as string;
+    const filePath = workspacePath(args.path as string);
     try {
       const content = fs.readFileSync(filePath, 'utf8');
       const startLine = args.start_line as number | undefined;
@@ -104,7 +84,7 @@ const fileWriteTool: NativeTool = {
     },
   },
   async execute(args): Promise<string> {
-    const filePath = args.path as string;
+    const filePath = workspacePath(args.path as string);
     const content = args.content as string;
     const append = args.append as boolean | undefined;
     try {
@@ -140,7 +120,7 @@ const fileEditTool: NativeTool = {
     },
   },
   async execute(args): Promise<string> {
-    const filePath = args.path as string;
+    const filePath = workspacePath(args.path as string);
     const oldText = args.old_text as string;
     const newText = args.new_text as string;
     try {
@@ -175,7 +155,7 @@ const grepTool: NativeTool = {
   },
   async execute(args): Promise<string> {
     const pattern = args.pattern as string;
-    const searchPath = args.path as string;
+    const searchPath = workspacePath(args.path as string);
     const include = args.include as string | undefined;
     const caseInsensitive = args.case_insensitive as boolean | undefined;
 
@@ -185,7 +165,7 @@ const grepTool: NativeTool = {
     grepArgs.push(pattern, searchPath);
 
     try {
-      const output = execSync(`grep ${grepArgs.join(' ')}`, {
+      const output = execFileSync('grep', grepArgs, {
         encoding: 'utf8',
         maxBuffer: 512 * 1024,
         timeout: 10000,
@@ -217,26 +197,28 @@ const globTool: NativeTool = {
   },
   async execute(args): Promise<string> {
     const pattern = args.pattern as string;
-    const cwd = (args.cwd as string) || process.cwd();
+    const cwd = workspacePath((args.cwd as string) || '.');
 
     try {
-      // Use find command as a portable alternative
-      const cmd = `find ${cwd} -path '${pattern}' -type f 2>/dev/null | head -100`;
-      const output = execSync(cmd, { encoding: 'utf8', maxBuffer: 256 * 1024, timeout: 10000 });
-      return output || '(no matches)';
+      const output = execFileSync('find', [cwd, '-type', 'f'], {
+        encoding: 'utf8', maxBuffer: 256 * 1024, timeout: 10000,
+      });
+      const suffix = pattern.startsWith('*.') ? pattern.slice(1) : null;
+      const files = output.trim().split('\n').filter(Boolean).filter((file) =>
+        suffix ? file.endsWith(suffix) : file.includes(pattern.replaceAll('*', ''))
+      );
+      return files.slice(0, 100).join('\n') || '(no matches)';
     } catch {
       return '(no matches)';
     }
   },
 };
 
-import { resolveVaultPlaceholders, getVaultSecret } from '../vault/vault-resolver.js';
-
 // --- HTTP Request Tool ---
 const httpRequestTool: NativeTool = {
   definition: {
     name: 'http_request',
-    description: 'Make an HTTP request. Supports GET, POST, PUT, DELETE. Vault placeholders {{vault:Name.field}} are resolved before sending.',
+    description: 'Make an unauthenticated HTTP request. Credentialed operations must use an installed connector or gateway capability.',
     input_schema: {
       type: 'object',
       properties: {
@@ -254,24 +236,63 @@ const httpRequestTool: NativeTool = {
     const headers = (args.headers as Record<string, string>) || {};
     const body = args.body as string | undefined;
 
-    // Resolve vault placeholders in url, headers, and body
-    const resolvedUrl = resolveVaultPlaceholders(url);
-    const resolvedBody = body ? resolveVaultPlaceholders(body) : undefined;
-    const resolvedHeaders: Record<string, string> = {};
-    for (const [k, v] of Object.entries(headers)) {
-      resolvedHeaders[k] = resolveVaultPlaceholders(v);
+    const serialized = JSON.stringify({ url, headers, body });
+    const hasCredentialHeader = Object.keys(headers).some((key) => /authorization|proxy-authorization|cookie|x-api-key/i.test(key));
+    if (hasCredentialHeader || /\{\{vault:|password|bearer\s|access[_-]?token|refresh[_-]?token|api[_-]?key/i.test(serialized)) {
+      return 'Credential access denied. Use a connector/gateway reference; agents cannot resolve Vault secrets.';
     }
 
     try {
-      const response = await fetch(resolvedUrl, {
+      const response = await fetch(url, {
         method,
-        headers: resolvedHeaders,
-        body: resolvedBody || undefined,
+        headers,
+        body: body || undefined,
       });
       const text = await response.text();
       return `HTTP ${response.status} ${response.statusText}\n\n${text.slice(0, 4096)}`;
     } catch (err) {
       return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+};
+
+// --- Credentialed Connector Gateway Tool ---
+const connectorRequestTool: NativeTool = {
+  definition: {
+    name: 'connector_request',
+    description: 'Call the origin bound to a Vault reference. Use opaque {{credential:field}} variables; secret values are resolved and redacted by the trusted gateway.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        credential_ref: { type: 'string', description: 'Opaque reference returned by vault_list' },
+        url: { type: 'string', description: 'URL or path on the Vault entry origin' },
+        method: { type: 'string', description: 'GET, POST, PUT, PATCH or DELETE' },
+        headers: { type: 'object', description: 'Headers; credentials must use {{credential:field}} variables' },
+        body: { type: 'string', description: 'Optional request body with opaque credential variables' },
+      },
+      required: ['credential_ref', 'url'],
+    },
+  },
+  async execute(args): Promise<string> {
+    const capability = process.env.VUA_CONNECTOR_GATEWAY_TOKEN;
+    if (!capability) return 'Connector gateway is unavailable.';
+    try {
+      const response = await fetch(`${AI_ROUTER_URL}/v1/connectors/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${capability}` },
+        body: JSON.stringify({
+          credentialRef: args.credential_ref,
+          url: args.url,
+          method: args.method,
+          headers: args.headers,
+          body: args.body,
+        }),
+      });
+      const payload = await response.json() as { status?: number; body?: string; error?: string };
+      if (!response.ok) return `Connector error: ${payload.error || response.status}`;
+      return `HTTP ${payload.status}\n\n${payload.body || ''}`;
+    } catch (error) {
+      return `Connector error: ${error instanceof Error ? error.message : String(error)}`;
     }
   },
 };
@@ -287,16 +308,24 @@ const vaultListTool: NativeTool = {
     },
   },
   async execute(): Promise<string> {
+    const capability = process.env.VUA_CONNECTOR_GATEWAY_TOKEN;
+    if (!capability) return 'Connector gateway is unavailable.';
     try {
-      const indexRaw = getVaultSecret('vault-index');
-      if (!indexRaw) {
+      const response = await fetch(`${AI_ROUTER_URL}/v1/vault/manifest`, {
+        headers: { Authorization: `Bearer ${capability}` },
+      });
+      if (!response.ok) return `Vault manifest is unavailable (${response.status}).`;
+      const manifest = await response.json() as {
+        entries?: Array<{ ref: string; label: string; service?: string; fields?: string[] }>;
+      };
+      const entries = manifest.entries ?? [];
+      if (entries.length === 0) {
         return 'Your secure Vault is currently empty.';
       }
-      const index = JSON.parse(indexRaw) as Array<{ label: string; service?: string }>;
-      if (index.length === 0) {
-        return 'Your secure Vault is currently empty.';
-      }
-      return index.map((e) => `- ${e.label}${e.service ? ` (Service: ${e.service})` : ''}`).join('\n');
+      return entries.map((entry) =>
+        `- ${entry.label}${entry.service ? ` (${entry.service})` : ''} ref=${entry.ref}` +
+        `${entry.fields?.length ? ` variables=${entry.fields.map((field) => `{{credential:${field}}}`).join(',')}` : ''}`
+      ).join('\n');
     } catch (err) {
       return `Error listing Vault: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -307,13 +336,13 @@ const vaultListTool: NativeTool = {
 
 /** All built-in native tools */
 export const NATIVE_TOOLS: NativeTool[] = [
-  bashTool,
   fileReadTool,
   fileWriteTool,
   fileEditTool,
   grepTool,
   globTool,
   httpRequestTool,
+  connectorRequestTool,
   vaultListTool,
 ];
 

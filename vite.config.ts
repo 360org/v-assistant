@@ -4,6 +4,26 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import fs from "node:fs";
 import path from "node:path";
+import { readNanoClawSessions } from "./server/nanoclaw-sessions";
+
+function mergeNanoClawSessions(state: Record<string, any>): Record<string, any> {
+  try {
+    const remote = readNanoClawSessions();
+    if (!remote.length) return state;
+    const current = Array.isArray(state.chatSessions) ? state.chatSessions : [];
+    const remoteIds = new Set(remote.map((session) => session.id));
+    const synced = remote.map((session) => ({
+      ...session,
+      agentId: current.find((item: any) => item.id === session.id)?.agentId ?? state.activeAgentId ?? null,
+    }));
+    const chatSessions = [...synced, ...current.filter((item: any) => !remoteIds.has(item.id))]
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    const active = synced.find((session) => session.id === state.activeSessionId);
+    return { ...state, chatSessions, ...(active ? { messages: active.messages } : {}) };
+  } catch {
+    return state;
+  }
+}
 
 // Vite config tuned for Tauri development.
 // https://v2.tauri.app/start/frontend/vite/
@@ -17,11 +37,30 @@ export default defineConfig({
         server.middlewares.use((req, res, next) => {
           const urlPath = req.url ? req.url.split("?")[0] : "";
 
+          if (urlPath === "/api/nanoclaw/sessions" && req.method === "GET") {
+            res.setHeader("Content-Type", "application/json");
+            try {
+              res.end(JSON.stringify({ sessions: readNanoClawSessions() }));
+            } catch (error) {
+              res.statusCode = 503;
+              res.end(JSON.stringify({
+                sessions: [],
+                error: error instanceof Error ? error.message : "NanoClaw session store unavailable",
+              }));
+            }
+            return;
+          }
+
           if (urlPath === "/api/state" && req.method === "GET") {
             const statePath = path.resolve(".vua_state_dev.json");
             res.setHeader("Content-Type", "application/json");
             if (fs.existsSync(statePath)) {
-              res.end(fs.readFileSync(statePath, "utf-8"));
+              try {
+                const state = JSON.parse(fs.readFileSync(statePath, "utf-8"));
+                res.end(JSON.stringify(mergeNanoClawSessions(state)));
+              } catch {
+                res.end(JSON.stringify({}));
+              }
             } else {
               res.end(JSON.stringify({}));
             }
@@ -172,6 +211,18 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/proxy\/gemini/, ""),
         secure: true,
+      },
+      "/proxy/antigravity": {
+        target: "https://cloudcode-pa.googleapis.com",
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/proxy\/antigravity/, ""),
+        secure: true,
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            proxyReq.setHeader("User-Agent", "antigravity/ide/2.1.1 darwin/arm64");
+            proxyReq.removeHeader("origin");
+          });
+        },
       },
       "/proxy/openrouter": {
         target: "https://openrouter.ai",

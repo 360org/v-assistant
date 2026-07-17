@@ -56,10 +56,10 @@ export const PROVIDERS: Provider[] = [
     id: "gemini",
     name: "Gemini",
     loginLabel: "Continue with Gemini",
-    tagline: "Google Gemini — sign in with your account",
+    tagline: "Google Gemini — sign in with your subscription",
     oauth: true,
     keyUrl: "https://aistudio.google.com/apikey",
-    hint: "Sign in with your Google account — no API key needed. Advanced options let you paste a key instead.",
+    hint: "Sign in with your Gemini subscription. API keys remain available under Advanced options.",
   },
 {
     id: "local",

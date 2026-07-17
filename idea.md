@@ -18,8 +18,8 @@ Tài liệu này đặc tả ý tưởng sản phẩm cuối cùng và làm cơ 
 
 3. **Chạy trực tiếp siêu nhẹ (Zero-Docker / Host Process):**
    * Sử dụng cơ chế chạy nền trực tiếp làm tiến trình hệ thống (**Host Process** - thông qua `bun` hoặc `node` trên máy host).
-   * Không bắt buộc cài đặt Docker/Colima khi cài app, giúp cài đặt cực kỳ đơn giản (Download > Install > Login > Dùng ngay).
-   * Vẫn có khả năng thực thi các lệnh Terminal (qua công cụ `Bash` gọi tiến trình hệ thống) và sửa đổi file (qua công cụ `FileRead`, `FileWrite`, `FileEdit`...).
+   * Không bắt buộc cài đặt Docker/Colima khi cài app, giúp cài đặt cực kỳ đơn giản (Download > Install > Login > Dùng ngay). Desktop đóng gói native sidecar cho Windows, macOS và Linux; Docker chỉ là profile triển khai server riêng.
+   * Không expose Terminal/Bash cho model. Các công cụ file chỉ hoạt động trong workspace được cấp; tác vụ bên ngoài đi qua connector capability.
    * **Ví dụ luồng nghiệp vụ thực tế:** Người dùng ra lệnh: *"Em hãy thiết kế cho anh một chương trình quảng cáo Facebook"* -> Agent lập kế hoạch chiến dịch -> Người dùng cung cấp tài khoản/token liên kết từ Vault -> Agent tự động chạy chiến dịch qua API, tối ưu hóa ngân sách, theo dõi và xuất báo cáo tiến độ chi tiết cho người dùng.
 
 ---
@@ -61,7 +61,7 @@ Tài liệu này đặc tả ý tưởng sản phẩm cuối cùng và làm cơ 
 |                     |               |                      |
 |       +-------------v-----+   +-----v-------------+        |
 |       |   Universal LLM   |   |   Native Tools    |        |
-|       |      Client       |   | (Bash, FS, HTTP)  |        |
+|       |      Client       |   | (Scoped FS, HTTP) |        |
 |       +---------+---------+   +---------+---------+        |
 +-----------------|-----------------------|--------------------+
                   |                       |
@@ -89,8 +89,8 @@ Tài liệu này đặc tả ý tưởng sản phẩm cuối cùng và làm cơ 
 *   **[ ] Thay thế Claude SDK:**
     * Phát triển module `universal-executor.ts` thực thi vòng lặp Agent: Gửi prompt -> nhận lệnh gọi tool -> chạy tool -> nạp lại lịch sử -> phản hồi.
 *   **[ ] Công cụ Cục bộ tự chế (Native Tools):**
-    * `Bash`: Thực thi lệnh qua `child_process.spawn`.
-    * `FileRead` / `FileWrite` / `FileEdit`: Đọc, ghi và thay thế nội dung file thông qua module `fs` của Node/Bun.
+    * Không cung cấp `Bash`/host shell cho model.
+    * `FileRead` / `FileWrite` / `FileEdit`: Chỉ đọc, ghi và thay thế trong workspace được cấp.
     * `Grep` / `Glob`: Tìm kiếm file và nội dung nhanh chóng.
 *   **[ ] Tự nâng cấp (Self-Improving Memory):**
     * Agent tự suy ngẫm sau mỗi cuộc hội thoại, cập nhật tóm tắt thông tin quan trọng vào file memory riêng của Agent để kế thừa cho các phiên chat sau.
@@ -119,6 +119,6 @@ Tài liệu này đặc tả ý tưởng sản phẩm cuối cùng và làm cơ 
     * Là tính năng cốt lõi của V-Assistant (không phải lấy từ OS/keychain của macOS hay Windows). Đây là một cơ sở lưu trữ dữ liệu an toàn được mã hóa và quản lý trực tiếp bởi V-Assistant, chứa toàn bộ API Keys, tài khoản, Tokens và cấu hình tích hợp của người dùng.
 *   **[ ] Tích hợp & Liên kết (Integrations & Connectors) kết nối vào Vault:**
     * Định nghĩa sẵn các cổng kết nối dịch vụ bên ngoài (GitHub, Notion, Slack, Discord, Telegram).
-    * Các Integrations & Connectors này tự động kết nối vào Vault để truy xuất thông tin cấu hình và áp dụng xác thực tự động, giúp Agent thực thi tác vụ mà không làm lộ các khóa bảo mật gốc ra ngoài.
+    * Agent chỉ query danh sách `credential_ref` và tên biến. Trusted Connector Gateway trong AI Router mới được đọc Vault, resolve credential trong memory, bind request vào origin đã lưu và redaction response trước khi trả về Agent.
 *   **[ ] Công cụ Web HTTP linh hoạt:**
-    * Công cụ `http_request` giúp Agent gọi bất kỳ Webhook API nào, tự động thay thế placeholders dạng `{{vault:Name.field}}` cục bộ trước khi gửi yêu cầu đi.
+    * `http_request` chỉ dùng cho request không xác thực. Request cần credential phải dùng `connector_request` với `vault-entry:<id>` và biến `{{credential:field}}`; Agent không được đọc password/token/auth code/API key.

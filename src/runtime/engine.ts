@@ -104,8 +104,9 @@ export function buildSystemPrompt(options: ChatOptions): string {
     "You can act on the user's behalf using tools. The user keeps logins, " +
     "API keys and endpoints in their Vault. When a task needs a credential " +
     "(e.g. \"post this to my blog\"), call vault_list to see what is stored, " +
-    "then use http_request to perform the action — reference any secret as " +
-    "{{vault:<name>.<field>}} so you never handle the raw value. Do not ask " +
+    "then use connector_request with its opaque ref and " +
+    "{{credential:<field>}} variables. The trusted gateway resolves those " +
+    "values outside your context. Do not ask " +
     "the user for a password that is already in the Vault.";
   if (options.agentName) {
     prompt +=

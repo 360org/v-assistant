@@ -89,7 +89,7 @@ npm install
 # Web preview (chỉ UI, chạy trong trình duyệt)
 npm run dev
 
-# Chạy live bằng Docker/Colima — không cài gì trên host
+# Profile server bằng Docker/Colima
 ./dev.sh up
 
 # App desktop với login + Vault thật (cửa sổ Tauri)

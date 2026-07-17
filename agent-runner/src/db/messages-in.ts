@@ -77,8 +77,20 @@ export function getPendingMessages(isFirstPoll = false): MessageInRow[] {
       ).map((r) => r.message_id),
     );
 
-    // Return unacked messages in chronological order (oldest first)
-    return pending.filter((m) => !acked.has(m.id)).reverse();
+    const unacked = pending.filter((m) => !acked.has(m.id));
+    if (unacked.length === 0) return [];
+
+    // Never mix two conversations in one model request. Anchor on the newest
+    // due message; other routes remain pending for the following poll.
+    const anchor = unacked[0];
+    return unacked
+      .filter(
+        (m) =>
+          m.channel_type === anchor.channel_type &&
+          m.platform_id === anchor.platform_id &&
+          m.thread_id === anchor.thread_id,
+      )
+      .reverse();
   } finally {
     inbound.close();
   }

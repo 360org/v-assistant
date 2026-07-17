@@ -8,19 +8,15 @@
  *
  *   - `vault_list`  — the agent discovers what credentials exist (names and
  *                     field names only, never secret values).
- *   - `http_request`— the agent performs an action (post to a blog, call an
- *                     API). Secrets are referenced by placeholder
- *                     `{{vault:<name>.<field>}}` and substituted locally by
- *                     the executor, so passwords/keys never enter the model.
+ *   - `connector_request` — the agent sends only an opaque Vault reference
+ *                     and `{{credential:<field>}}` variables. Tauri and AI
+ *                     Router resolve them outside the model context.
  */
 
 import {
   listVaultEntries,
   findVaultEntry,
-  readField,
-  isSecretField,
 } from "./vault";
-import { CONNECTORS, callConnector } from "./connectors";
 
 /** An OpenAI-compatible tool the agent can call, plus its executor. */
 export interface AgentTool {
@@ -35,32 +31,6 @@ export interface AgentTool {
   run(args: Record<string, unknown>): Promise<string>;
 }
 
-/** Fill `{{vault:Label.field}}` placeholders with real values from the Vault. */
-async function resolveVaultPlaceholders(input: string): Promise<string> {
-  const pattern = /\{\{\s*vault:([^.}]+)\.([^}]+?)\s*\}\}/g;
-  const matches = [...input.matchAll(pattern)];
-  if (matches.length === 0) return input;
-  let out = input;
-  for (const [token, rawLabel, rawField] of matches) {
-    const entry = await findVaultEntry(rawLabel.trim());
-    const value = entry ? readField(entry, rawField.trim()) : undefined;
-    if (value !== undefined) out = out.split(token).join(value);
-  }
-  return out;
-}
-
-/** Recursively resolve placeholders inside any JSON-ish value. */
-async function resolveDeep(value: unknown): Promise<unknown> {
-  if (typeof value === "string") return resolveVaultPlaceholders(value);
-  if (Array.isArray(value)) return Promise.all(value.map(resolveDeep));
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = await resolveDeep(v);
-    return out;
-  }
-  return value;
-}
-
 const vaultListTool: AgentTool = {
   schema: {
     type: "function",
@@ -69,8 +39,8 @@ const vaultListTool: AgentTool = {
       description:
         "List the credentials the user has stored in their Vault (site " +
         "logins, API keys, endpoints). Returns each entry's name, service " +
-        "and the names of its fields — never the secret values. Use a " +
-        "field in http_request by referencing it as {{vault:Name.field}}.",
+        "and opaque references — never secret values. Use a field in " +
+        "connector_request as {{credential:field}}.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -84,16 +54,16 @@ const vaultListTool: AgentTool = {
       const entry = await findVaultEntry(meta.label);
       if (!entry) continue;
       const fields: string[] = [];
-      if (entry.url) fields.push("url");
       if (entry.username) fields.push("username");
-      if (entry.password) fields.push("password (secret)");
+      if (entry.password) fields.push("password");
       for (const f of entry.fields ?? []) {
-        fields.push(`${f.label}${isSecretField(f) ? " (secret)" : ""}`);
+        fields.push(f.label);
       }
       entries.push({
-        name: entry.label,
+        ref: `vault-entry:${entry.id}`,
+        label: entry.label,
         service: entry.service ?? null,
-        fields,
+        variables: fields.map((field) => `{{credential:${field}}}`),
       });
     }
     return JSON.stringify(entries);
@@ -106,12 +76,8 @@ const httpRequestTool: AgentTool = {
     function: {
       name: "http_request",
       description:
-        "Perform an HTTP request to act on the user's behalf (e.g. publish " +
-        "a blog post, call an API). To use a stored secret, put a " +
-        "placeholder like {{vault:My WordPress.password}} in any header or " +
-        "body value — it is replaced with the real value locally before " +
-        "sending, so you never see the secret. Returns the response status " +
-        "and body (truncated).",
+        "Perform an unauthenticated HTTP request. Credentialed requests must " +
+        "use connector_request so Vault values stay outside agent context.",
       parameters: {
         type: "object",
         properties: {
@@ -121,20 +87,16 @@ const httpRequestTool: AgentTool = {
           },
           url: {
             type: "string",
-            description:
-              "Full URL. May contain a {{vault:Name.url}} placeholder.",
+            description: "Full absolute URL.",
           },
           headers: {
             type: "object",
-            description:
-              "Request headers. Values may contain vault placeholders.",
+            description: "Non-credential request headers.",
             additionalProperties: { type: "string" },
           },
           body: {
             type: "string",
-            description:
-              "Request body as a string (JSON or form). May contain vault " +
-              "placeholders. Omit for GET.",
+            description: "Request body as a string. Omit for GET.",
           },
         },
         required: ["method", "url"],
@@ -143,18 +105,19 @@ const httpRequestTool: AgentTool = {
   },
   async run(args) {
     const method = String(args.method ?? "GET").toUpperCase();
-    const url = await resolveVaultPlaceholders(String(args.url ?? ""));
+    const url = String(args.url ?? "");
     if (!/^https?:\/\//i.test(url)) {
       return "Error: url must be an absolute http(s) URL.";
     }
-    const headers = (await resolveDeep(args.headers ?? {})) as Record<
-      string,
-      string
-    >;
-    const body =
-      args.body != null
-        ? await resolveVaultPlaceholders(String(args.body))
-        : undefined;
+    const headers = (args.headers ?? {}) as Record<string, string>;
+    const body = args.body != null ? String(args.body) : undefined;
+    const serialized = JSON.stringify({ url, headers, body });
+    if (
+      Object.keys(headers).some((key) => /authorization|cookie|x-api-key/i.test(key)) ||
+      /\{\{credential:|\{\{vault:|password|bearer\s|access[_-]?token|api[_-]?key/i.test(serialized)
+    ) {
+      return "Credential access denied. Use connector_request with an opaque Vault reference.";
+    }
     try {
       const response = await fetch(url, {
         method,
@@ -171,49 +134,54 @@ const httpRequestTool: AgentTool = {
   },
 };
 
-const connectorCallTool: AgentTool = {
+const connectorRequestTool: AgentTool = {
   schema: {
     type: "function",
     function: {
-      name: "connector_call",
+      name: "connector_request",
       description:
-        "Operate a connected system (e.g. GitHub, Notion, Slack, Discord, " +
-        "Telegram) the user linked on the Integrations page. The connector " +
-        "fetches its credential from the Vault and applies the right " +
-        "authentication automatically — you never handle the token. Known " +
-        `connectors: ${Object.keys(CONNECTORS).join(", ")}. Pass a path (the ` +
-        "connector adds the base URL and auth) or a full URL.",
+        "Call the origin bound to an opaque Vault reference. Put " +
+        "{{credential:field}} variables in headers or body; the trusted " +
+        "gateway resolves and redacts them outside your context.",
       parameters: {
         type: "object",
         properties: {
-          connector: {
+          credential_ref: {
             type: "string",
-            description: "The connected system, e.g. \"github\" or \"notion\".",
+            description: "Opaque ref returned by vault_list.",
           },
           method: { type: "string", description: "HTTP method (default GET)." },
-          target: {
+          url: {
             type: "string",
-            description: "API path (e.g. \"/user/repos\") or a full URL.",
+            description: "Path or URL on the Vault entry's saved origin.",
           },
+          headers: { type: "object", additionalProperties: { type: "string" } },
           body: { type: "string", description: "Request body (JSON), if any." },
         },
-        required: ["connector", "target"],
+        required: ["credential_ref", "url"],
       },
     },
   },
   async run(args) {
-    const result = await callConnector({
-      connector: String(args.connector ?? ""),
-      method: args.method ? String(args.method) : undefined,
-      target: String(args.target ?? ""),
+    if (!(typeof window !== "undefined" && "__TAURI_INTERNALS__" in window)) {
+      return "Connector gateway is available only in V Assistant Desktop.";
+    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    const payload = JSON.stringify({
+      credentialRef: String(args.credential_ref ?? ""),
+      url: String(args.url ?? ""),
+      method: args.method ? String(args.method) : "GET",
+      headers: args.headers ?? {},
       body: args.body != null ? String(args.body) : undefined,
     });
-    const status = result.status ? `HTTP ${result.status}\n` : "";
-    return `${status}${result.body}`;
+    const raw = await invoke<string>("runtime_connector_request", { payload });
+    const result = JSON.parse(raw) as { status?: number; body?: string; error?: string };
+    if (result.error) return `Connector error: ${result.error}`;
+    return `HTTP ${result.status ?? 0}\n${result.body ?? ""}`;
   },
 };
 
 /** The tools every agent turn can use. */
 export function buildAgentTools(): AgentTool[] {
-  return [vaultListTool, httpRequestTool, connectorCallTool];
+  return [vaultListTool, httpRequestTool, connectorRequestTool];
 }

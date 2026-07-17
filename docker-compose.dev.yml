@@ -11,7 +11,9 @@
 # Stop with Ctrl-C; `docker compose -f docker-compose.dev.yml down` to remove.
 services:
   dev:
-    image: node:20-bookworm-slim
+    # Node 24 includes the read-only SQLite API used by the NanoClaw session
+    # bridge. The UI never writes to NanoClaw's runtime volume.
+    image: node:24-bookworm-slim
     working_dir: /app
     # Install deps on first run, then start Vite listening on all interfaces
     # so the host can reach it through the mapped port.
@@ -27,7 +29,43 @@ services:
       - .:/app
       # Keep container-built node_modules out of the host mount.
       - node_modules:/app/node_modules
+      - nanoclaw_appdata:/nanoclaw-appdata:ro
+    depends_on:
+      ai-router:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai-router:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    command: node ai-router/src/sidecar.mjs
+    ports:
+      - "20128:20128"
+      - "1455:1455"
+      - "56121:56121"
+    environment:
+      AI_ROUTER_HOST: "0.0.0.0"
+      AI_ROUTER_PORT: "20128"
+      AI_ROUTER_UI_ORIGIN: "http://localhost:1420"
+      AI_ROUTER_CALLBACK_HOST: "0.0.0.0"
+      AI_ROUTER_VAULT_PATH: "/data/vault.json"
+      AI_ROUTER_PACKS_PATH: "/data/packs.json"
+    volumes:
+      - .:/app:ro
+      - ai_router_data:/data
+      # The browser dev broker and AI Router must resolve the same App Vault.
+      # Metadata carries credentialRef only; secrets never enter connection JSON.
+      - ./.vua_vault_dev.json:/data/vault.json
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20128/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
     restart: unless-stopped
 
 volumes:
   node_modules:
+  ai_router_data:
+  nanoclaw_appdata:
+    external: true
+    name: nanoclaw_nanoclaw-appdata

@@ -1,7 +1,7 @@
 /**
  * OpenAI-compatible provider adapter.
  *
- * Works with: ChatGPT, OpenRouter, LocalAI, Ollama, 9router, and any
+ * Works with: ChatGPT, OpenRouter, LocalAI, Ollama, AI Router, and any
  * OpenAI-compatible endpoint.
  *
  * Uses direct HTTP API calls — NO SDK dependency.
@@ -285,11 +285,25 @@ registerProvider('local', (options) => {
   });
   return { ...provider, name: 'local' };
 });
+/**
+ * AI Router is V-Assistant's local, OpenAI-compatible gateway. It owns
+ * provider routing; the Runner never needs a vendor-specific adapter.
+ */
+registerProvider('ai-router', (options) => {
+  const provider = createOpenAIProvider({
+    ...options,
+    baseUrl: options.baseUrl || 'http://127.0.0.1:20128/v1',
+    model: options.model || 'auto',
+  });
+  return { ...provider, name: 'ai-router' };
+});
+
+// Kept only so existing runner.json files made before the rename still boot.
 registerProvider('9router', (options) => {
   const provider = createOpenAIProvider({
     ...options,
-    baseUrl: options.baseUrl || 'http://localhost:20128/v1',
-    model: options.model || 'openrouter/auto',
+    baseUrl: options.baseUrl || 'http://127.0.0.1:20128/v1',
+    model: options.model || 'auto',
   });
-  return { ...provider, name: '9router' };
+  return { ...provider, name: 'ai-router' };
 });

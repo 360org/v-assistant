@@ -5,9 +5,9 @@ import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 
-const { executeTool } = await import('../src/native-tools/index.ts');
-
 const dir = mkdtempSync(path.join(tmpdir(), 'ar-tools-'));
+process.env.VUA_AGENT_WORKSPACE = dir;
+const { executeTool } = await import('../src/native-tools/index.ts');
 const file = path.join(dir, 'note.txt');
 
 let pass = true;
@@ -36,9 +36,12 @@ check('grep finds a match', !r.is_error && r.content.includes('second'));
 r = await executeTool('glob', { pattern: '*.txt', cwd: dir });
 check('glob lists the file', r.content.includes('note.txt'));
 
-// bash
+// Host shell is deliberately not exposed to the model.
 r = await executeTool('bash', { command: 'echo RUNNER_OK' });
-check('bash executes a command', r.content.includes('RUNNER_OK'));
+check('bash is not exposed to the agent', r.is_error === true);
+
+r = await executeTool('file_read', { path: path.join(dir, '..', 'vault.key') });
+check('file tools cannot escape the assigned workspace', r.content.includes('Access denied'));
 
 // unknown tool is handled, not thrown
 r = await executeTool('does_not_exist', {});

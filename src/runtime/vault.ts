@@ -1,11 +1,9 @@
 /**
  * Credential Vault — front-end access to the secure secret store.
  *
- * On the desktop the secret lives in the OS keychain (via the Rust
- * `vault_*` commands); nothing sensitive is written to app storage. In the
- * browser there is no OS keychain, so we fall back to localStorage with a
- * clear namespace — acceptable for the web preview, and the desktop build
- * is the one that ships to users.
+ * On desktop, secrets live in V Assistant's encrypted SQLite Vault through
+ * the Rust `vault_*` commands. Browser persistence is development-only and
+ * is not the security boundary used by the shipped desktop app.
  */
 
 const WEB_PREFIX = "v-assistant-vault:";
@@ -101,7 +99,7 @@ export async function vaultDelete(key: string): Promise<void> {
   } catch {}
 }
 
-/** True when running inside the Tauri desktop shell (OS keychain available). */
+/** True when running inside the Tauri desktop shell (App Vault available). */
 export function vaultIsSecure(): boolean {
   return inDesktopShell();
 }

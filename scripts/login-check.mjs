@@ -107,8 +107,10 @@ function sseGemini(text) {
 let lastInferenceHeaders = null;
 let anthropicMessageCalls = 0;
 let anthropicRateLimitResponses = 0;
+let anthropicAuthResponses = 0;
 let openAIChatCalls = 0;
 let openAIRateLimitResponses = 0;
+let lastOpenAIRequest = null;
 let geminiCalls = 0;
 let geminiRateLimitResponses = 0;
 globalThis.fetch = async (url, init) => {
@@ -122,6 +124,11 @@ globalThis.fetch = async (url, init) => {
   }
   if (u.includes("/oauth/token") || u.includes("/token")) {
     const params = new URLSearchParams(init.body);
+    if (params.get("grant_type") === "refresh_token") {
+      return new Response(JSON.stringify({ access_token: "ya29.REFRESHED", expires_in: 3600 }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     exchangeSaw = {
       code: params.get("code"),
       code_verifier: params.get("code_verifier"),
@@ -147,8 +154,30 @@ globalThis.fetch = async (url, init) => {
       { headers: { "Content-Type": "application/json" } },
     );
   }
+  if (u.includes("cloudcode-pa.googleapis.com") || u.includes("/proxy/antigravity/")) {
+    geminiCalls++;
+    if (geminiRateLimitResponses > 0) {
+      geminiRateLimitResponses--;
+      return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "0" },
+      });
+    }
+    lastInferenceHeaders = init.headers || {};
+    const model = JSON.parse(init.body).model;
+    return new Response(sseGemini(`model=${model}`), {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  }
   if (u.includes("/v1/messages")) {
     anthropicMessageCalls++;
+    if (anthropicAuthResponses > 0) {
+      anthropicAuthResponses--;
+      return new Response(JSON.stringify({ error: { message: "expired credential" } }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     if (anthropicRateLimitResponses > 0) {
       anthropicRateLimitResponses--;
       return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
@@ -188,7 +217,8 @@ globalThis.fetch = async (url, init) => {
       }
     }
     // Echo the requested model so we can assert per-vendor routing.
-    const model = JSON.parse(init.body).model;
+    lastOpenAIRequest = JSON.parse(init.body);
+    const model = lastOpenAIRequest.model;
     return new Response(sseStream(`model=${model}`), {
       headers: { "Content-Type": "text/event-stream" },
     });
@@ -220,6 +250,7 @@ export {
   loginConfig,
   streamProvider,
   streamProviderWithFallback,
+  MODELS,
   ROUTED_MODELS,
   SUBSCRIPTION_MODELS,
 } from "../src/runtime/providers.ts";
@@ -279,6 +310,7 @@ check("ChatGPT login → OpenAI model", (await modelFor("chatgpt")).startsWith("
 check("Claude login → Anthropic model", (await modelFor("claude")).startsWith("anthropic/"));
 check("Gemini login → Google model", (await modelFor("gemini")).startsWith("google/"));
 check("OpenRouter login → auto", (await modelFor("openrouter")).includes("auto"));
+check("OpenRouter → caps completion tokens for available credits", lastOpenAIRequest?.max_tokens === 4096);
 
 // 3. Local user created from the vendor account.
 const account = await mod.fetchVendorAccount("gemini", "sk-user-key");
@@ -290,12 +322,12 @@ check(
 // 4. Subscription vendor sign-in (loginConfig): the vendor's own OAuth token
 //    is used NATIVELY (Bearer + OAuth beta) against the vendor API — NOT the
 //    router. This is the "login with your subscription" path (SPEC §1).
-async function drainLogin(provider, token) {
+async function drainLogin(provider, token, metadata) {
   lastInferenceHeaders = null;
   let out = "";
   for await (const chunk of mod.streamProvider(
     provider,
-    mod.loginConfig(provider, token),
+    mod.loginConfig(provider, token, metadata),
     "system",
     [{ id: "1", role: "user", content: "hi", createdAt: 0 }],
   )) {
@@ -323,14 +355,35 @@ check("Claude subscription → Bearer + OAuth beta header (not x-api-key)",
   claudeRun.headers["anthropic-beta"] === "oauth-2025-04-20" &&
   !("x-api-key" in claudeRun.headers));
 
-const gemRun = await drainLogin("gemini", "ya29.TOKEN");
-check("Gemini subscription → Bearer header (not x-goog-api-key)",
-  gemRun.headers.Authorization === "Bearer ya29.TOKEN" &&
-  !("x-goog-api-key" in gemRun.headers));
-check("Gemini OAuth → requests Generative Language API scope",
-  mod.OAUTH_CONFIGS.gemini.scopes.includes(
-    "https://www.googleapis.com/auth/generative-language.retriever",
-  ));
+const gemRun = await drainLogin("gemini", "ya29.ANTIGRAVITY", { projectId: "test-project" });
+check("Gemini subscription → uses Antigravity Bearer transport",
+  gemRun.headers.Authorization === "Bearer ya29.ANTIGRAVITY");
+check("Gemini subscription → uses an Antigravity model",
+  gemRun.model === mod.SUBSCRIPTION_MODELS.gemini);
+check("Gemini picker → exposes Antigravity model catalog",
+  mod.MODELS.gemini.map((m) => m.id).join(",") === [
+    "gemini-3.5-flash-low",
+    "gemini-3-flash-agent",
+    "gemini-3.5-flash-extra-low",
+    "gemini-3.1-pro-low",
+    "gemini-pro-agent",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6-thinking",
+    "gpt-oss-120b-medium",
+  ].join(","));
+check("Gemini OAuth → requests Antigravity scopes",
+  mod.OAUTH_CONFIGS.gemini.scopes.includes("https://www.googleapis.com/auth/cclog") &&
+  mod.OAUTH_CONFIGS.gemini.scopes.includes("https://www.googleapis.com/auth/experimentsandconfigs"));
+
+const refreshedGemRun = await drainLogin("gemini", "ya29.EXPIRED", {
+  projectId: "test-project",
+  refreshToken: "refresh-token",
+  expiresAt: 0,
+});
+check("Gemini subscription → refreshes an expired access token",
+  refreshedGemRun.headers.Authorization === "Bearer ya29.REFRESHED");
+globalThis.mockStorageStore.delete("v-assistant-vault:provider:gemini");
+globalThis.mockStorageStore.delete("v-assistant-vault:provider:gemini:refresh");
 
 const openAICallsBeforeRateLimit = openAIChatCalls;
 openAIRateLimitResponses = 1;
@@ -347,7 +400,7 @@ check("ChatGPT → retries one 429 response",
 
 const geminiCallsBeforeRateLimit = geminiCalls;
 geminiRateLimitResponses = 1;
-await drainLogin("gemini", "ya29.TOKEN");
+await drainLogin("gemini", "ya29.TOKEN", { projectId: "test-project" });
 check("Gemini → retries one 429 response",
   geminiCalls === geminiCallsBeforeRateLimit + 2);
 
@@ -371,7 +424,7 @@ const callsBeforeVendorFailover = anthropicMessageCalls;
 anthropicRateLimitResponses = 3;
 const geminiFallbackModel = await drainFallback({
   claude: mod.loginConfig("claude", "sk-ant-oat01-TOKEN"),
-  gemini: mod.loginConfig("gemini", "ya29.TOKEN"),
+  gemini: mod.loginConfig("gemini", "ya29.TOKEN", { projectId: "test-project" }),
   openrouter: mod.loginConfig("openrouter", "sk-or-user"),
 });
 check("Claude rate limit → retries before switching vendor",
@@ -386,6 +439,24 @@ const openRouterFallbackModel = await drainFallback({
 });
 check("Claude rate limit → OpenRouter is the final configured fallback",
   openRouterFallbackModel === mod.ROUTED_MODELS.openrouter);
+
+geminiRateLimitResponses = 3;
+anthropicAuthResponses = 1;
+let continuedFallbackModel = "";
+for await (const chunk of mod.streamProviderWithFallback(
+  "gemini",
+  {
+    gemini: mod.loginConfig("gemini", "ya29.TOKEN", { projectId: "test-project" }),
+    claude: mod.loginConfig("claude", "sk-ant-oat01-EXPIRED"),
+    chatgpt: { apiKey: "sk-chatgpt" },
+  },
+  "system",
+  [{ id: "1", role: "user", content: "hi", createdAt: 0 }],
+)) {
+  continuedFallbackModel += chunk;
+}
+check("Gemini quota → skips expired Claude and continues to ChatGPT",
+  continuedFallbackModel.replace("model=", "") === "gpt-4o-mini");
 
 // OpenRouter login stays a router key (central subscription), not a native call.
 const orCfg = mod.loginConfig("openrouter", "sk-or-user");

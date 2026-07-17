@@ -109,11 +109,19 @@ await globalThis.saveVaultEntry({
   updatedAt: Date.now(),
 });
 
-// Start the channel with a live provider (points at the mock model).
-globalThis.startTelegram(() => ({
-  provider: "openrouter",
-  config: { apiKey: "x", baseUrl: `http://127.0.0.1:${MODEL_PORT}/v1`, model: "mock" },
-}));
+// Start the channel with a live provider (points at the mock model) and verify
+// the exchange is surfaced to the shared session store callback.
+const recorded = [];
+globalThis.startTelegram(
+  () => ({
+    options: {
+      provider: "openrouter",
+      config: { apiKey: "x", baseUrl: `http://127.0.0.1:${MODEL_PORT}/v1`, model: "mock" },
+    },
+    messages: [],
+  }),
+  (chatId, user, assistant) => recorded.push({ chatId, user, assistant }),
+);
 
 // Wait for a reply to be sent back (up to ~8s).
 const deadline = Date.now() + 8000;
@@ -127,7 +135,11 @@ rmSync(outfile, { force: true });
 
 const reply = sent[0];
 const ok =
-  reply && reply.chat_id === 99 && String(reply.text).includes("hello from telegram");
+  reply &&
+  reply.chat_id === 99 &&
+  String(reply.text).includes("hello from telegram") &&
+  recorded[0]?.chatId === 99 &&
+  recorded[0]?.user.content === "hello from telegram";
 console.log("reply sent to chat :", reply?.chat_id);
 console.log("reply text         :", JSON.stringify(reply?.text));
 console.log(ok ? "\n✓ Telegram 2-way channel works end-to-end" : "\n✗ FAILED");

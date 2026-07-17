@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Eraser, SendHorizonal, Wand2, X } from "lucide-react";
+import { ChevronDown, Eraser, Layers3, Maximize2, Minimize2, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import {
   type ProviderConfig,
 } from "@/runtime/providers";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
 import { reflectAndLearn } from "@/runtime/selfImprove";
-import { AI_ROUTER_BASE_URL, getAiRouterModels, type AiRouterModel } from "@/runtime/aiRouter";
+import {
+  AI_ROUTER_BASE_URL,
+  deleteAiRouterPack,
+  getAiRouterModels,
+  saveAiRouterPack,
+  type AiRouterModel,
+} from "@/runtime/aiRouter";
 import { Logo } from "@/components/Logo";
 import { ChatSessionMenu } from "@/components/ChatSessionMenu";
 import { cn } from "@/lib/utils";
@@ -43,7 +49,37 @@ export function Chat() {
   const [routerModels, setRouterModels] = useState<AiRouterModel[]>([]);
   const [modelLoadError, setModelLoadError] = useState<string | null>(null);
   const [activeModel, setActiveModel] = useState(() => localStorage.getItem("vua:ai-router-model") ?? "");
-  const modelLabel = routerModels.find((m) => m.id === activeModel)?.name || activeModel;
+  const [packEditorOpen, setPackEditorOpen] = useState(false);
+  const [packExpanded, setPackExpanded] = useState(false);
+  const [editingPackId, setEditingPackId] = useState<string | null>(null);
+  const [packName, setPackName] = useState("");
+  const [packModels, setPackModels] = useState<string[]>([]);
+  const [packStrategy, setPackStrategy] = useState<"fallback" | "round-robin">("fallback");
+  const [packAccountFilters, setPackAccountFilters] = useState<string[]>([]);
+  const [packError, setPackError] = useState<string | null>(null);
+  const selectedModel = routerModels.find((model) => model.id === activeModel);
+  const modelLabel = selectedModel
+    ? `${selectedModel.name}${selectedModel.accountLabel ? ` · ${selectedModel.accountLabel}` : ""}`
+    : activeModel;
+  const packOptions = routerModels.filter((model) => model.kind === "pack");
+  const individualModels = routerModels.filter((model) => model.kind !== "pack");
+  const connectedModelAccounts = useMemo(() => {
+    const accounts = new Map<string, { id: string; provider: string; label: string; count: number }>();
+    for (const model of individualModels) {
+      if (!model.connectionId) continue;
+      const current = accounts.get(model.connectionId);
+      accounts.set(model.connectionId, {
+        id: model.connectionId,
+        provider: model.provider || "AI",
+        label: model.accountLabel || "Account",
+        count: (current?.count || 0) + 1,
+      });
+    }
+    return [...accounts.values()];
+  }, [individualModels]);
+  const filteredPackModels = individualModels.filter((model) =>
+    !packExpanded || !model.connectionId || packAccountFilters.includes(model.connectionId)
+  );
   const routerConfig: ProviderConfig = {
     baseUrl: AI_ROUTER_BASE_URL,
     model: activeModel,
@@ -96,6 +132,45 @@ export function Chat() {
   useEffect(() => {
     if (activeModel) localStorage.setItem("vua:ai-router-model", activeModel);
   }, [activeModel]);
+
+  const openPackEditor = (pack?: AiRouterModel) => {
+    setEditingPackId(pack?.id.startsWith("pack:") ? pack.id.slice(5) : null);
+    setPackName(pack?.name ?? "");
+    setPackModels(pack?.models ?? []);
+    setPackStrategy(pack?.strategy ?? "fallback");
+    setPackAccountFilters(connectedModelAccounts.map((account) => account.id));
+    setPackError(null);
+    setPackExpanded(false);
+    setPackEditorOpen(true);
+  };
+
+  const savePack = async () => {
+    setPackError(null);
+    try {
+      await saveAiRouterPack({
+        id: editingPackId ?? undefined,
+        name: packName.trim(),
+        models: packModels,
+        strategy: packStrategy,
+        stickyLimit: 1,
+        autoSwitch: true,
+      });
+      setPackEditorOpen(false);
+      refreshRouterModels();
+    } catch (error) {
+      setPackError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const removePack = async (pack: AiRouterModel) => {
+    if (!pack.id.startsWith("pack:")) return;
+    try {
+      await deleteAiRouterPack(pack.id.slice(5));
+      refreshRouterModels();
+    } catch (error) {
+      setModelLoadError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -250,8 +325,18 @@ export function Chat() {
                 <ChevronDown className="size-3.5 shrink-0" />
               </button>
               {modelPickerOpen && (
-                <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
-                  {routerModels.map((m) => (
+                <div className="absolute right-0 top-full z-10 mt-1 max-h-[70vh] w-64 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
+                  <div className="flex items-center justify-between px-3 pb-1 pt-2">
+                    <span className="text-[10px] font-semibold uppercase text-gold-300">Packs</span>
+                    <button
+                      onClick={() => openPackEditor()}
+                      title="Add pack"
+                      className="cursor-pointer rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-gold-300"
+                    >
+                      <Plus className="size-3.5" />
+                    </button>
+                  </div>
+                  {packOptions.map((m) => (
                     <button
                       key={m.id}
                       onClick={() => {
@@ -263,12 +348,159 @@ export function Chat() {
                         activeModel === m.id ? "text-gold-300" : "text-neutral-300",
                       )}
                     >
-                      {m.name}
+                      <span className="flex items-center gap-2 font-medium">
+                        <Layers3 className="size-3.5" />
+                        <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          title="Edit pack"
+                          onClick={(event) => { event.stopPropagation(); openPackEditor(m); }}
+                          className="rounded p-1 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200"
+                        ><Pencil className="size-3" /></span>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          title="Delete pack"
+                          onClick={(event) => { event.stopPropagation(); void removePack(m); }}
+                          className="rounded p-1 text-neutral-500 hover:bg-neutral-700 hover:text-red-400"
+                        ><Trash2 className="size-3" /></span>
+                      </span>
                       <span className="block font-mono text-[10px] text-neutral-500">
-                        {m.provider ? `${m.provider} · ${m.id}` : m.id}
+                        {m.models?.length || 0} models · {m.strategy || "fallback"}
                       </span>
                     </button>
                   ))}
+                  {packEditorOpen && (
+                    <div
+                      className={cn(
+                        "border border-neutral-700 bg-neutral-950 p-3 shadow-2xl",
+                        packExpanded
+                          ? "fixed inset-4 z-50 flex flex-col sm:inset-10 lg:inset-x-[18%] lg:inset-y-[8%]"
+                          : "m-1",
+                      )}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">{editingPackId ? "Edit pack" : "New pack"}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setPackExpanded((expanded) => !expanded)}
+                            title={packExpanded ? "Collapse pack editor" : "Expand pack editor"}
+                            className="cursor-pointer rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+                          >
+                            {packExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                          </button>
+                          <button onClick={() => setPackEditorOpen(false)} className="cursor-pointer rounded p-1 text-neutral-500 hover:bg-neutral-800"><X className="size-3.5" /></button>
+                        </div>
+                      </div>
+                      <input
+                        value={packName}
+                        onChange={(event) => setPackName(event.target.value)}
+                        placeholder="Pack name"
+                        className="mt-2 w-full border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs outline-none focus:border-gold-400/60"
+                      />
+                      <select
+                        value={packStrategy}
+                        onChange={(event) => setPackStrategy(event.target.value as "fallback" | "round-robin")}
+                        className="mt-2 w-full border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs outline-none"
+                      >
+                        <option value="fallback">Fallback in order</option>
+                        <option value="round-robin">Round robin</option>
+                      </select>
+                      {packExpanded && <details className="relative mt-2">
+                        <summary className="flex cursor-pointer list-none items-center justify-between border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-300 hover:border-neutral-600">
+                          <span>Accounts</span>
+                          <span className="text-neutral-500">
+                            {packAccountFilters.length}/{connectedModelAccounts.length} selected
+                          </span>
+                        </summary>
+                        <div className="absolute left-0 top-full z-20 mt-1 max-h-72 w-full overflow-y-auto border border-neutral-700 bg-neutral-900 p-2 shadow-2xl sm:w-[28rem]">
+                          <div className="mb-2 flex items-center justify-between gap-3 border-b border-neutral-800 pb-2">
+                            <span className="text-[10px] font-semibold uppercase text-neutral-500">Connected accounts</span>
+                            <button
+                              onClick={() => setPackAccountFilters(
+                                packAccountFilters.length === connectedModelAccounts.length
+                                  ? []
+                                  : connectedModelAccounts.map((account) => account.id),
+                              )}
+                              className="cursor-pointer text-[10px] text-gold-300 hover:text-gold-200"
+                            >
+                              {packAccountFilters.length === connectedModelAccounts.length ? "Clear all" : "Select all"}
+                            </button>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            {connectedModelAccounts.map((account) => (
+                              <label key={account.id} className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800">
+                                <input
+                                  type="checkbox"
+                                  checked={packAccountFilters.includes(account.id)}
+                                  onChange={() => setPackAccountFilters((current) => current.includes(account.id)
+                                    ? current.filter((id) => id !== account.id)
+                                    : [...current, account.id])}
+                                  className="accent-gold-400"
+                                />
+                                <span className="min-w-0 flex-1 truncate">{account.provider} · {account.label}</span>
+                                <span className="text-[10px] text-neutral-600">{account.count}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </details>}
+                      <div className={cn(
+                        "mt-2 overflow-y-auto border border-neutral-800",
+                        packExpanded ? "grid min-h-0 flex-1 grid-cols-1 content-start sm:grid-cols-2" : "max-h-48",
+                      )}>
+                        {filteredPackModels.map((model) => (
+                          <label key={model.id} className="flex cursor-pointer items-center gap-2 border-b border-neutral-800 px-2 py-1.5 text-xs last:border-0 hover:bg-neutral-900">
+                            <input
+                              type="checkbox"
+                              checked={packModels.includes(model.id)}
+                              onChange={() => setPackModels((current) => current.includes(model.id)
+                                ? current.filter((id) => id !== model.id)
+                                : [...current, model.id])}
+                              className="accent-gold-400"
+                            />
+                            <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                            <span className="max-w-[45%] truncate text-[10px] text-neutral-500" title={model.accountLabel}>
+                              {model.provider} · {model.accountLabel || "Account"}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => void savePack()}
+                        disabled={!packName.trim() || packModels.length < 2}
+                        className="mt-2 w-full cursor-pointer bg-gold-400 px-2 py-1.5 text-xs font-medium text-neutral-950 disabled:cursor-default disabled:opacity-40"
+                      >
+                        {editingPackId ? "Save pack" : "Create pack"}
+                      </button>
+                      {packError && <p className="mt-1 text-[10px] text-red-300">{packError}</p>}
+                    </div>
+                  )}
+                  <details className="mt-1 border-t border-neutral-800">
+                    <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase text-neutral-500 hover:text-neutral-300">
+                      Individual models ({individualModels.length})
+                    </summary>
+                    {individualModels.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setActiveModel(m.id);
+                          setModelPickerOpen(false);
+                        }}
+                        className={cn(
+                          "block w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs hover:bg-neutral-800",
+                          activeModel === m.id ? "text-gold-300" : "text-neutral-300",
+                        )}
+                      >
+                        {m.name}
+                        <span className="block truncate text-[10px] text-neutral-500" title={m.accountLabel}>
+                          {m.provider} · {m.accountLabel || "Account"}
+                        </span>
+                      </button>
+                    ))}
+                  </details>
                 </div>
               )}
             </div>

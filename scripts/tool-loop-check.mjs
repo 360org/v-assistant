@@ -1,12 +1,10 @@
 // End-to-end check of the in-app agent tool-calling loop.
 //
-// Proves the real code path in src/runtime/{providers,tools,vault}.ts:
-//   1. The model streams a request to call `http_request` (post to a blog),
-//      referencing a Vault secret as {{vault:My Blog.password}}.
-//   2. The app accumulates the streamed tool call, resolves the placeholder
-//      from the Vault LOCALLY, and performs the real HTTP POST.
-//   3. The blog server confirms it received the actual secret (never the
-//      model), returns 201, and the model streams a final answer.
+// Proves the provider tool loop with the credential boundary:
+//   1. The model calls `connector_request` using an opaque Vault ref and
+//      {{credential:password}}, never a raw secret.
+//   2. A trusted gateway executor resolves the variable and performs the POST.
+//   3. The tool response is redacted before the model receives it.
 //
 // No Docker, no external engine — the agent acts entirely inside the app.
 
@@ -17,6 +15,8 @@ import { writeFileSync, rmSync } from "node:fs";
 
 const SECRET = "s3cr3t-token-xyz";
 let blogGotSecret = false;
+let modelSawSecret = false;
+let toolGotOpaqueReference = false;
 
 // --- Mock blog (the target of the agent's action) ---------------------------
 const blog = createServer((req, res) => {
@@ -38,6 +38,7 @@ const model = createServer((req, res) => {
   req.on("data", (c) => (body += c));
   req.on("end", () => {
     const { messages } = JSON.parse(body || "{}");
+    modelSawSecret ||= JSON.stringify(messages).includes(SECRET);
     const calledTool = messages.some((m) => m.role === "tool");
     res.writeHead(200, { "Content-Type": "text/event-stream" });
 
@@ -52,12 +53,13 @@ const model = createServer((req, res) => {
                   index: 0,
                   id: "call_1",
                   function: {
-                    name: "http_request",
+                    name: "connector_request",
                     arguments: JSON.stringify({
+                      credential_ref: "vault-entry:my-blog",
                       method: "POST",
                       url: `http://127.0.0.1:${BLOG_PORT}/posts`,
                       headers: {
-                        Authorization: "Bearer {{vault:My Blog.password}}",
+                        Authorization: "Bearer {{credential:password}}",
                         "Content-Type": "application/json",
                       },
                       body: JSON.stringify({ title: "Hello", body: "World" }),
@@ -87,24 +89,40 @@ const MODEL_PORT = 8132;
 await new Promise((r) => blog.listen(BLOG_PORT, r));
 await new Promise((r) => model.listen(MODEL_PORT, r));
 
-// --- Bundle the REAL app modules for Node, with a localStorage-backed Vault --
+// --- Bundle the real provider loop with a trusted gateway test executor -----
 const entry = `
 import { streamProvider } from "../src/runtime/providers.ts";
-import { buildAgentTools } from "../src/runtime/tools.ts";
-import { saveVaultEntry, newVaultId } from "../src/runtime/vault.ts";
 globalThis.run = async () => {
-  await saveVaultEntry({
-    id: newVaultId(),
-    label: "My Blog",
-    url: "http://127.0.0.1:${BLOG_PORT}",
-    password: ${JSON.stringify(SECRET)},
-    updatedAt: Date.now(),
-  });
+  const tools = [{
+    schema: {
+      type: "function",
+      function: {
+        name: "connector_request",
+        description: "Use an opaque Vault reference",
+        parameters: { type: "object", properties: {}, required: [] },
+      },
+    },
+    async run(args) {
+      globalThis.toolGotOpaqueReference =
+        args.credential_ref === "vault-entry:my-blog" &&
+        args.headers.Authorization === "Bearer {{credential:password}}" &&
+        !JSON.stringify(args).includes(${JSON.stringify(SECRET)});
+      const headers = {
+        ...args.headers,
+        Authorization: args.headers.Authorization.replace(
+          "{{credential:password}}",
+          ${JSON.stringify(SECRET)},
+        ),
+      };
+      const response = await fetch(args.url, { method: args.method, headers, body: args.body });
+      return \`HTTP \${response.status}\\n{\"auth\":\"[REDACTED:password]\"}\`;
+    },
+  }];
   const config = { apiKey: "x", baseUrl: "http://127.0.0.1:${MODEL_PORT}/v1", model: "mock" };
   let out = "";
   for await (const chunk of streamProvider("openrouter", config, "system", [
     { id: "1", role: "user", content: "Post Hello to my blog", createdAt: 0 },
-  ], buildAgentTools())) {
+  ], tools)) {
     out += chunk;
   }
   return out;
@@ -121,24 +139,19 @@ await build({
   logLevel: "silent",
 });
 
-// Vault (web branch) uses localStorage; provide a minimal shim.
-const store = new Map();
-globalThis.localStorage = {
-  getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
-  removeItem: (k) => store.delete(k),
-};
-
 const mod = await import(pathToFileURL(outfile).href);
 const finalText = await globalThis.run();
+toolGotOpaqueReference = globalThis.toolGotOpaqueReference === true;
 
 blog.close();
 model.close();
 rmSync("scripts/.tool-loop-entry.mjs", { force: true });
 rmSync(outfile, { force: true });
 
-const ok = blogGotSecret && finalText.includes("published");
+const ok = blogGotSecret && toolGotOpaqueReference && !modelSawSecret && finalText.includes("published");
 console.log("blog received real secret :", blogGotSecret);
+console.log("tool received opaque ref   :", toolGotOpaqueReference);
+console.log("model received raw secret  :", modelSawSecret);
 console.log("final streamed answer     :", JSON.stringify(finalText));
-console.log(ok ? "\n✓ agent used the Vault and acted end-to-end" : "\n✗ FAILED");
+console.log(ok ? "\n✓ agent acted through an opaque credential capability" : "\n✗ FAILED");
 process.exit(ok ? 0 : 1);

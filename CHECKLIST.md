@@ -298,17 +298,17 @@
   nhận capability hay secret đã resolve
 
 ### 5.7 MCP Tools (Kế thừa NanoClaw)
-- [x] MCP Server built-in (`nanoclaw` server)
+- [ ] MCP Server built-in (`nanoclaw` server)
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/server.ts]`
-- [x] Core tools: `send_message`, `send_file`, `edit_message`, `add_reaction`
+- [ ] Core tools: `send_message`, `send_file`, `edit_message`, `add_reaction`
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/core.ts]`
-- [x] Interactive tools: `ask_user_question` (chờ phản hồi từ user)
+- [ ] Interactive tools: `ask_user_question` (chờ phản hồi từ user)
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/interactive.ts]`
-- [x] Scheduling tools: `schedule_message`, `list_scheduled`, `cancel_scheduled`
+- [ ] Scheduling tools: `schedule_message`, `list_scheduled`, `cancel_scheduled`
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/scheduling.ts]`
-- [x] Self-mod tools: self-improvement memory mutations
+- [ ] Self-mod tools: self-improvement memory mutations
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/self-mod.ts]`
-- [x] Agent management tools: `list_agents`, `switch_agent`
+- [ ] Agent management tools: `list_agents`, `switch_agent`
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/agents.ts]`
 - [x] Khai báo MCP servers bên ngoài qua `container.json`
   `[REF: NanoClaw/container/agent-runner/src/index.ts L77-L88 — mcpServers config]`
@@ -339,7 +339,7 @@
   `[REF: NanoClaw/container/agent-runner/src/memory-scaffold.ts]`
 - [x] Memory templates (summaries, preferences, learnings)
   `[REF: NanoClaw/container/agent-runner/src/memory-templates/]`
-- [ ] Provider opt-in: `usesMemoryScaffold` flag
+- [x] Provider opt-in: `usesMemoryScaffold` flag
   `[REF: NanoClaw providers/types.ts L14-L15]`
 - [ ] Hermes-style self-improving memory
   `[REF: Hermes/data/memories/ — bộ nhớ lưu dưới dạng file text/JSON]`
@@ -498,10 +498,10 @@
 - [ ] Skill marketplace / community store
 
 ### 10.3 MCP (Model Context Protocol)
-- [ ] MCP Client tích hợp trong Agent Runner
+- [x] MCP Client tích hợp trong Agent Runner
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/server.ts — MCP server implementation]`
-- [ ] Khai báo MCP servers qua config file
-- [ ] Agent tự discovery & gọi MCP tools
+- [x] Khai báo MCP servers qua config file
+- [x] Agent tự discovery & gọi MCP tools
 - [ ] MCP built-in: expose native tools qua MCP protocol
 - [ ] 9router MCP integration
   `[REF: 9router/src/lib/mcp/ — MCP tools]`
@@ -661,7 +661,8 @@
 - [x] Test provider transient retries —
       `agent-runner/scripts/anthropic-retry-check.mjs` +
       `agent-runner/scripts/openai-gemini-retry-check.mjs`
-- [ ] Test MCP Tools
+- [x] Test MCP client handshake/discovery/tool call trong Docker
+  `agent-runner/scripts/mcp-client-check.mjs`
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/core.test.ts]`
 - [ ] Test Vault encryption/decryption
 - [ ] Test Formatter
@@ -686,7 +687,7 @@
 | Giao diện UI | 26 | 2 | 7 |
 | Authentication | 4 | 0 | 3 |
 | AI Providers & 9router | 6 | 0 | 5 |
-| **Agent Runner (Core)** | **0** | **0** | **42** |
+| **Agent Runner (Core)** | **49** | **2** | **5** |
 | Tauri Shell (Host-side) | 2 | 3 | 7 |
 | Vault | 1 | 1 | 8 |
 | Channels | 2 | 0 | 8 |
@@ -700,6 +701,6 @@
 
 > **76 tính năng đã hoàn thành**, **7 cần cập nhật**, **125 chưa triển khai**.
 >
-> **Trọng tâm #1: Agent Runner (42 items)** — kế thừa NanoClaw poll-loop, provider registry, MCP tools, SQLite IPC, memory scaffold.
+> **Trọng tâm #1: Agent Runner (7 items)** — hoàn tất MCP built-in/core delivery, sau đó interactive, scheduling, self-improving memory và agent management. Hai mục MCP đầu đang chờ native desktop acceptance test trước khi đánh dấu hoàn thành. Docker chỉ là profile triển khai server, không là runtime desktop.
 > **Trọng tâm #2: Bảo mật (10 items)** — kế thừa NanoClaw circuit-breaker, command-gate, egress-lockdown.
 > **Trọng tâm #3: Tauri Host-side (7 items)** — kế thừa NanoClaw session-manager, container-runner, delivery.

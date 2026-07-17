@@ -89,11 +89,15 @@ export function ProviderConnect({
     setManualAuthUrl(null);
     setManualCallbackUrl("");
     try {
-      const result = await signIn(provider, context, (url) => {
-        setManualAuthUrl(url);
-      });
+      const result = await signIn(
+        provider,
+        context,
+        needsManualCallback(provider)
+          ? (url) => setManualAuthUrl(url)
+          : undefined,
+      );
       // Demo mode returns a credential in place; real mode navigated away.
-      if (result) onSave(loginConfig(result.provider, result.apiKey));
+      if (result) onSave(loginConfig(result.provider, result.apiKey, result));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setLoginError(msg);
@@ -107,6 +111,7 @@ export function ProviderConnect({
       apiKey: apiKey.trim() || undefined,
       baseUrl: isLocal ? baseUrl.trim() : (hasSubscription && !apiKey.trim() ? ROUTER_BASE_URL : undefined),
       model: model.trim() || undefined,
+      connectionStatus: "connected",
     });
   };
 

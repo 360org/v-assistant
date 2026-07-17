@@ -21,6 +21,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  vaultDelete,
+  vaultGet,
+  vaultSet,
   deleteVaultEntry,
   getVaultEntry,
   isSecretField,
@@ -33,6 +36,12 @@ import {
   type VaultField,
   type VaultFieldType,
 } from "@/runtime/vault";
+import {
+  deleteAiRouterConnection,
+  getAiRouterConnections,
+  saveAiRouterConnection,
+  type AiRouterConnection,
+} from "@/runtime/aiRouter";
 
 /** The field types a user can pick when adding a custom field. */
 const FIELD_TYPES: {
@@ -78,11 +87,25 @@ const blank = (): VaultEntry => ({
 
 export function Vault() {
   const [entries, setEntries] = useState<VaultEntryMeta[]>([]);
+  const [providerCredentials, setProviderCredentials] = useState<AiRouterConnection[]>([]);
   const [editing, setEditing] = useState<VaultEntry | null>(null);
+  const [editingProvider, setEditingProvider] = useState<AiRouterConnection | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
-    setEntries(await listVaultEntries());
+    const [savedEntries, connections] = await Promise.all([
+      listVaultEntries(),
+      getAiRouterConnections().catch(() => []),
+    ]);
+    setEntries(savedEntries);
+    setProviderCredentials(
+      connections
+        .filter((connection) => Boolean(connection.credentialRef))
+        .sort((a, b) => {
+          const providerOrder = (a.name ?? a.provider).localeCompare(b.name ?? b.provider);
+          return providerOrder || (a.priority ?? 0) - (b.priority ?? 0);
+        }),
+    );
     setLoading(false);
   };
 
@@ -96,6 +119,12 @@ export function Vault() {
 
   const remove = async (id: string) => {
     await deleteVaultEntry(id);
+    await refresh();
+  };
+
+  const removeProviderCredential = async (connection: AiRouterConnection) => {
+    await deleteAiRouterConnection(connection.id);
+    if (connection.credentialRef) await vaultDelete(connection.credentialRef);
     await refresh();
   };
 
@@ -117,11 +146,11 @@ export function Vault() {
       <div className="mt-3 flex items-center gap-1.5 text-xs text-neutral-500">
         <Lock className="size-3.5" />
         {vaultIsSecure()
-          ? "Stored in your device's secure keychain."
-          : "Stored locally in this browser (the desktop app uses your OS keychain)."}
+          ? "Stored in V Assistant's encrypted App Vault."
+          : "Development preview storage; desktop uses the encrypted App Vault."}
       </div>
 
-      {loading ? null : entries.length === 0 ? (
+      {loading ? null : entries.length === 0 && providerCredentials.length === 0 ? (
         <Card className="mt-8 flex flex-col items-center gap-2 py-12 text-center">
           <KeyRound className="size-8 text-gold-300" />
           <div className="font-semibold">No saved logins yet</div>
@@ -131,7 +160,43 @@ export function Vault() {
           </p>
         </Card>
       ) : (
-        <ul className="mt-6 flex flex-col gap-2">
+        <section className="mt-6">
+          <ul className="flex flex-col gap-2">
+          {providerCredentials.map((connection) => (
+            <li
+              key={connection.id}
+              className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-3"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-gold-300">
+                <KeyRound className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-sm font-medium">{connection.label || connection.name || connection.provider}</div>
+                  <Badge tone={connection.testStatus === "Verified" ? "green" : connection.isActive === false ? "neutral" : "gold"}>
+                    {connection.isActive === false ? "Disabled" : connection.testStatus || "Connected"}
+                  </Badge>
+                </div>
+                <div className="truncate text-xs text-neutral-500">
+                  {connection.email || connection.accountLabel || connection.id}
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingProvider(connection)}
+                className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+                title="Manage connection"
+              >
+                <Pencil className="size-4" />
+              </button>
+              <button
+                onClick={() => void removeProviderCredential(connection)}
+                className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
+                title="Delete connection and credential"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </li>
+          ))}
           {entries.map((e) => (
             <li
               key={e.id}
@@ -141,7 +206,10 @@ export function Vault() {
                 <KeyRound className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{e.label}</div>
+                <div className="flex items-center gap-2">
+                  <div className="truncate text-sm font-medium">{e.label}</div>
+                  <Badge>Stored</Badge>
+                </div>
                 {e.service && (
                   <div className="text-xs text-neutral-500">{e.service}</div>
                 )}
@@ -162,7 +230,8 @@ export function Vault() {
               </button>
             </li>
           ))}
-        </ul>
+          </ul>
+        </section>
       )}
 
       {editing && (
@@ -175,6 +244,173 @@ export function Vault() {
           }}
         />
       )}
+      {editingProvider && (
+        <AiProviderCredentialEditor
+          connection={editingProvider}
+          onClose={() => setEditingProvider(null)}
+          onSaved={async () => {
+            setEditingProvider(null);
+            await refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+type AiCredentialForm = {
+  label: string;
+  email: string;
+  apiKey: string;
+  accessToken: string;
+  refreshToken: string;
+  projectId: string;
+};
+
+function AiProviderCredentialEditor({
+  connection,
+  onClose,
+  onSaved,
+}: {
+  connection: AiRouterConnection;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [form, setForm] = useState<AiCredentialForm>({
+    label: connection.label || connection.name || connection.provider,
+    email: connection.email ?? "",
+    apiKey: "",
+    accessToken: "",
+    refreshToken: "",
+    projectId: "",
+  });
+  const [storedCredential, setStoredCredential] = useState<Record<string, unknown>>({});
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = connection.credentialRef ? await vaultGet(connection.credentialRef) : null;
+        const credential = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+        if (cancelled) return;
+        setStoredCredential(credential);
+        setForm((current) => ({
+          ...current,
+          email: typeof credential.email === "string" ? credential.email : current.email,
+          apiKey: typeof credential.apiKey === "string" ? credential.apiKey : "",
+          accessToken: typeof credential.accessToken === "string" ? credential.accessToken : "",
+          refreshToken: typeof credential.refreshToken === "string" ? credential.refreshToken : "",
+          projectId: typeof credential.projectId === "string" ? credential.projectId : "",
+        }));
+      } catch (loadError) {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : String(loadError));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [connection]);
+
+  const update = (key: keyof AiCredentialForm, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const save = async () => {
+    if (!connection.credentialRef) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const nextCredential = {
+        ...storedCredential,
+        apiKey: form.apiKey || undefined,
+        accessToken: form.accessToken || undefined,
+        refreshToken: form.refreshToken || undefined,
+        email: form.email || undefined,
+        projectId: form.projectId || undefined,
+      };
+      await vaultSet(connection.credentialRef, JSON.stringify(nextCredential));
+      await saveAiRouterConnection({
+        id: connection.id,
+        provider: connection.provider,
+        name: connection.name,
+        label: form.label.trim() || connection.name || connection.provider,
+        email: form.email.trim() || undefined,
+        accountLabel: connection.accountLabel || form.email.trim() || undefined,
+        priority: connection.priority,
+        authType: connection.authType ?? (form.apiKey ? "api-key" : "subscription"),
+        credentialRef: connection.credentialRef,
+        defaultModel: connection.defaultModel,
+      });
+      await onSaved();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : String(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (label: string, key: keyof AiCredentialForm, secret = false) => (
+    <div>
+      <div className="mb-1 text-xs text-neutral-400">{label}</div>
+      <div className="flex gap-2">
+        <input
+          value={form[key]}
+          onChange={(event) => update(key, event.target.value)}
+          type={secret && !revealed[key] ? "password" : "text"}
+          className={`${baseInput} min-w-0 flex-1`}
+        />
+        {secret && (
+          <button
+            onClick={() => setRevealed((current) => ({ ...current, [key]: !current[key] }))}
+            title={revealed[key] ? `Hide ${label}` : `Show ${label}`}
+            className="cursor-pointer rounded-lg bg-neutral-800 px-2 text-neutral-400 hover:text-neutral-100"
+          >
+            {revealed[key] ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-5" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">Edit {connection.label || connection.name || connection.provider}</h2>
+              <Badge tone={connection.testStatus === "Verified" ? "green" : "gold"}>
+                {connection.testStatus || "Connected"}
+              </Badge>
+            </div>
+            <p className="text-xs text-neutral-500">{connection.email || connection.accountLabel || connection.provider}</p>
+          </div>
+          <button onClick={onClose} className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800"><X className="size-4" /></button>
+        </div>
+        {loading ? (
+          <div className="py-10 text-center text-sm text-neutral-500">Loading credential…</div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-3">
+            {field("Account label", "label")}
+            {field("Email", "email")}
+            {(connection.authType === "api-key" || Boolean(form.apiKey)) && field("API key", "apiKey", true)}
+            {(connection.authType !== "api-key" || Boolean(form.accessToken)) && field("Access token", "accessToken", true)}
+            {Boolean(form.refreshToken) && field("Refresh token", "refreshToken", true)}
+            {(connection.provider === "antigravity" || Boolean(form.projectId)) && field("Project ID", "projectId")}
+          </div>
+        )}
+        {error && <p className="mt-3 text-xs text-red-300">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => void save()} disabled={loading || saving || !connection.credentialRef}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

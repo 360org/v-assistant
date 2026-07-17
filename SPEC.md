@@ -61,17 +61,17 @@ Tất cả adapters đều hỗ trợ **streaming response** và **tool calling 
         VUA_IPC_DIR=~/.v-assistant/ipc
         ```
 2.  **Thao tác Hệ thống & File:**
-    *   Do chạy ở chế độ Host Process, Agent Runner có toàn quyền:
-        *   Gọi lệnh shell (tool `Bash` → `child_process.spawn`)
-        *   Đọc/ghi/sửa file (tools `FileRead`, `FileWrite`, `FileEdit` → native `fs` module)
+    *   Agent Runner là Host Process nhưng model chỉ có capability giới hạn:
+        *   Không có tool `Bash`/host shell.
+        *   Đọc/ghi/sửa file chỉ trong `VUA_AGENT_WORKSPACE`.
         *   Tìm kiếm file & nội dung (tools `Grep`, `Glob`)
     *   Không cần cầu nối container Docker.
 3.  **Health Check & Auto-restart:**
     *   Tauri định kỳ kiểm tra Agent Runner process còn sống.
     *   Tự động restart nếu process crash.
     *   Graceful shutdown khi thoát app (gửi SIGTERM).
-4.  **Fallback Engine nhúng:**
-    *   Khi Agent Runner chưa khởi động hoặc ở Demo Mode, UI sử dụng engine nhúng (gọi trực tiếp provider API từ Webview).
+4.  **Compatibility/Demo Engine:**
+    *   Production dùng Agent Runner → AI Router. Demo/compatibility engine không được nhận raw connector secret và phải dùng cùng trusted gateway.
 
 ---
 
@@ -82,9 +82,10 @@ Tất cả adapters đều hỗ trợ **streaming response** và **tool calling 
     *   Tự động mã hóa AES-256 và quản lý dữ liệu nhạy cảm cục bộ (API Keys, Access Tokens của Slack, Notion, GitHub, tài khoản liên kết...).
     *   Lưu trữ tại `~/.v-assistant/vault.db` (SQLite mã hóa) hoặc Tauri app data directory.
 *   **Liên kết không lộ thông tin (Connectors Auth):**
-    *   Các Integrations/Connectors kết nối vào Vault cục bộ để lấy credential và áp dụng chữ ký xác thực API tự động.
-    *   Model AI chỉ nhìn thấy tên trường credential dưới dạng placeholders (ví dụ `{{vault:Github.token}}`) mà không bao giờ tiếp cận được khóa bảo mật gốc.
-    *   Giá trị thật được thay thế tại chỗ bởi executor ngay trước khi gửi HTTP request.
+    *   App Vault là nguồn duy nhất cho cả connection metadata và secret; không tạo credential cache bên ngoài Vault.
+    *   Model chỉ query sanitized manifest gồm opaque ref và tên biến, ví dụ `vault-entry:abc` + `{{credential:token}}`.
+    *   Agent/Webview/Runner không được resolve secret. Tauri giữ process capability; AI Router Connector Gateway resolve trong memory ngay trước request.
+    *   Mỗi ref bị bind vào origin đã lưu. Gateway chặn đổi origin, chặn literal auth header và redaction mọi giá trị đã resolve khỏi response/log trả về Agent.
 
 ---
 

@@ -21,11 +21,17 @@ import type { ProviderConfig } from "@/runtime/providers";
 import {
   completeOAuthReturn,
   fetchVendorAccount,
+  loadAntigravityProject,
   type OAuthReturn,
 } from "@/runtime/oauth";
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
-import { notifyTelegram, startTelegram, stopTelegram } from "@/runtime/telegram";
+import {
+  notifyTelegram,
+  startTelegram,
+  stopTelegram,
+  telegramConfiguredChatId,
+} from "@/runtime/telegram";
 import {
   clearKnowledge,
   deleteKnowledgeFile,
@@ -36,15 +42,22 @@ import { newMessageId } from "@/runtime/engine";
 import { AGENT_STORE, getProvider, PROVIDERS, type AgentTemplate } from "@/lib/catalog";
 import type { ImportedAgent } from "@/runtime/agentImport";
 import { syncAgents, restartAgentRunner } from "@/runtime/nanoclaw";
+import { fetchNanoClawSessions } from "@/runtime/nanoclawSessions";
+import { AI_ROUTER_BASE_URL } from "@/runtime/aiRouter";
 
 /** Vault key holding a provider's secret (API key / router token). */
 function vaultKey(provider: ProviderId): string {
   return `provider:${provider}`;
 }
 
+function refreshVaultKey(provider: ProviderId): string {
+  return `provider:${provider}:refresh`;
+}
+
 export type View =
   | "home"
   | "chat"
+  | "sessions"
   | "agents"
   | "skills"
   | "knowledge"
@@ -105,6 +118,35 @@ export interface LocalUser {
   createdAt: number;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  agentId: string | null;
+  channel: "desktop" | "telegram";
+  externalId?: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+function newChatSession(
+  agentId: string | null = null,
+  channel: "desktop" | "telegram" = "desktop",
+  externalId?: string,
+): ChatSession {
+  const now = Date.now();
+  return {
+    id: `chat-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    title: "New chat",
+    agentId,
+    channel,
+    externalId,
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 /** A recurring job the assistant runs on a schedule (NanoClaw scheduling). */
 export interface ScheduledTask {
   id: string;
@@ -138,6 +180,8 @@ interface PersistedState {
    */
   knowledgeByAgent: Record<string, KnowledgeFile[]>;
   messages: ChatMessage[];
+  chatSessions: ChatSession[];
+  activeSessionId: string | null;
   activeAgentId: string | null;
   customSkills: CustomSkill[];
   scheduledTasks: ScheduledTask[];
@@ -148,6 +192,8 @@ interface PersistedState {
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
+
+const initialChatSession = newChatSession();
 
 const initialState: PersistedState = {
   onboarded: false,
@@ -160,6 +206,8 @@ const initialState: PersistedState = {
   connectedIntegrations: [],
   knowledgeByAgent: {},
   messages: [],
+  chatSessions: [initialChatSession],
+  activeSessionId: initialChatSession.id,
   activeAgentId: null,
   customSkills: [],
   scheduledTasks: [],
@@ -184,6 +232,22 @@ function loadState(): PersistedState {
     if (parsed.knowledgeFiles && !parsed.knowledgeByAgent) {
       merged.knowledgeByAgent = { [GENERAL_KNOWLEDGE]: parsed.knowledgeFiles };
     }
+    if (!merged.chatSessions?.length) {
+      const migrated = newChatSession(merged.activeAgentId);
+      migrated.messages = merged.messages ?? [];
+      migrated.title = migrated.messages.find((message) => message.role === "user")?.content.slice(0, 48) || "New chat";
+      migrated.updatedAt = migrated.messages[migrated.messages.length - 1]?.createdAt ?? migrated.createdAt;
+      merged.chatSessions = [migrated];
+      merged.activeSessionId = migrated.id;
+    }
+    const active = merged.chatSessions.find((session) => session.id === merged.activeSessionId) ?? merged.chatSessions[0];
+    merged.chatSessions = merged.chatSessions.map((session) => ({
+      ...session,
+      channel: session.channel ?? "desktop",
+    }));
+    merged.activeSessionId = active.id;
+    merged.messages = active.messages;
+    merged.activeAgentId = active.agentId;
     return merged;
   } catch {
     return initialState;
@@ -244,6 +308,10 @@ interface AppStore extends PersistedState {
     update: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
   ) => void;
   clearChat: () => void;
+  createChatSession: () => void;
+  switchChatSession: (sessionId: string) => void;
+  renameChatSession: (sessionId: string, title: string) => void;
+  deleteChatSession: (sessionId: string) => void;
   resetApp: () => void;
 }
 
@@ -256,6 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeSkill, setActiveSkill] = useState<ActiveSkill | null>(null);
   const [oauthReturn, setOauthReturn] = useState<OAuthReturn | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const [hasHydratedCredentials, setHasHydratedCredentials] = useState(false);
 
   // Dev server synchronization + vault rehydrate: run sequentially to avoid
   // race conditions. Host state is loaded first (contains provider metadata
@@ -266,6 +335,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
+      // The first render can have no local provider metadata while the dev
+      // host already has it. Track IDs separately so Vault rehydration never
+      // races React's asynchronous host-state merge.
+      // A prior preview session may have persisted only the Vault secret and
+      // lost its non-secret provider metadata. Check every known vendor so a
+      // valid saved credential always restores a usable connection.
+      const providerIds = new Set<ProviderId>(PROVIDERS.map((provider) => provider.id));
       // Step 1: Load host state (dev server only, non-Tauri browsers)
       if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
         try {
@@ -273,6 +349,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (res.ok) {
             const hostState = await res.json();
             if (hostState && typeof hostState === "object" && Object.keys(hostState).length > 0) {
+              for (const id of Object.keys(hostState.providerConfigs ?? {})) {
+                providerIds.add(id as ProviderId);
+              }
               if (cancelled) return;
               setState((s) => {
                 const mergedConfigs = { ...s.providerConfigs };
@@ -302,41 +381,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // This MUST run after hostState is merged, so vault keys always win
       // over the empty apiKey:"" values from persisted state.
       if (cancelled) return;
-      const ids = Object.keys(
-        // Re-read current state to get the merged providerConfigs
-        (() => { let s: PersistedState | undefined; setState(cur => { s = cur; return cur; }); return s!; })().providerConfigs,
-      ) as ProviderId[];
-
-      for (const id of ids) {
+      for (const id of providerIds) {
         if (cancelled) break;
         const key = await vaultGet(vaultKey(id));
         if (cancelled || !key) continue;
+        const refreshToken = id === "gemini"
+          ? await vaultGet(refreshVaultKey(id))
+          : null;
+        const legacyGemini = id === "gemini" && !state.providerConfigs.gemini?.projectId;
+        const projectId = legacyGemini
+          ? await loadAntigravityProject(key).catch(() => undefined)
+          : undefined;
         setState((s) => {
           const current = s.providerConfigs[id];
-          if (!current) return s;
+          const restored = current ?? loginConfig(id, key);
           // Always write the vault key — it's the authoritative source.
           // Also ensure baseUrl is set for routed models (format "vendor/model"):
           // if the model contains '/' and no baseUrl, it was signed in through
           // the router, so attach the router base URL so requests reach
           // OpenRouter instead of a native vendor API.
-          const isRoutedModel = current.model?.includes("/") && id !== "local";
-          const baseUrl = current.baseUrl || (isRoutedModel ? ROUTER_BASE_URL : undefined);
-          // Subscription sign-ins used to pin a model id into the saved config.
-          // Those ids go stale when the vendor retires the model (a saved
-          // `claude-sonnet-4-…` answered 404), so drop them and let the current
-          // default apply. A model the user typed themselves is never pinned
-          // this way, so it survives.
-          const { model, ...rest } = current;
-          const next = current.oauth ? rest : current;
+          const isRoutedModel = restored.model?.includes("/") && id !== "local";
+          const baseUrl = restored.baseUrl || (isRoutedModel ? ROUTER_BASE_URL : undefined);
+          // Claude subscription model ids can expire, but Antigravity models
+          // are a user-facing subscription choice and must survive restart.
+          const { model, ...rest } = restored;
+          const next = restored.oauth && id === "claude" ? rest : restored;
+          // A credential recovered from the Vault is an established local
+          // connection. A future 401/403 downgrades it to "expired" at the
+          // point of use; until then it belongs in the connected provider list.
+          const connectionStatus = next.connectionStatus ?? "connected";
           return {
             ...s,
             providerConfigs: {
               ...s.providerConfigs,
-              [id]: { ...next, apiKey: key, ...(baseUrl ? { baseUrl } : {}) },
+              [id]: {
+                ...next,
+                apiKey: key,
+                ...(connectionStatus ? { connectionStatus } : {}),
+                ...(refreshToken ? { refreshToken } : {}),
+                ...(projectId ? { projectId, authMode: "antigravity" as const, model: "gemini-3.1-pro-low" } : {}),
+                ...(baseUrl ? { baseUrl } : {}),
+              },
             },
           };
         });
       }
+      if (!cancelled) setHasHydratedCredentials(true);
     })();
 
     return () => { cancelled = true; };
@@ -352,7 +442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Sets config (routed to the chosen vendor) + creates the local user.
         await connectProvider(
           result.provider,
-          loginConfig(result.provider, result.apiKey),
+          loginConfig(result.provider, result.apiKey, result),
         );
         setOauthReturn(result);
       })
@@ -372,6 +462,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const consumeChatDraft = useCallback(() => setChatDraft(null), []);
 
   useEffect(() => {
+    if (!hasHydratedCredentials) return;
     // Storage can be unavailable (sandboxed webviews, private mode) — the
     // app must keep working without persistence. Secrets are never written
     // here: the API key is stripped from each provider config and kept in
@@ -380,7 +471,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const providerConfigs = Object.fromEntries(
         Object.entries(state.providerConfigs).map(([id, cfg]) => [
           id,
-          cfg ? { ...cfg, apiKey: cfg.apiKey ? "" : undefined } : cfg,
+          cfg
+            ? { ...cfg, apiKey: cfg.apiKey ? "" : undefined, refreshToken: undefined }
+            : cfg,
         ]),
       );
       const safe = { ...state, providerConfigs };
@@ -397,7 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {
       /* run without persistence */
     }
-  }, [state]);
+  }, [state, hasHydratedCredentials]);
 
   // Telegram channel: while it's connected, run the 2-way bridge so the user
   // can chat with their assistant from Telegram. It resolves the current
@@ -430,12 +523,118 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const resolveTelegramConversation = useCallback((chatId: number) => {
+    const options = resolveChatOptions();
+    if (!options) return null;
+    const sessionId = `telegram:${chatId}`;
+    const session = stateRef.current.chatSessions.find((item) => item.id === sessionId);
+    return {
+      options: { ...options, sessionId },
+      messages: session?.messages ?? [],
+    };
+  }, [resolveChatOptions]);
+
+  const recordTelegramExchange = useCallback(
+    (chatId: number, userMessage: ChatMessage, assistantMessage: ChatMessage) => {
+      setState((s) => {
+        const sessionId = `telegram:${chatId}`;
+        const existing = s.chatSessions.find((session) => session.id === sessionId);
+        const messages = [...(existing?.messages ?? []), userMessage, assistantMessage];
+        const updated: ChatSession = existing
+          ? { ...existing, messages, updatedAt: Date.now() }
+          : {
+              id: sessionId,
+              title: `Telegram ${chatId}`,
+              agentId: s.activeAgentId,
+              channel: "telegram",
+              externalId: String(chatId),
+              messages,
+              createdAt: userMessage.createdAt,
+              updatedAt: assistantMessage.createdAt,
+            };
+        return {
+          ...s,
+          chatSessions: existing
+            ? s.chatSessions.map((session) => session.id === sessionId ? updated : session)
+            : [updated, ...s.chatSessions],
+          messages: s.activeSessionId === sessionId ? messages : s.messages,
+        };
+      });
+    },
+    [],
+  );
+
   const telegramOn = state.connectedIntegrations.includes("telegram");
   useEffect(() => {
-    if (telegramOn) startTelegram(resolveChatOptions);
-    else stopTelegram();
-    return () => stopTelegram();
-  }, [telegramOn, resolveChatOptions]);
+    let cancelled = false;
+    let syncTimer: ReturnType<typeof setInterval> | undefined;
+    if (telegramOn) {
+      void telegramConfiguredChatId().then((chatId) => {
+        if (chatId == null) return;
+        setState((s) => {
+          const sessionId = `telegram:${chatId}`;
+          if (s.chatSessions.some((session) => session.id === sessionId)) return s;
+          const now = Date.now();
+          return {
+            ...s,
+            chatSessions: [
+              {
+                id: sessionId,
+                title: `Telegram ${chatId}`,
+                agentId: s.activeAgentId,
+                channel: "telegram",
+                externalId: String(chatId),
+                messages: [],
+                createdAt: now,
+                updatedAt: now,
+              },
+              ...s.chatSessions,
+            ],
+          };
+        });
+      });
+      // Codex's in-app browser may expose Tauri-like globals of its own. Use
+      // the served app URL as the source of truth: localhost/127.0.0.1 is the
+      // Docker demo and must sync NanoClaw's read-only session store.
+      const browserDev = typeof window !== "undefined" &&
+        ["localhost", "127.0.0.1"].includes(window.location.hostname);
+      if (browserDev) {
+        // NanoClaw owns Telegram updates in the Docker demo. Read its store
+        // instead of starting a competing getUpdates poller in each tab.
+        stopTelegram();
+        const sync = async () => {
+          try {
+            const remoteSessions = await fetchNanoClawSessions();
+            if (cancelled || remoteSessions.length === 0) return;
+            setState((s) => {
+              const remoteIds = new Set(remoteSessions.map((session) => session.id));
+              const synced: ChatSession[] = remoteSessions.map((session) => ({
+                ...session,
+                agentId: s.chatSessions.find((item) => item.id === session.id)?.agentId ?? s.activeAgentId,
+              }));
+              const chatSessions = [
+                ...synced,
+                ...s.chatSessions.filter((session) => !remoteIds.has(session.id)),
+              ].sort((a, b) => b.updatedAt - a.updatedAt);
+              const active = synced.find((session) => session.id === s.activeSessionId);
+              return { ...s, chatSessions, messages: active?.messages ?? s.messages };
+            });
+          } catch {
+            // NanoClaw may be stopped independently; retain the last snapshot.
+          }
+        };
+        void sync();
+        syncTimer = setInterval(() => void sync(), 2_000);
+      } else {
+        startTelegram(resolveTelegramConversation, recordTelegramExchange);
+      }
+    } else stopTelegram();
+    return () => {
+      cancelled = true;
+      if (syncTimer) clearInterval(syncTimer);
+      stopTelegram();
+    };
+  }, [telegramOn, resolveTelegramConversation, recordTelegramExchange]);
 
   // Scheduled tasks: tick once a minute and run whatever is due. Results show
   // up in chat and, when Telegram is connected, are pushed there too.
@@ -509,7 +708,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (provider: ProviderId, config: ProviderConfig | null) => {
       // The secret goes to the Vault; only the config shape stays in state.
       if (config?.apiKey) void vaultSet(vaultKey(provider), config.apiKey);
-      else if (!config) void vaultDelete(vaultKey(provider));
+      if (config?.refreshToken) void vaultSet(refreshVaultKey(provider), config.refreshToken);
+      else if (!config) {
+        void vaultDelete(vaultKey(provider));
+        void vaultDelete(refreshVaultKey(provider));
+      }
       setState((s) => {
         const providerConfigs = { ...s.providerConfigs };
         if (config) providerConfigs[provider] = config;
@@ -522,8 +725,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const connectProvider = useCallback(
     async (provider: ProviderId, config: ProviderConfig) => {
-      // Stash the credential in the OS keychain, not in app storage.
+      // Persist credentials only through V Assistant's App Vault boundary.
       if (config.apiKey) await vaultSet(vaultKey(provider), config.apiKey);
+      if (config.refreshToken) await vaultSet(refreshVaultKey(provider), config.refreshToken);
       setState((s) => ({
         ...s,
         provider,
@@ -661,7 +865,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setActiveAgent = useCallback((agentId: string | null) => {
-    setState((s) => ({ ...s, activeAgentId: agentId }));
+    setState((s) => ({
+      ...s,
+      activeAgentId: agentId,
+      chatSessions: s.chatSessions.map((session) =>
+        session.id === s.activeSessionId
+          ? { ...session, agentId, updatedAt: Date.now() }
+          : session,
+      ),
+    }));
   }, []);
 
   // Nhập một agent từ persona markdown: lưu vào customAgents, gieo Soul +
@@ -772,16 +984,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMessages = useCallback(
     (update: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
-      setState((s) => ({
-        ...s,
-        messages: typeof update === "function" ? update(s.messages) : update,
-      }));
+      setState((s) => {
+        const messages = typeof update === "function" ? update(s.messages) : update;
+        const firstUser = messages.find((message) => message.role === "user")?.content.trim();
+        return {
+          ...s,
+          messages,
+          chatSessions: s.chatSessions.map((session) =>
+            session.id === s.activeSessionId
+              ? {
+                  ...session,
+                  messages,
+                  title: session.title === "New chat" && firstUser
+                    ? firstUser.slice(0, 48)
+                    : session.title,
+                  updatedAt: Date.now(),
+                }
+              : session,
+          ),
+        };
+      });
     },
     [],
   );
 
   const clearChat = useCallback(() => {
-    setState((s) => ({ ...s, messages: [] }));
+    setState((s) => ({
+      ...s,
+      messages: [],
+      chatSessions: s.chatSessions.map((session) =>
+        session.id === s.activeSessionId
+          ? { ...session, messages: [], updatedAt: Date.now() }
+          : session,
+      ),
+    }));
+  }, []);
+
+  const createChatSession = useCallback(() => {
+    setState((s) => {
+      const session = newChatSession(s.activeAgentId);
+      return {
+        ...s,
+        chatSessions: [session, ...s.chatSessions],
+        activeSessionId: session.id,
+        messages: [],
+      };
+    });
+  }, []);
+
+  const switchChatSession = useCallback((sessionId: string) => {
+    setState((s) => {
+      const session = s.chatSessions.find((item) => item.id === sessionId);
+      if (!session) return s;
+      return {
+        ...s,
+        activeSessionId: session.id,
+        activeAgentId: session.agentId,
+        messages: session.messages,
+      };
+    });
+  }, []);
+
+  const renameChatSession = useCallback((sessionId: string, title: string) => {
+    const clean = title.trim().slice(0, 80);
+    if (!clean) return;
+    setState((s) => ({
+      ...s,
+      chatSessions: s.chatSessions.map((session) =>
+        session.id === sessionId ? { ...session, title: clean, updatedAt: Date.now() } : session,
+      ),
+    }));
+  }, []);
+
+  const deleteChatSession = useCallback((sessionId: string) => {
+    setState((s) => {
+      const remaining = s.chatSessions.filter((session) => session.id !== sessionId);
+      const sessions = remaining.length ? remaining : [newChatSession()];
+      if (s.activeSessionId !== sessionId) return { ...s, chatSessions: sessions };
+      const next = sessions[0];
+      return {
+        ...s,
+        chatSessions: sessions,
+        activeSessionId: next.id,
+        activeAgentId: next.agentId,
+        messages: next.messages,
+      };
+    });
   }, []);
 
   const resetApp = useCallback(() => {
@@ -791,7 +1079,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       /* run without persistence */
     }
     // Purge secrets from the Vault and every role's indexed documents too.
-    for (const p of PROVIDERS) void vaultDelete(vaultKey(p.id));
+    for (const p of PROVIDERS) {
+      void vaultDelete(vaultKey(p.id));
+      void vaultDelete(refreshVaultKey(p.id));
+    }
     void clearKnowledge();
     setState(initialState);
     setView("home");
@@ -819,27 +1110,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const activeId = state.activeAgentId || "default";
-    const activeProvider = state.provider ?? "openai";
     const cfg =
       (state.provider ? state.providerConfigs[state.provider] : undefined) ?? {};
-    
+
     (async () => {
-      let realKey = cfg.apiKey;
-      if (!realKey && activeProvider !== "local") {
-        realKey =
-          (await vaultGet(`provider:${activeProvider}`).catch(() => null)) ??
-          undefined;
-      }
-      
       if (cancelled) return;
-      
-      console.log(`[store] Syncing & starting runner: agent=${activeId}, provider=${activeProvider}`);
+
+      console.log(`[store] Syncing & starting runner: agent=${activeId}, provider=ai-router`);
       await restartAgentRunner(
         activeId,
-        activeProvider,
-        realKey || null,
-        cfg.baseUrl || null,
-        cfg.model || null
+        AI_ROUTER_BASE_URL,
+        cfg.model || "auto",
       );
     })();
     
@@ -898,6 +1179,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeKnowledgeFile,
       setMessages,
       clearChat,
+      createChatSession,
+      switchChatSession,
+      renameChatSession,
+      deleteChatSession,
       resetApp,
     }),
     [
@@ -932,6 +1217,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeKnowledgeFile,
       setMessages,
       clearChat,
+      createChatSession,
+      switchChatSession,
+      renameChatSession,
+      deleteChatSession,
       resetApp,
     ],
   );

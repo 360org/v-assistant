@@ -20,6 +20,10 @@ import {
   getContinuation,
   setContinuation,
   clearContinuation,
+  getTranscript,
+  setTranscript,
+  clearTranscript,
+  sessionIdFor,
 } from './db/index.js';
 import {
   formatMessages,
@@ -29,6 +33,7 @@ import {
 } from './formatter.js';
 import { getToolDefinitions, executeTool } from './native-tools/index.js';
 import { mcpManager } from './mcp-client/index.js';
+import { clearBuiltinToolContext, executeBuiltinTool, getBuiltinToolDefinitions, hasBuiltinTool, setBuiltinToolContext } from './mcp-tools/index.js';
 import type { AgentProvider, ProviderEvent, ChatMessage, ToolCall, ToolResult } from './providers/types.js';
 
 const POLL_INTERVAL_MS = 1000;
@@ -50,6 +55,8 @@ function sleep(ms: number): Promise<void> {
 export interface PollLoopConfig {
   provider: AgentProvider;
   providerName: string;
+  /** Stable agent identity used to isolate conversations. */
+  agentId?: string;
   systemContext: {
     instructions: string;
   };
@@ -61,13 +68,6 @@ export interface PollLoopConfig {
  * Main poll loop. Runs indefinitely until the process is killed or signal aborted.
  */
 export async function runPollLoop(config: PollLoopConfig): Promise<void> {
-  // Resume prior session if one was persisted
-  let continuation: string | undefined = getContinuation(config.providerName) ?? undefined;
-
-  if (continuation) {
-    log(`Resuming agent session ${continuation}`);
-  }
-
   // Clear leftover 'processing' acks from a previous crashed run
   clearStaleProcessingAcks();
 
@@ -102,6 +102,9 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     markProcessing(ids);
 
     const routing = extractRouting(messages);
+    const sessionId = sessionIdFor(config.agentId || 'default', routing);
+    let continuation = getContinuation(sessionId, config.providerName);
+    if (continuation) log(`Resuming session ${sessionId}`);
 
     // --- Handle /clear command ---
     const normalMessages = [];
@@ -111,7 +114,8 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
       if (isClearCommand(msg)) {
         log('Clearing session (resetting continuation)');
         continuation = undefined;
-        clearContinuation(config.providerName);
+        clearContinuation(sessionId, config.providerName);
+        clearTranscript(sessionId);
         writeMessageOut({
           id: generateId(),
           kind: 'chat',
@@ -157,11 +161,26 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     }
 
     try {
-      const result = await executeAgentLoop(config, prompt, continuation, routing, activeSystemContext);
+      const priorTranscript = getTranscript(sessionId);
+      setBuiltinToolContext({ routing, inReplyTo: normalMessages[normalMessages.length - 1]?.id });
+      let result: AgentLoopResult;
+      try {
+        result = await executeAgentLoop(config, prompt, continuation, routing, activeSystemContext, priorTranscript);
+      } finally {
+        clearBuiltinToolContext();
+      }
 
       if (result.continuation) {
         continuation = result.continuation;
-        setContinuation(config.providerName, result.continuation);
+        setContinuation(sessionId, config.providerName, result.continuation);
+      }
+
+      if (result.text) {
+        setTranscript(sessionId, [
+          ...priorTranscript,
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: result.text },
+        ]);
       }
 
       // Write final response to outbound
@@ -193,7 +212,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
       if (config.provider.isSessionInvalid(err)) {
         log('Session invalid, clearing continuation');
         continuation = undefined;
-        clearContinuation(config.providerName);
+        clearContinuation(sessionId, config.providerName);
       }
 
       // Write error response
@@ -235,15 +254,16 @@ async function executeAgentLoop(
   continuation: string | undefined,
   _routing: RoutingContext,
   systemContext: { instructions: string },
+  priorTranscript: ChatMessage[] = [],
 ): Promise<AgentLoopResult> {
-  const conversationHistory: ChatMessage[] = [];
+  const conversationHistory: ChatMessage[] = [...priorTranscript];
   let currentPrompt = prompt;
   let finalText: string | null = null;
   let sessionContinuation = continuation;
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const mcpTools = await mcpManager.listAllTools();
-    const allTools = [...getToolDefinitions(), ...mcpTools];
+    const allTools = [...getToolDefinitions(), ...getBuiltinToolDefinitions(), ...mcpTools];
 
     const query = config.provider.query({
       prompt: currentPrompt,
@@ -303,7 +323,9 @@ async function executeAgentLoop(
       log(`Tool call: ${tc.name}(${JSON.stringify(tc.arguments).slice(0, 200)})`);
       let result: ToolResult;
       
-      if (tc.name.includes('__')) {
+      if (hasBuiltinTool(tc.name)) {
+        result = await executeBuiltinTool(tc.name, tc.arguments);
+      } else if (tc.name.includes('__')) {
         const mcpResult = await mcpManager.executeTool(tc.name, tc.arguments);
         if (mcpResult) {
           result = mcpResult;

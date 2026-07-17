@@ -44,7 +44,7 @@ export async function engineRunning(): Promise<boolean> {
 export const nanoclawEngine: Engine = {
   async *chat(
     messages: ChatMessage[],
-    options: { provider: ProviderId; agentName?: string; agentId?: string },
+    options: { provider: ProviderId; agentName?: string; agentId?: string; sessionId?: string },
   ) {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUser) return;
@@ -58,6 +58,9 @@ export const nanoclawEngine: Engine = {
       meta: JSON.stringify({
         provider: options.provider,
         agent: options.agentName ?? null,
+        platformId: "desktop",
+        channelType: "chat",
+        threadId: options.sessionId ?? groupId,
       }),
     });
 
@@ -102,8 +105,6 @@ export async function syncAgents(
 /** Restart the agent runner process with new configurations. */
 export async function restartAgentRunner(
   agentName: string,
-  provider: string,
-  apiKey?: string | null,
   baseUrl?: string | null,
   model?: string | null,
 ): Promise<boolean> {
@@ -111,8 +112,6 @@ export async function restartAgentRunner(
   try {
     return await invoke<boolean>("runtime_restart_runner", {
       agentName,
-      provider,
-      apiKey: apiKey || null,
       baseUrl: baseUrl || null,
       model: model || null,
     });

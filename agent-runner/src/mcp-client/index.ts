@@ -19,6 +19,15 @@ interface JsonRpcRequest {
   id?: number | string;
 }
 
+interface PendingRequest {
+  resolve: (val: unknown) => void;
+  reject: (err: Error) => void;
+  timer: NodeJS.Timeout;
+}
+
+const MCP_PROTOCOL_VERSION = '2025-06-18';
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 interface JsonRpcResponse {
   jsonrpc: '2.0';
   result?: unknown;
@@ -29,8 +38,8 @@ interface JsonRpcResponse {
 export class McpClientConnection {
   private proc: ChildProcess | null = null;
   private nextId = 1;
-  private pendingRequests = new Map<number | string, { resolve: (val: unknown) => void; reject: (err: Error) => void }>();
-  private buffer = '';
+  private pendingRequests = new Map<number | string, PendingRequest>();
+  private initialized = false;
 
   constructor(
     public readonly name: string,
@@ -42,11 +51,16 @@ export class McpClientConnection {
   /**
    * Start the MCP server process.
    */
-  public start(): void {
+  public async start(): Promise<void> {
     log(`Spawning MCP server "${this.name}": ${this.command} ${this.args.join(' ')}`);
 
+    const childEnv = { ...process.env, ...this.env };
+    // Gateway capabilities belong only to trusted Runner code. An external
+    // MCP server must never inherit or override them.
+    delete childEnv.VUA_CONNECTOR_GATEWAY_TOKEN;
+
     this.proc = spawn(this.command, this.args, {
-      env: { ...process.env, ...this.env },
+      env: childEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -76,6 +90,22 @@ export class McpClientConnection {
       log(`MCP server "${this.name}" process error: ${err.message}`);
       this.cleanup(err);
     });
+
+    // MCP requires initialize to be the first client/server interaction.
+    // Source: https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle#initialization
+    const result = await this.sendRequest('initialize', {
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'v-assistant-agent-runner', version: '0.1.0' },
+    }) as { protocolVersion?: string; capabilities?: Record<string, unknown> };
+
+    if (!result.protocolVersion) {
+      throw new Error(`MCP server "${this.name}" returned an invalid initialize result`);
+    }
+
+    this.sendNotification('notifications/initialized', {});
+    this.initialized = true;
+    log(`MCP server "${this.name}" initialized (${result.protocolVersion})`);
   }
 
   /**
@@ -93,6 +123,7 @@ export class McpClientConnection {
    * List tools provided by this server.
    */
   public async listTools(): Promise<ToolDefinition[]> {
+    if (!this.initialized) return [];
     try {
       const response = await this.sendRequest('tools/list', {}) as { tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> };
       return (response.tools || []).map((t) => ({
@@ -134,7 +165,11 @@ export class McpClientConnection {
     }
   }
 
-  private sendRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
+  private sendRequest(
+    method: string,
+    params: Record<string, unknown>,
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+  ): Promise<unknown> {
     if (!this.proc || this.proc.killed) {
       return Promise.reject(new Error(`MCP server "${this.name}" is not running`));
     }
@@ -148,9 +183,24 @@ export class McpClientConnection {
     };
 
     return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+      // MCP recommends bounded request timeouts to avoid hung connections.
+      // Source: https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle#timeouts
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        this.sendNotification('notifications/cancelled', {
+          requestId: id,
+          reason: `Request timed out after ${timeoutMs}ms`,
+        });
+        reject(new Error(`MCP request "${method}" timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.pendingRequests.set(id, { resolve, reject, timer });
       this.proc!.stdin!.write(JSON.stringify(request) + '\n');
     });
+  }
+
+  private sendNotification(method: string, params: Record<string, unknown>): void {
+    if (!this.proc || this.proc.killed || !this.proc.stdin?.writable) return;
+    this.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
   }
 
   private handleMessage(line: string): void {
@@ -160,6 +210,7 @@ export class McpClientConnection {
         const pending = this.pendingRequests.get(msg.id);
         if (pending) {
           this.pendingRequests.delete(msg.id);
+          clearTimeout(pending.timer);
           if (msg.error) {
             pending.reject(new Error(msg.error.message));
           } else {
@@ -174,9 +225,11 @@ export class McpClientConnection {
 
   private cleanup(err: Error): void {
     for (const [, pending] of this.pendingRequests) {
+      clearTimeout(pending.timer);
       pending.reject(err);
     }
     this.pendingRequests.clear();
+    this.initialized = false;
     this.proc = null;
   }
 }
@@ -189,14 +242,20 @@ export class McpManager {
   /**
    * Initialize connections to all configured external MCP servers.
    */
-  public init(servers: Record<string, { command: string; args: string[]; env: Record<string, string> }>): void {
+  public async init(servers: Record<string, { command: string; args: string[]; env: Record<string, string> }>): Promise<void> {
+    const starts: Promise<void>[] = [];
     for (const [name, cfg] of Object.entries(servers)) {
       if (this.connections.has(name)) continue;
 
       const conn = new McpClientConnection(name, cfg.command, cfg.args, cfg.env);
-      conn.start();
       this.connections.set(name, conn);
+      starts.push(conn.start().catch((err) => {
+        this.connections.delete(name);
+        conn.stop();
+        throw err;
+      }));
     }
+    await Promise.all(starts);
   }
 
   /**

@@ -13,7 +13,7 @@ const DATA_DIR = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '/tmp
 const CONFIG_PATH = process.env.CONFIG_PATH || path.join(DATA_DIR, 'runner.json');
 
 export interface RunnerConfig {
-  /** AI provider name: 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'local' */
+  /** Provider id. `ai-router` is the normal production route for all vendors. */
   provider: string;
   /** Display name for the assistant */
   assistantName: string;
@@ -25,8 +25,6 @@ export interface RunnerConfig {
   mcpServers: Record<string, { command: string; args: string[]; env: Record<string, string> }>;
   /** Model ID or alias */
   model?: string;
-  /** API key for the provider */
-  apiKey?: string;
   /** Base URL override for the provider */
   baseUrl?: string;
   /** Data directory */
@@ -56,14 +54,13 @@ export function loadConfig(): RunnerConfig {
   }
 
   _config = {
-    provider: (raw.provider as string) || process.env.VUA_PROVIDER || 'openai',
+    provider: (raw.provider as string) || process.env.VUA_PROVIDER || 'ai-router',
     assistantName: (raw.assistantName as string) || process.env.VUA_ASSISTANT_NAME || 'V-Assistant',
     agentName: (raw.agentName as string) || process.env.VUA_AGENT_NAME || 'default',
     maxMessagesPerPrompt: (raw.maxMessagesPerPrompt as number) || DEFAULT_MAX_MESSAGES,
     mcpServers: (raw.mcpServers as RunnerConfig['mcpServers']) || {},
-    model: (raw.model as string) || process.env.VUA_MODEL || undefined,
-    apiKey: (raw.apiKey as string) || process.env.VUA_API_KEY || undefined,
-    baseUrl: (raw.baseUrl as string) || process.env.VUA_BASE_URL || undefined,
+    model: (raw.model as string) || process.env.VUA_MODEL || 'auto',
+    baseUrl: (raw.baseUrl as string) || process.env.VUA_BASE_URL || 'http://127.0.0.1:20128/v1',
     dataDir: DATA_DIR,
     ipcDir: process.env.VUA_IPC_DIR || path.join(DATA_DIR, 'ipc'),
   };

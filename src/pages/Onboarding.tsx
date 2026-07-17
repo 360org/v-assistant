@@ -62,7 +62,7 @@ export function Onboarding() {
         // routes the chosen vendor's models through the router key.
         await connectProvider(
           result.provider,
-          loginConfig(result.provider, result.apiKey),
+          loginConfig(result.provider, result.apiKey, result),
         );
         setProvider(result.provider);
         setStep("connect");

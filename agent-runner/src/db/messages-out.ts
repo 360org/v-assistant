@@ -101,8 +101,13 @@ export function getRoutingBySeq(seq: number): {
   thread_id: string | null;
 } | null {
   const outbound = getOutboundDb();
-  const row = outbound
+  const inbound = getInboundDb();
+  const outRow = outbound
     .prepare('SELECT channel_type, platform_id, thread_id FROM messages_out WHERE seq = ?')
     .get(seq) as { channel_type: string | null; platform_id: string | null; thread_id: string | null } | undefined;
-  return row ?? null;
+  if (outRow) return outRow;
+  const inRow = inbound
+    .prepare('SELECT channel_type, platform_id, thread_id FROM messages_in WHERE seq = ?')
+    .get(seq) as { channel_type: string | null; platform_id: string | null; thread_id: string | null } | undefined;
+  return inRow ?? null;
 }

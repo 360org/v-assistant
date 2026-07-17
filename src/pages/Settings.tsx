@@ -85,6 +85,7 @@ export function Settings() {
   );
 
   const subscriptionProvider = selectedProvider?.oauthProvider;
+  const deviceCodeSubscription = subscriptionProvider === "grok-cli";
   const selectedProviderConnections = selectedProvider
     ? connections.filter((connection) => connection.provider === selectedProvider.id && connection.isActive !== false)
     : [];
@@ -168,20 +169,29 @@ export function Settings() {
 
   const submitManualCallback = () => {
     try {
-      const callback = new URL(manualCallbackUrl.trim());
-      const error = callback.searchParams.get("error");
-      if (error) {
-        setConnectMessage(callback.searchParams.get("error_description") || error);
-        return;
+      const rawValue = manualCallbackUrl.trim();
+      if (!rawValue) throw new Error("Paste a callback URL or authorization code.");
+
+      let code = rawValue;
+      let callbackUrl: URL | null = null;
+
+      if (/^https?:\/\//i.test(rawValue)) {
+        callbackUrl = new URL(rawValue);
+        const error = callbackUrl.searchParams.get("error");
+        if (error) {
+          setConnectMessage(callbackUrl.searchParams.get("error_description") || error);
+          return;
+        }
+        code = callbackUrl.searchParams.get("code") || callbackUrl.searchParams.get("token") || rawValue;
       }
-      const code = callback.searchParams.get("code") || callback.searchParams.get("token");
-      if (!code) throw new Error("Callback URL does not contain an authorization code.");
+
+      if (!code) throw new Error("Paste a callback URL or authorization code.");
       const channel = new BroadcastChannel("v_assistant_oauth");
       setConnectMessage("Completing subscription sign-in...");
       channel.postMessage({
         code,
-        state: callback.searchParams.get("state"),
-        fullUrl: callback.toString(),
+        state: callbackUrl?.searchParams.get("state"),
+        fullUrl: callbackUrl?.toString(),
       });
       channel.close();
     } catch (error) {
@@ -497,11 +507,11 @@ export function Settings() {
                       </div>
                     </div>
                   )}
-                  {manualAuthUrl && (
+                  {manualAuthUrl && !deviceCodeSubscription && (
                     <div className="mt-3 border border-neutral-800 bg-neutral-900 p-3">
                       <div className="text-xs font-medium text-neutral-300">Complete subscription sign-in</div>
                       <p className="mt-1 text-xs text-neutral-500">
-                        Follow the vendor sign-in page. If it redirects to a local callback URL, paste the full URL below.
+                        Follow the vendor sign-in page. If it shows a code, paste the code below. If it redirects to a local callback URL, paste the full URL below.
                       </p>
                       <div className="mt-2 flex gap-2">
                         <input
@@ -517,11 +527,29 @@ export function Settings() {
                         <input
                           value={manualCallbackUrl}
                           onChange={(event) => setManualCallbackUrl(event.target.value)}
-                          placeholder="http://localhost:443/callback?code=..."
+                          placeholder="authorization code or http://localhost:443/callback?code=..."
                           className="min-w-0 flex-1 border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-gold-400/60"
                         />
                         <Button size="sm" variant="secondary" onClick={submitManualCallback} disabled={!manualCallbackUrl.trim()}>
                           Complete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {manualAuthUrl && deviceCodeSubscription && (
+                    <div className="mt-3 border border-neutral-800 bg-neutral-900 p-3">
+                      <div className="text-xs font-medium text-neutral-300">Complete Grok Build sign-in</div>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Complete the approval in the browser window. V Assistant checks the device code automatically; no API key or pasted callback is needed.
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          readOnly
+                          value={manualAuthUrl}
+                          className="min-w-0 flex-1 border border-neutral-700 bg-neutral-950 px-2 py-2 font-mono text-xs text-neutral-400"
+                        />
+                        <Button className="w-8 px-0" size="sm" variant="secondary" onClick={copyManualAuthUrl} title="Copy sign-in URL">
+                          {authUrlCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
                         </Button>
                       </div>
                     </div>

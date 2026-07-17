@@ -3,7 +3,7 @@ export default {
   priority: 280,
   alias: "xai",
   display: {
-    name: "xAI (Grok)",
+    name: "xAI API (Grok)",
     icon: "auto_awesome",
     color: "#1DA1F2",
     textIcon: "XA",

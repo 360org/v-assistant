@@ -7,16 +7,22 @@
 //! Spawns the Universal Agent Runner process, automatically writing runner.json
 //! before startup to pass settings.
 
+use crate::vault::VaultBroker;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
+use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 
 /// App-facing engine state, managed by Tauri.
 pub struct Runtime {
     pub dir: PathBuf,
     engine: Arc<Mutex<Option<Child>>>,
+    ai_router: Arc<Mutex<Option<Child>>>,
+    connector_token: String,
 }
 
 #[derive(Serialize)]
@@ -24,6 +30,8 @@ pub struct RuntimeStatus {
     pub version: &'static str,
     /// True when a V-Assistant Agent Runner process is attached and alive.
     pub engine_running: bool,
+    /// True when the native AI Router sidecar is attached and alive.
+    pub ai_router_running: bool,
     /// Where the runtime exchanges messages with the engine.
     pub dir: String,
 }
@@ -90,7 +98,12 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn spawn_process(dir: &Path, project_dir: &Path, config_path: &Path) -> Result<Child, String> {
+fn spawn_process(
+    dir: &Path,
+    project_dir: &Path,
+    config_path: &Path,
+    connector_token: &str,
+) -> Result<Child, String> {
     let runner_src = project_dir.join("agent-runner/src/index.ts");
     let runner_dist = project_dir.join("agent-runner/dist/index.js");
 
@@ -131,6 +144,9 @@ fn spawn_process(dir: &Path, project_dir: &Path, config_path: &Path) -> Result<C
 
     cmd.env("VUA_DATA_DIR", dir)
         .env("VUA_IPC_DIR", dir.join("ipc"))
+        .env("VUA_AGENT_WORKSPACE", dir.join("workspace"))
+        .env("VUA_AI_ROUTER_URL", "http://127.0.0.1:20128")
+        .env("VUA_CONNECTOR_GATEWAY_TOKEN", connector_token)
         .env("CONFIG_PATH", config_path)
         .env("PATH", new_path)
         .stdin(Stdio::null());
@@ -155,17 +171,59 @@ fn spawn_process(dir: &Path, project_dir: &Path, config_path: &Path) -> Result<C
     cmd.spawn().map_err(err)
 }
 
+fn spawn_ai_router(
+    dir: &Path,
+    project_dir: &Path,
+    broker: &VaultBroker,
+) -> Result<Child, String> {
+    let sidecar = project_dir.join("ai-router/src/sidecar.mjs");
+    if !sidecar.exists() {
+        return Err("AI Router sidecar source not found".to_string());
+    }
+    let node_bin = find_executable("node").unwrap_or_else(|| PathBuf::from("node"));
+    let mut command = Command::new(node_bin);
+    command
+        .arg(sidecar)
+        .current_dir(project_dir.join("ai-router"))
+        .env("AI_ROUTER_VAULT_BROKER_URL", &broker.url)
+        .env("AI_ROUTER_VAULT_BROKER_TOKEN", &broker.token)
+        .env("AI_ROUTER_CONNECTOR_TOKEN", &broker.connector_token)
+        .stdin(Stdio::null());
+
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(dir.join("ai-router.log"));
+    if let Ok(file) = log {
+        if let Ok(stderr) = file.try_clone() {
+            command.stdout(file).stderr(stderr);
+        }
+    }
+    command.spawn().map_err(err)
+}
+
 impl Runtime {
-    pub fn new(dir: PathBuf) -> Result<Self, String> {
+    pub fn new(dir: PathBuf, project_dir: PathBuf, broker: VaultBroker) -> Result<Self, String> {
         std::fs::create_dir_all(dir.join("ipc")).map_err(err)?;
         std::fs::create_dir_all(dir.join("agents")).map_err(err)?;
+        std::fs::create_dir_all(dir.join("workspace")).map_err(err)?;
 
         let engine = Arc::new(Mutex::new(None));
+        let ai_router = Arc::new(Mutex::new(None));
 
         let runtime = Runtime {
             dir: dir.clone(),
             engine: engine.clone(),
+            ai_router: ai_router.clone(),
+            connector_token: broker.connector_token.clone(),
         };
+
+        if let Ok(child) = spawn_ai_router(&dir, &project_dir, &broker) {
+            if let Ok(mut guard) = ai_router.lock() {
+                *guard = Some(child);
+            }
+        }
 
         // Initialize schema for both DBs
         runtime.init_inbound_schema()?;
@@ -174,7 +232,8 @@ impl Runtime {
         // Spawning background process monitor (health check & auto-restart)
         let dir_clone = dir;
         let engine_clone = engine.clone();
-        let project_dir_val = std::env::var("VUA_PROJECT_DIR").ok();
+        let project_dir_val = project_dir;
+        let connector_token = broker.connector_token;
 
         std::thread::spawn(move || {
             loop {
@@ -191,13 +250,12 @@ impl Runtime {
                             println!("[tauri-runtime] Agent runner exited unexpectedly with status: {}. Restarting...", status);
                             
                             let config_path = dir_clone.join("runner.json");
-                            let project_dir = if let Some(ref p) = project_dir_val {
-                                PathBuf::from(p)
-                            } else {
-                                PathBuf::new()
-                            };
-
-                            match spawn_process(&dir_clone, &project_dir, &config_path) {
+                            match spawn_process(
+                                &dir_clone,
+                                &project_dir_val,
+                                &config_path,
+                                &connector_token,
+                            ) {
                                 Ok(new_child) => {
                                     *child = new_child;
                                     println!("[tauri-runtime] Agent runner auto-restarted successfully.");
@@ -381,6 +439,28 @@ impl Runtime {
         Ok(results)
     }
 
+    /// Forward an opaque connector request through AI Router. The Webview and
+    /// model never receive the process capability or any resolved Vault value.
+    pub fn connector_request(&self, payload: &str) -> Result<String, String> {
+        let mut stream = TcpStream::connect("127.0.0.1:20128").map_err(err)?;
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(30)))
+            .map_err(err)?;
+        let request = format!(
+            "POST /v1/connectors/request HTTP/1.1\r\nHost: 127.0.0.1:20128\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            self.connector_token,
+            payload.len(),
+            payload,
+        );
+        stream.write_all(request.as_bytes()).map_err(err)?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response).map_err(err)?;
+        response
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body.to_string())
+            .ok_or_else(|| "AI Router connector returned an invalid response".to_string())
+    }
+
     pub fn sync(&self, agents: &[AgentConfig], _active_id: Option<&str>) -> Result<(), String> {
         for agent in agents {
             let agent_dir = self.dir.join("agents").join(&agent.name);
@@ -399,24 +479,21 @@ impl Runtime {
     pub fn spawn_engine_with_config(
         &self,
         agent_name: &str,
-        provider: &str,
-        api_key: Option<&str>,
         base_url: Option<&str>,
         model: Option<&str>,
         app: Option<&tauri::AppHandle>,
     ) -> Result<bool, String> {
-        self.stop_engine();
+        self.stop_runner();
 
         let config_path = self.dir.join("runner.json");
         let config_json = serde_json::json!({
-            "provider": provider,
+            "provider": "ai-router",
             "assistantName": "V-Assistant",
             "agentName": agent_name,
             "maxMessagesPerPrompt": 10,
             "mcpServers": {},
-            "model": model,
-            "apiKey": api_key,
-            "baseUrl": base_url
+            "model": model.unwrap_or("auto"),
+            "baseUrl": base_url.unwrap_or("http://127.0.0.1:20128/v1")
         });
         std::fs::write(&config_path, serde_json::to_string_pretty(&config_json).map_err(err)?)
             .map_err(err)?;
@@ -434,7 +511,12 @@ impl Runtime {
             return Ok(false);
         };
 
-        let child = spawn_process(&self.dir, &project_dir, &config_path)?;
+        let child = spawn_process(
+            &self.dir,
+            &project_dir,
+            &config_path,
+            &self.connector_token,
+        )?;
         *guard = Some(child);
 
         println!("[tauri-runtime] Spawned agent-runner for agent: {}", agent_name);
@@ -448,15 +530,13 @@ impl Runtime {
             if let Ok(content) = std::fs::read_to_string(&config_path) {
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
                     let agent_name = parsed.get("agentName").and_then(|x| x.as_str()).unwrap_or("default");
-                    let provider = parsed.get("provider").and_then(|x| x.as_str()).unwrap_or("openai");
-                    let api_key = parsed.get("apiKey").and_then(|x| x.as_str());
                     let base_url = parsed.get("baseUrl").and_then(|x| x.as_str());
                     let model = parsed.get("model").and_then(|x| x.as_str());
-                    return self.spawn_engine_with_config(agent_name, provider, api_key, base_url, model, app);
+                    return self.spawn_engine_with_config(agent_name, base_url, model, app);
                 }
             }
         }
-        self.spawn_engine_with_config("default", "openai", None, None, None, app)
+        self.spawn_engine_with_config("default", None, Some("auto"), app)
     }
 
     pub fn status(&self) -> RuntimeStatus {
@@ -466,14 +546,31 @@ impl Runtime {
             .ok()
             .and_then(|mut g| g.as_mut().map(|c| c.try_wait().ok().flatten().is_none()))
             .unwrap_or(false);
+        let ai_router_running = self
+            .ai_router
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.as_mut().map(|child| child.try_wait().ok().flatten().is_none()))
+            .unwrap_or(false);
         RuntimeStatus {
             version: env!("CARGO_PKG_VERSION"),
             engine_running,
+            ai_router_running,
             dir: self.dir.display().to_string(),
         }
     }
 
     pub fn stop_engine(&self) {
+        self.stop_runner();
+        if let Ok(mut guard) = self.ai_router.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
+    fn stop_runner(&self) {
         if let Ok(mut guard) = self.engine.lock() {
             if let Some(mut child) = guard.take() {
                 let _ = child.kill();

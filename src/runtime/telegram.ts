@@ -12,14 +12,24 @@
  * automatically.
  */
 
-import { runAssistant, newMessageId, type ChatOptions } from "./engine";
+import { runAssistant, newMessageId, type ChatMessage, type ChatOptions } from "./engine";
 import { findVaultEntry, readField } from "./vault";
 
 const API = "https://api.telegram.org";
 const TELEGRAM_MAX = 4096;
 
-/** Latest chat context (provider, agent, config) — resolved per message. */
-export type ResolveOptions = () => ChatOptions | null;
+export interface TelegramConversation {
+  options: ChatOptions;
+  messages: ChatMessage[];
+}
+
+/** Latest context and transcript for this Telegram chat. */
+export type ResolveConversation = (chatId: number) => TelegramConversation | null;
+export type RecordExchange = (
+  chatId: number,
+  userMessage: ChatMessage,
+  assistantMessage: ChatMessage,
+) => void;
 
 interface TelegramUpdate {
   update_id: number;
@@ -80,6 +90,19 @@ export async function telegramTokenPresent(): Promise<boolean> {
   return Boolean(await botToken());
 }
 
+/** Configured Telegram chat id, used to materialize the channel session early. */
+export async function telegramConfiguredChatId(): Promise<number | null> {
+  const entry = await findVaultEntry("telegram");
+  const raw =
+    entry &&
+    (readField(entry, "Chat ID") ??
+      readField(entry, "chatId") ??
+      entry.fields?.find((field) => /chat/i.test(field.label))?.value);
+  if (!raw) return null;
+  const chatId = Number(raw);
+  return Number.isFinite(chatId) ? chatId : null;
+}
+
 /**
  * Push a message to the user's Telegram (best-effort). Uses the bot token and
  * the optional Chat ID saved in the Vault; a no-op if either is missing. Used
@@ -112,11 +135,22 @@ export async function notifyTelegram(text: string): Promise<boolean> {
  * is already running. `resolve` returns the current chat options each time a
  * message arrives, so provider/agent switches take effect live.
  */
-export function startTelegram(resolve: ResolveOptions): void {
+export function startTelegram(resolve: ResolveConversation, record?: RecordExchange): void {
   if (running) return;
   running = true;
   const myGen = ++generation;
-  void loop(resolve, myGen);
+  const run = () => loop(resolve, record, myGen);
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    void navigator.locks.request(
+      "v-assistant-telegram-bridge",
+      { ifAvailable: true },
+      async (lock) => {
+        if (lock) await run();
+      },
+    );
+  } else {
+    void run();
+  }
 }
 
 /** Stop the channel; the in-flight long-poll ends on its own. */
@@ -125,7 +159,11 @@ export function stopTelegram(): void {
   generation++;
 }
 
-async function loop(resolve: ResolveOptions, myGen: number): Promise<void> {
+async function loop(
+  resolve: ResolveConversation,
+  record: RecordExchange | undefined,
+  myGen: number,
+): Promise<void> {
   let offset = 0;
   let drained = false;
   while (running && myGen === generation) {
@@ -175,8 +213,8 @@ async function loop(resolve: ResolveOptions, myGen: number): Promise<void> {
         continue;
       }
 
-      const options = resolve();
-      if (!options) {
+      const conversation = resolve(chatId);
+      if (!conversation) {
         await sendMessage(
           token,
           chatId,
@@ -186,17 +224,23 @@ async function loop(resolve: ResolveOptions, myGen: number): Promise<void> {
       }
 
       try {
+        const userMessage: ChatMessage = {
+          id: newMessageId(),
+          role: "user",
+          content: text,
+          createdAt: Date.now(),
+        };
         const reply = await runAssistant(
-          [
-            {
-              id: newMessageId(),
-              role: "user",
-              content: text,
-              createdAt: Date.now(),
-            },
-          ],
-          options,
+          [...conversation.messages, userMessage],
+          { ...conversation.options, sessionId: `telegram:${chatId}` },
         );
+        const assistantMessage: ChatMessage = {
+          id: newMessageId(),
+          role: "assistant",
+          content: reply,
+          createdAt: Date.now(),
+        };
+        record?.(chatId, userMessage, assistantMessage);
         await sendMessage(token, chatId, reply);
       } catch (e) {
         await sendMessage(

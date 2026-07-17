@@ -47,7 +47,7 @@ Tài liệu này mô tả chi tiết sơ đồ thiết kế kiến trúc, cấu 
 |              | (Query / Execute)             |               |
 |     +--------v--------+            +--------v--------+      |
 |     |  Universal LLM  |            |  Native Tools   |      |
-|     |     Client      |            | (Bash, FS, HTTP,|      |
+|     |     Client      |            | (Scoped FS, HTTP|      |
 |     |                 |            |  Grep, Glob)    |      |
 |     +--------+--------+            +--------+--------+      |
 +--------------|-------------------------------|---------------+
@@ -107,18 +107,18 @@ Tiến trình nền chạy độc lập trên máy host (Bun hoặc Node.js), **
     *   **Skills** (`SKILL.md`): Kỹ năng đang kích hoạt.
 3.  Gửi yêu cầu tới AI provider qua **Universal LLM Client**.
 4.  Nếu AI yêu cầu tool call:
-    *   `Bash`: Khởi chạy shell con trực tiếp trên host OS.
-    *   `FileRead`/`FileWrite`/`FileEdit`: Đọc/ghi/sửa file cục bộ.
+    *   Không expose `Bash`/host shell cho model.
+    *   `FileRead`/`FileWrite`/`FileEdit`: Chỉ thao tác trong workspace được cấp.
     *   `Grep`/`Glob`: Tìm kiếm file & nội dung.
-    *   `http_request`: Gọi API với Vault placeholder resolution.
-    *   `vault_list`: Liệt kê credential (chỉ tên, không giá trị).
-    *   `connector_call`: Gọi Integration/Connector đã đăng ký.
+    *   `http_request`: Chỉ gọi request không credential.
+    *   `vault_list`: Query App Vault, chỉ trả opaque ref + tên biến.
+    *   `connector_request`: Gọi trusted AI Router gateway bằng ref và `{{credential:field}}`.
     *   Gửi kết quả tool quay lại LLM, tiếp tục vòng lặp.
 5.  Ghi câu trả lời cuối cùng vào `outbound.db`.
 
-### 2.4. Universal LLM Client (Đa nhà cung cấp)
+### 2.4. Universal LLM Client + AI Router
 
-Giao diện API thống nhất gọi trực tiếp đến các cổng API chính chủ:
+Agent Runner chỉ gọi API nội bộ `http://127.0.0.1:20128/v1`. AI Router dùng Provider Core đã copy để kết nối các endpoint vendor:
 
 | Provider | Endpoint | Giao thức |
 |----------|----------|-----------|
@@ -134,15 +134,16 @@ Tất cả adapters đều hỗ trợ **streaming** và **tool calling / functio
 
 **Vault là tính năng cốt lõi của V-Assistant**, chạy mặc định và tích hợp trực thuộc hệ thống (không phải connector, không phụ thuộc OS Keychain).
 
-*   Tự mã hóa AES-256 và giải mã thông tin tài khoản người dùng.
+*   Mã hóa AES-256-CBC, xác thực ciphertext bằng HMAC-SHA256.
 *   Lưu trữ: API Keys, Access Tokens, tài khoản liên kết, cấu hình tích hợp.
-*   Agent chỉ thấy **tên field** (placeholder `{{vault:Name.field}}`), giá trị thật được thay thế tại chỗ bởi executor trước khi gửi HTTP request.
+*   Agent chỉ thấy opaque ref + tên biến. Không có agent-side Vault resolver hoặc metadata cache ngoài Vault.
 
 ### 2.6. Integrations & Connectors
 
-**Connectors** đóng vai trò client kết nối vào Vault:
-*   Lấy access token từ Vault → áp dụng xác thực tự động vào HTTP request.
-*   Khóa bảo mật không bao giờ lộ ra ngoài hay gửi lên model AI.
+**AI Router Connector Gateway** là boundary duy nhất được resolve Vault:
+*   Tauri cấp process capability riêng cho Runner; capability không nằm trong prompt/tool result.
+*   Gateway bind `credential_ref` vào origin, resolve biến trong memory và áp auth.
+*   Response được redaction trước khi quay về Agent; secret không vào model/log/`runner.json`.
 *   Định nghĩa sẵn: GitHub, Notion, Slack, Discord, Telegram.
 *   Mở rộng qua cơ chế plugin connector.
 
@@ -168,9 +169,8 @@ v-assistant/
 │   └── runtime/                # Engine nhúng (fallback / legacy)
 │       ├── engine.ts           # Engine selector
 │       ├── providers.ts        # Multi-provider streaming
-│       ├── tools.ts            # Agent tools
+│       ├── tools.ts            # Agent tools + opaque connector client qua Tauri
 │       ├── vault.ts            # Vault client
-│       ├── connectors.ts       # Connector plugins
 │       ├── knowledge.ts        # RAG per-role
 │       ├── telegram.ts         # Telegram channel
 │       ├── scheduler.ts        # Scheduled tasks
@@ -189,7 +189,7 @@ v-assistant/
 │       ├── index.ts            # Entry point / daemon
 │       ├── universal-llm-client.ts  # Multi-provider API client
 │       ├── universal-executor.ts    # Agent loop
-│       ├── native-tools/       # Bash, FS, HTTP, Grep, Glob
+│       ├── native-tools/       # Scoped FS, HTTP, connector gateway
 │       ├── db/                 # SQLite IPC schemas
 │       └── providers/          # Per-provider adapters
 ├── skills/                     # Built-in Agent Skills
@@ -207,7 +207,7 @@ v-assistant/
 
 1.  **Bỏ Docker cho người dùng cuối.** Engine chạy nhúng hoặc Host Process. Docker chỉ là đường nâng cao tùy chọn qua `VUA_ENGINE_DIR`.
 2.  **Đa vai trò, không đa tiến trình.** Chuyển vai trò Agent = chuyển state cô lập (memory/knowledge riêng), khởi động tức thì, 0 thời gian chờ.
-3.  **Universal Agent Loop thay Claude SDK.** Tự viết vòng lặp agentic bằng TypeScript thuần, gọi trực tiếp API từng vendor — không phụ thuộc SDK nào.
-4.  **Vault nội bộ, không phụ thuộc OS.** Mã hóa AES-256, quản lý bởi V-Assistant. Agent chỉ thấy placeholder, secret thay tại chỗ.
+3.  **Universal Agent Loop thay Claude SDK.** Vòng lặp agentic gọi AI Router nội bộ; Provider Core đã copy xử lý vendor/OAuth/normalization.
+4.  **Vault nội bộ, không phụ thuộc OS.** App Vault là nguồn duy nhất. Agent chỉ thấy opaque ref; trusted gateway mới được resolve secret.
 5.  **Sandbox = WASM (Wasmtime), tùy chọn.** Feature flag `--features sandbox`, off mặc định. Guest không có host import, trần bộ nhớ + fuel.
-6.  **Giữ engine nhúng làm fallback.** Khi Agent Runner chưa khởi động hoặc trong Demo Mode, UI vẫn gọi trực tiếp provider qua engine nhúng.
+6.  **AI Router là provider boundary.** Production không inject raw vendor credential vào Agent Runner; engine nhúng chỉ là compatibility/demo path và dùng cùng connector gateway cho tác vụ có credential.

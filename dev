@@ -11,6 +11,7 @@
 # │    ./dev status   Kiểm tra trạng thái            │
 # │    ./dev shell    Mở shell vào container         │
 # │    ./dev demo     Gửi message test vào runner    │
+# │    ./dev check    Chạy toàn bộ test trong Docker │
 # │    ./dev reset    Xóa sạch data, chạy lại        │
 # │    ./dev ui       Chạy Vite UI dev server        │
 # │    ./dev all      Chạy cả UI + Agent Runner      │
@@ -69,6 +70,7 @@ usage() {
   echo "    status       Kiểm tra trạng thái container"
   echo "    shell        Mở shell vào container runner"
   echo "    demo         Gửi message test vào runner"
+  echo "    check        Typecheck + test Agent Runner trong container"
   echo "    reset        Xóa sạch volumes, chạy lại từ đầu"
   echo ""
   echo "  Vite UI:"
@@ -154,6 +156,12 @@ case "$cmd" in
     ensure_docker
     echo "▸ Gửi message test vào Agent Runner…"
     compose_runner run --rm demo
+    ;;
+
+  check)
+    ensure_docker
+    echo "▸ Chạy Agent Runner checks trong Docker…"
+    compose_runner exec agent-runner npm run check
     ;;
 
   reset)

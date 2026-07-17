@@ -277,8 +277,8 @@ export async function signInWithAiRouterCore(
   if (!authorizeResponse.ok || !authorize.authUrl || !authorize.state || !authorize.redirectUri) {
     throw new Error(authorize.error || `AI Router OAuth requires ${authorize.flowType || "a different sign-in flow"} for this provider.`);
   }
-  const manualCallback = provider === "claude";
-  if (manualCallback) onManualAuthUrl?.(authorize.authUrl);
+  const manualCallback = provider === "claude" || provider === "xai";
+  onManualAuthUrl?.(authorize.authUrl);
   const callback = await waitForPopupCallback(authorize.authUrl, authorize.state, manualCallback);
   const code = callback.code || callback.token;
   if (!code) throw new Error("OAuth callback did not contain an authorization code.");

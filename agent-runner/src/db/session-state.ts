@@ -7,6 +7,7 @@
  * @ref NanoClaw/container/agent-runner/src/db/session-state.ts
  */
 import { getOutboundDb } from './connection.js';
+import type { ChatMessage } from '../providers/types.js';
 
 /**
  * Get a session state value by key.
@@ -38,29 +39,54 @@ export function deleteSessionState(key: string): void {
 
 // --- Continuation helpers ---
 
-function continuationKey(providerName: string): string {
-  return `continuation:${providerName}`;
+function continuationKey(sessionId: string, providerName: string): string {
+  return `session:${sessionId}:continuation:${providerName}`;
 }
 
 /**
  * Get the stored continuation token for a provider.
  */
-export function getContinuation(providerName: string): string | undefined {
-  return getSessionState(continuationKey(providerName)) ?? undefined;
+export function getContinuation(sessionId: string, providerName: string): string | undefined {
+  return getSessionState(continuationKey(sessionId, providerName)) ?? undefined;
 }
 
 /**
  * Store a continuation token for a provider.
  */
-export function setContinuation(providerName: string, value: string): void {
-  setSessionState(continuationKey(providerName), value);
+export function setContinuation(sessionId: string, providerName: string, value: string): void {
+  setSessionState(continuationKey(sessionId, providerName), value);
 }
 
 /**
  * Clear the stored continuation token for a provider.
  */
-export function clearContinuation(providerName: string): void {
-  deleteSessionState(continuationKey(providerName));
+export function clearContinuation(sessionId: string, providerName: string): void {
+  deleteSessionState(continuationKey(sessionId, providerName));
+}
+
+const MAX_TRANSCRIPT_MESSAGES = 40;
+
+function transcriptKey(sessionId: string): string {
+  return `session:${sessionId}:transcript`;
+}
+
+export function getTranscript(sessionId: string): ChatMessage[] {
+  const value = getSessionState(transcriptKey(sessionId));
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setTranscript(sessionId: string, messages: ChatMessage[]): void {
+  setSessionState(transcriptKey(sessionId), JSON.stringify(messages.slice(-MAX_TRANSCRIPT_MESSAGES)));
+}
+
+export function clearTranscript(sessionId: string): void {
+  deleteSessionState(transcriptKey(sessionId));
 }
 
 // --- In-reply-to helpers ---

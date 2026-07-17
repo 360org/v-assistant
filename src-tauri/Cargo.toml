@@ -1,6 +1,6 @@
 [package]
 name = "v-assistant"
-version = "0.1.0"
+version = "0.1.1"
 description = "V Assistant — AI for everyone"
 authors = ["360org <support@vuaai.net>"]
 homepage = "https://vuaai.net"

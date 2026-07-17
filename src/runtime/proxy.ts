@@ -19,6 +19,7 @@ const PROXY_MAP: Record<string, string> = {
   "https://api.anthropic.com": "/proxy/anthropic",
   "https://api.openai.com": "/proxy/openai",
   "https://generativelanguage.googleapis.com": "/proxy/gemini",
+  "https://cloudcode-pa.googleapis.com": "/proxy/antigravity",
   "https://openrouter.ai": "/proxy/openrouter",
   "https://auth.openai.com": "/proxy/openai-auth",
   "https://claude.ai": "/proxy/claude-auth",

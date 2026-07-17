@@ -86,7 +86,17 @@ function sendMessage(text: string): void {
   log(`📤 Sent message (seq=${nextSeq}): "${text}"`);
 }
 
-async function pollResponse(timeoutMs = 60000): Promise<string | null> {
+function latestOutboundSeq(): number {
+  if (!fs.existsSync(OUTBOUND_PATH)) return 0;
+  const db = new Database(OUTBOUND_PATH, { readonly: true });
+  try {
+    return (db.prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM messages_out').get() as { seq: number }).seq;
+  } finally {
+    db.close();
+  }
+}
+
+async function pollResponse(afterSeq: number, timeoutMs = 60000): Promise<string | null> {
   const start = Date.now();
   log('⏳ Waiting for agent response...');
 
@@ -99,8 +109,8 @@ async function pollResponse(timeoutMs = 60000): Promise<string | null> {
 
       const db = new Database(OUTBOUND_PATH, { readonly: true });
       const rows = db.prepare(`
-        SELECT * FROM messages_out ORDER BY seq DESC LIMIT 1
-      `).all() as Array<{ content: string; seq: number; timestamp: string }>;
+        SELECT * FROM messages_out WHERE seq > ? ORDER BY seq ASC LIMIT 1
+      `).all(afterSeq) as Array<{ content: string; seq: number; timestamp: string }>;
       db.close();
 
       if (rows.length > 0) {
@@ -134,7 +144,9 @@ async function main(): Promise<void> {
   // Step 1: Create inbound schema
   createInboundSchema();
 
-  // Step 2: Send test messages
+  // Step 2: Capture the boundary so an old outbound row cannot produce a
+  // false-positive, then send the test message.
+  const afterSeq = latestOutboundSeq();
   const testMessages = [
     'Xin chào! Hãy cho tôi biết bạn là ai và bạn có thể làm gì?',
   ];
@@ -144,7 +156,7 @@ async function main(): Promise<void> {
   }
 
   // Step 3: Poll for response
-  const response = await pollResponse(120000); // Wait up to 2 minutes
+  const response = await pollResponse(afterSeq, 120000); // Wait up to 2 minutes
 
   log('');
   if (response) {
@@ -153,24 +165,30 @@ async function main(): Promise<void> {
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     log(response);
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    log('✅ Demo PASSED — Agent Runner is working!');
+    if (response.trimStart().startsWith('❌ Error:')) {
+      log('❌ Demo FAILED — IPC worked, but the provider request failed.');
+      process.exitCode = 1;
+    } else {
+      log('✅ Demo PASSED — IPC and provider response are working!');
+    }
   } else {
     log('❌ No response received within timeout.');
     log('');
     log('Possible reasons:');
-    log('  1. No API key set (set VUA_API_KEY env var)');
+    log('  1. AI Router has no verified vendor connection');
     log('  2. Agent Runner not started yet');
-    log('  3. Provider error (check agent-runner logs)');
+    log('  3. AI Router/provider error (check runtime logs)');
     log('');
-    log('Without an API key, this is EXPECTED behavior.');
+    log('Without a verified AI Router connection, this is expected behavior.');
     log('The poll loop is running and waiting for messages.');
     
     // Check if runner created the outbound DB (means it started OK)
     if (fs.existsSync(OUTBOUND_PATH)) {
       log('');
       log('✅ Agent Runner DID start successfully (outbound.db exists).');
-      log('   It just cannot call the LLM without an API key.');
+      log('   It cannot route an LLM call until a vendor connection is verified.');
     }
+    process.exitCode = 1;
   }
 }
 

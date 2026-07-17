@@ -31,23 +31,25 @@ async function main(): Promise<void> {
   setMaxMessagesPerPrompt(config.maxMessagesPerPrompt);
 
   // Initialize external MCP servers
-  mcpManager.init(config.mcpServers || {});
-
-  // Initialize agent memory scaffold
-  const agentDir = path.join(config.dataDir, 'agents', config.agentName);
-  ensureMemoryScaffold(agentDir);
-
-  // Build system prompt
-  const instructions = buildSystemPrompt(config.assistantName, config.agentName, agentDir);
+  await mcpManager.init(config.mcpServers || {});
 
   // Create provider
   const provider = createProvider(providerName, {
-    apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     model: config.model,
     assistantName: config.assistantName,
     mcpServers: config.mcpServers,
   });
+
+  // Providers opt in because some stateless/local backends may not want the
+  // persistent per-agent memory tree injected into their context.
+  const agentDir = path.join(config.dataDir, 'agents', config.agentName);
+  if (provider.usesMemoryScaffold) {
+    ensureMemoryScaffold(agentDir);
+  }
+
+  // Build system prompt after the optional scaffold exists.
+  const instructions = buildSystemPrompt(config.assistantName, config.agentName, agentDir);
 
   log(`Provider created: ${provider.name}`);
   log('Entering poll loop...');
@@ -56,6 +58,7 @@ async function main(): Promise<void> {
   await runPollLoop({
     provider,
     providerName,
+    agentId: config.agentName,
     systemContext: { instructions },
   });
 }
@@ -70,13 +73,13 @@ function buildSystemPrompt(assistantName: string, agentName: string, agentDir: s
   parts.push(`Current role: ${agentName}`);
   parts.push('');
   parts.push('You have access to the following tools to help the user:');
-  parts.push('- bash: Execute shell commands');
   parts.push('- file_read: Read files');
   parts.push('- file_write: Write/create files');
   parts.push('- file_edit: Search and replace in files');
   parts.push('- grep: Search file contents');
   parts.push('- glob: List files by pattern');
-  parts.push('- http_request: Make HTTP requests');
+  parts.push('- http_request: Make unauthenticated HTTP requests');
+  parts.push('- connector_request: Use an opaque connector reference through the trusted gateway');
   parts.push('');
   parts.push('Always use tools when they would help accomplish the task.');
   parts.push('Be concise and helpful.');
