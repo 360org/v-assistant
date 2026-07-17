@@ -1,7 +1,7 @@
 name: Production Release
 
-# Every merge to main is versioned from its conventional commits, tagged, and
-# built as native installers. Docker is intentionally not part of this path.
+# Every main commit with a new manifest version is tagged and built as native
+# installers. Docker is intentionally not part of this path.
 on:
   push:
     branches: [main]
@@ -30,22 +30,22 @@ jobs:
           node-version: 20
 
       - id: release
-        name: Calculate version and create tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: Tag the committed application version
         shell: bash
         run: |
-          npx --yes \
-            -p semantic-release@24 \
-            -p @semantic-release/commit-analyzer@13 \
-            -p @semantic-release/release-notes-generator@14 \
-            semantic-release
-
-          tag="$(git tag --points-at HEAD 'v*' | sort -V | tail -n 1)"
-          if [ -n "$tag" ]; then
-            echo "tag=$tag" >> "$GITHUB_OUTPUT"
-            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists; no production build is required."
+            exit 0
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build:
     needs: version
