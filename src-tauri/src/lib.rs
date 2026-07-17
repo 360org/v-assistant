@@ -59,20 +59,26 @@ fn runtime_start_engine(app: tauri::AppHandle, state: tauri::State<Runtime>) -> 
 fn runtime_restart_runner(
     state: tauri::State<Runtime>,
     agent_name: String,
-    provider: String,
-    api_key: Option<String>,
     base_url: Option<String>,
     model: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<bool, String> {
     state.spawn_engine_with_config(
         &agent_name,
-        &provider,
-        api_key.as_deref(),
         base_url.as_deref(),
         model.as_deref(),
         Some(&app),
     )
+}
+
+/// Execute a credentialed connector call without exposing the gateway
+/// capability or resolved Vault values to Webview/agent code.
+#[tauri::command]
+fn runtime_connector_request(
+    state: tauri::State<Runtime>,
+    payload: String,
+) -> Result<String, String> {
+    state.connector_request(&payload)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -88,7 +94,12 @@ pub fn run() {
                 }
             }
 
-            let runtime = Runtime::new(dir).map_err(std::io::Error::other)?;
+            let project_dir = std::env::var("VUA_PROJECT_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or(app.path().resource_dir()?);
+            vault::migrate_legacy_vault(&dir).map_err(std::io::Error::other)?;
+            let broker = vault::start_broker(dir.clone()).map_err(std::io::Error::other)?;
+            let runtime = Runtime::new(dir, project_dir, broker).map_err(std::io::Error::other)?;
             // Attach a NanoClaw engine when one is installed; otherwise the
             // UI silently falls back to the preview engine.
             let _ = runtime.spawn_engine(Some(app.app_handle()));
@@ -109,8 +120,10 @@ pub fn run() {
             runtime_sync,
             runtime_start_engine,
             runtime_restart_runner,
+            runtime_connector_request,
             auth::oauth_listen,
             auth::open_external,
+            auth::capture_grok_sso_cookie,
             vault::vault_set,
             vault::vault_get,
             vault::vault_delete

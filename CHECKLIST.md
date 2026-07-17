@@ -12,7 +12,7 @@
 > - `[ ]` = Chưa triển khai
 > - `[REF: ...]` = Tham chiếu file/module gốc cần kế thừa
 >
-> *Cập nhật lần cuối: 2026-07-12*
+> *Cập nhật lần cuối: 2026-07-17*
 
 ---
 
@@ -85,7 +85,8 @@
 ### 2.6 Trang Vault
 - [x] CRUD credential (tạo/đọc/sửa/xóa)
 - [x] Field động: chọn kiểu dữ liệu (text/password/number/url/email/date/datetime) + icon
-- [x] Vault hiện dùng OS Keychain → cần chuyển sang V-Assistant Vault nội bộ (mã hóa riêng)
+- [x] V-Assistant Vault nội bộ: SQLite mã hóa AES-256-CBC + HMAC-SHA256;
+  không dùng OS Keychain
 
 ### 2.7 Trang Scheduled
 - [x] Lập lịch tác vụ (cron expression / interval)
@@ -168,14 +169,41 @@
   PKCE authorize/exchange và device-code start/poll từ source copied. UI dùng
   một browser OAuth client chung cho authorization-code providers; cần real
   smoke theo từng subscription trước khi đánh dấu vendor Connected.
+- [x] Codex OAuth callback compatibility: authorize dùng URI đã đăng ký
+  `http://localhost:1455/auth/callback`, relay giữ nguyên origin khởi tạo của
+  V Assistant (`localhost` hoặc `127.0.0.1`) để callback thực sự cập nhật UI.
+- [x] AI Router CORS cho phép đúng hai UI loopback origin `localhost:1420` và
+  `127.0.0.1:1420`; không dùng wildcard vì Router có quyền dùng Vault credential.
+- [x] Docker demo dùng một App Vault duy nhất: UI dev broker và AI Router cùng
+  đọc/ghi `.vua_vault_dev.json`; connection metadata chỉ giữ `credentialRef`.
+- [x] Claude OAuth callback compatibility: authorize/exchange dùng URI cố định
+  `http://localhost:443/callback`; Provider Manager cho dán full callback URL
+  và không coi việc đóng popup là đăng nhập thất bại.
+- [x] Real OAuth smoke Codex và Claude: callback tạo credential trong App Vault,
+  `POST /v1/providers/:id/test` trả Verified; Codex HTTP 200 với
+  `codex/gpt-5.6-sol`, Claude HTTP 200 với model native và models đã xuất hiện.
+- [x] Provider Manager dọn manual callback state ngay khi connection chuyển
+  sang `Verified`; không giữ form callback/loading hoặc nút đăng nhập cũ.
+- [x] Multi-account per vendor theo cơ chế 9router: mỗi login/API key có UUID,
+  `accountLabel/email/priority` và Vault credentialRef riêng; card hiển thị account,
+  models được dedupe theo provider/model, reset độc lập từng account và lỗi
+  401/403/429/5xx thử account tiếp theo cùng vendor trước.
 - [x] Generic connection verification and reset: `POST /v1/providers/:id/test`
   gọi `handleChatCore` + registry model đầu tiên; `DELETE /v1/providers/:id`
   xóa metadata và Settings xóa Vault credential reference. Models chỉ load
   khi `testStatus=Verified`. Smoke Antigravity ngày 2026-07-17: HTTP 200,
   test model `antigravity/gemini-3-flash-agent`, sau đó `/v1/models` trả đúng
   9 model của connection này.
-- [ ] Bridge Vault theo credential reference/short-lived capability từ Tauri;
-  Runner và `runner.json` không được chứa raw access token/API key.
+- [x] Bridge Vault theo opaque `credentialRef` + process capability từ Tauri.
+  Connection metadata và secret đều có nguồn duy nhất trong App Vault;
+  Runner/`runner.json` không chứa raw access token/API key.
+- [x] Agent credential boundary: model chỉ nhận ref + tên biến
+  `{{credential:field}}`; Tauri/AI Router resolve trong memory, bind request
+  vào origin của Vault entry và redaction response trước khi trả về agent.
+  `vault_list` query sanitized manifest trực tiếp từ App Vault, không dùng
+  metadata cache/file ngoài Vault.
+  Test: `scripts/credential-boundary-check.mjs` và
+  `scripts/connector-capability-check.mjs`.
 - [ ] Thay provider state lạc quan bằng health check thật qua AI Router; chỉ
   hiển thị provider/model đã login, còn hiệu lực và probe thành công.
 - [ ] Real vertical smoke: Vault -> AI Router -> Agent Runner -> SQLite
@@ -256,16 +284,18 @@
 - [x] Compact instructions (tối ưu token count)
   `[REF: NanoClaw/container/agent-runner/src/compact-instructions.ts]`
 
-### 5.6 Native Tools (Chạy trên Host OS)
-- [x] `Bash` — `child_process.spawn` thực thi lệnh shell
-- [x] `FileRead` — đọc file hệ thống qua `fs.readFile`
-- [x] `FileWrite` — ghi file qua `fs.writeFile`
+### 5.6 Native Tools (Chạy trong workspace được cấp)
+- [x] Không expose `Bash`/host shell cho model
+- [x] `FileRead` — chỉ đọc trong `VUA_AGENT_WORKSPACE`
+- [x] `FileWrite` — chỉ ghi trong `VUA_AGENT_WORKSPACE`
 - [x] `FileEdit` — tìm & thay thế nội dung file
 - [x] `Grep` — tìm kiếm nội dung (ripgrep-style)
 - [x] `Glob` — liệt kê file theo glob pattern
-- [x] `http_request` — HTTP client với Vault placeholder `{{vault:Name.field}}`
-- [x] `vault_list` — liệt kê credential (chỉ tên, không giá trị)
-- [ ] `connector_call` — gọi Connector/Integration đã đăng ký
+- [x] `http_request` — chỉ cho request không credential; chặn auth header,
+  token literal và Vault placeholder
+- [x] `vault_list` — chỉ trả opaque ref + tên biến, không trả giá trị
+- [x] `connector_request` — gửi opaque ref qua trusted gateway; agent không
+  nhận capability hay secret đã resolve
 
 ### 5.7 MCP Tools (Kế thừa NanoClaw)
 - [x] MCP Server built-in (`nanoclaw` server)
@@ -358,12 +388,48 @@
 
 - [x] CRUD credential cơ bản (hoàn toàn dùng local SQLite `vault.db`)
 - [x] Chuyển sang V-Assistant Vault nội bộ (SQLite mã hóa hoặc encrypted file)
-- [x] Mã hóa AES-256 / XOR cipher cho credential storage
+- [x] Mã hóa AES-256-CBC + HMAC-SHA256; tự migrate format XOR legacy sang v2
 - [ ] Master password hoặc device-bound key để unlock Vault
-- [x] API cho Agent Runner: `vault_set`, `vault_get`, `vault_delete`, `vault_list`
-- [x] Placeholder resolution: `{{vault:Name.field}}` → giá trị thật
-- [x] Agent chỉ thấy tên field, không bao giờ thấy giá trị secret
-- [x] Migration dữ liệu từ OS Keychain sang V-Assistant Vault
+- [x] UI Vault API: `vault_set`, `vault_get`, `vault_delete`; Agent Runner
+  không được gọi các API đọc secret này
+- [x] Opaque variable resolution: `{{credential:field}}` chỉ được resolve
+  trong AI Router trusted gateway, không resolve trong Agent/Webview
+- [x] Agent chỉ thấy `vault-entry:<id>` + tên biến; không thấy password,
+  token, auth code, API key hoặc gateway capability
+- [x] Vault UI hiển thị credential của tài khoản AI Router bằng account identity
+  + opaque `credentialRef`; không render token/API key và không cho sửa secret
+  trực tiếp từ UI
+- [x] AI Router Pack kế thừa nội bộ `handleComboChat`: CRUD ngay tại model
+  picker, lưu trong config riêng ngoài Vault, fallback/round-robin giữa model
+  Verified, Pack ưu tiên trên đầu và model riêng được thu gọn mặc định
+- [x] Vault dùng một kiểu danh sách thống nhất như credential Telegram; AI
+  provider có thao tác Manage và Delete thực, không render token/API key
+- [x] OpenRouter dùng OAuth PKCE để tự cấp user key; model passthrough được tải
+  động và test bằng model free thay vì đòi model LLM tĩnh trong registry
+- [x] Pack editor có nút Expand/Collapse để chọn nhanh catalog model lớn
+- [x] AI vendor credential mở editor ngay trong Vault như Telegram; sửa được
+  account metadata và key/token hiện có, giữ nguyên trạng thái Verified
+- [x] Mỗi model là một account-bound variant; model picker và Pack editor hiển
+  thị vendor + email/account label và Router gọi đúng connection đã chọn
+- [x] Chuẩn hóa Vault schema: editable `label` tách khỏi account identity và
+  mọi credential row hiển thị status badge thống nhất
+- [x] Pack editor có checkbox filter theo từng connected account, kèm Select
+  all/Clear all và số model của mỗi account
+- [x] Account filters được gom vào dropdown menu có bộ đếm selected/total để
+  không chiếm diện tích Pack editor
+- [x] Account filter chỉ hiển thị và có hiệu lực trong Pack Editor expanded;
+  editor thu nhỏ luôn hiện đầy đủ model
+- [x] Không dùng `Account 1` khi vendor có identity: Claude backfill email từ
+  bootstrap; OpenRouter dùng email/name/username/user ID theo dữ liệu API trả về
+- [x] Tách đúng auth Grok: Grok CLI dùng subscription device-code, Grok Web
+  dùng subscription `sso` cookie, xAI Grok giữ phần API/OAuth riêng với
+  callback loopback đã đăng ký
+- [x] Grok Web có nút direct `Open Grok & capture session`: desktop app mở
+  Chrome/Grok, tự bắt riêng cookie `sso`, lưu vào App Vault rồi test connection;
+  web preview vẫn giữ fallback nhập tay do browser sandbox không đọc được
+  cross-origin cookie.
+- [x] External MCP subprocess không inherit/override connector gateway capability
+- [x] Migration format Vault nội bộ legacy (XOR) sang AES/HMAC v2
 - [x] Field động: chọn kiểu dữ liệu (text/password/number/url/email/date/datetime) + icon
 
 ---
@@ -402,8 +468,9 @@
 
 ## 9. Integrations & Connectors
 
-- [x] Connector framework cơ bản (connector_call tool)
-- [x] Connector đọc Vault → tự áp auth header
+- [x] Connector framework qua `connector_request` trusted gateway
+- [x] Connector lấy credential từ App Vault bằng ref, bind origin, tự áp biến
+  auth và redaction response; không trả raw secret cho agent
 - [ ] Connector **GitHub** — thao tác repo, issue, PR
 - [ ] Connector **Notion** — đọc/ghi database, page
 - [ ] Connector **Slack** — gửi tin nhắn, quản lý channel
@@ -473,14 +540,16 @@
 ## 13. Bảo mật & Hiệu năng
 
 - [x] API keys chỉ gửi đến vendor, không gửi nơi khác
-- [x] Agent chỉ thấy tên credential, không thấy giá trị
-- [x] Secret thay tại chỗ bởi executor, không lọt vào model
-- [ ] Vault mã hóa AES-256 nội bộ
+- [x] Agent chỉ thấy opaque ref + tên biến, không thấy giá trị
+- [x] Secret chỉ resolve trong trusted AI Router gateway và response được
+  redaction trước khi quay về agent/model
+- [x] Vault mã hóa AES-256-CBC + HMAC-SHA256 nội bộ
 - [ ] Rate limiting cho tool execution
-- [ ] Resource limits cho Bash tool (timeout, max output size)
-- [ ] File system sandboxing (giới hạn thư mục Agent truy cập)
+- [x] Không expose Bash/host shell cho model
+- [x] File system sandboxing ở `VUA_AGENT_WORKSPACE`
 - [ ] Audit log: ghi lại mọi tool call & API request
-- [ ] Egress lockdown (hạn chế outbound network calls)
+- [~] Egress lockdown: credentialed request đã bind đúng origin trong Vault;
+  request không credential vẫn cần policy allowlist riêng
   `[REF: NanoClaw/src/egress-lockdown.ts]`
 - [ ] Command gate (chặn dangerous commands)
   `[REF: NanoClaw/src/command-gate.ts]`
@@ -515,12 +584,12 @@
 - [ ] Real Tauri host-process smoke remains required; web preview does not enter
       the Tauri runtime path and cannot prove child-process lifecycle/delivery.
 
-- [ ] Replace the XOR vault cipher with AES-256-GCM and a per-device key or
-      user-provided master password; migrate existing `vault.db` entries.
-- [ ] Bind every Vault credential and connector token to an allowlisted origin
-      before resolving placeholders or attaching authorization headers.
-- [ ] Add a command gate, per-agent filesystem allowlist, egress policy, and
-      audit trail before enabling host tools for general users.
+- [x] Replace XOR Vault format with AES-256-CBC + HMAC-SHA256 and local
+      64-byte key; migrate existing `vault.db` entries to v2 on read/startup.
+- [x] Bind every Vault credential request to its saved origin before resolving
+      variables; connector gateway redacts all resolved values from output.
+- [ ] Add tool rate limiting, unauthenticated egress policy, and audit trail
+      before enabling broader host capabilities for general users.
 - [ ] Bundle the Agent Runner in Tauri resources; production must not depend on
       the checkout, `npx`, or a developer-installed Node runtime.
 - [ ] Move Telegram, scheduled jobs, and RAG execution behind the host/Runner
@@ -584,8 +653,11 @@
       (inbound.db → poll loop → mock provider → outbound.db, chạy trong CI)
 - [x] Test Poll Loop — phủ bởi `e2e-check.mjs` (poll → format → query → write)
 - [x] Test SQLite IPC — phủ bởi `e2e-check.mjs` (Two-DB inbound/outbound)
-- [x] Test Native Tools (Bash, FileRead, FileWrite, FileEdit, Grep, Glob) —
+- [x] Test Native Tools (Bash denied; FileRead/Write/Edit/Grep/Glob confined) —
       `agent-runner/scripts/native-tools-check.mjs`
+- [x] Test credential boundary + capability gateway —
+      `scripts/credential-boundary-check.mjs` +
+      `scripts/connector-capability-check.mjs`
 - [x] Test provider transient retries —
       `agent-runner/scripts/anthropic-retry-check.mjs` +
       `agent-runner/scripts/openai-gemini-retry-check.mjs`

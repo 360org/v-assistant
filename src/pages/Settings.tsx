@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, RefreshCw, RotateCcw } from "lucide-react";
 import { vaultDelete, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
 import { getProvider } from "@/lib/catalog";
 import {
+  captureGrokWebSsoCookie,
   deleteAiRouterConnection,
   getAiRouterConnections,
   getAiRouterProviderCatalog,
@@ -36,6 +37,9 @@ export function Settings() {
   const [apiKey, setApiKey] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
+  const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
+  const [manualCallbackUrl, setManualCallbackUrl] = useState("");
+  const [authUrlCopied, setAuthUrlCopied] = useState(false);
   const [connectionActionId, setConnectionActionId] = useState<string | null>(null);
 
   const refreshConnections = useCallback(async () => {
@@ -50,54 +54,103 @@ export function Settings() {
     }
   }, []);
 
+  const refreshProviderCatalog = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setProviderCatalog(await getAiRouterProviderCatalog(signal));
+      setCatalogError(null);
+    } catch (error) {
+      if (!signal?.aborted) setCatalogError(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
   useEffect(() => { void refreshConnections(); }, [refreshConnections]);
 
   useEffect(() => {
     if (!showProviderManager || providerCatalog.length) return;
     const controller = new AbortController();
-    void getAiRouterProviderCatalog(controller.signal)
-      .then((providers) => {
-        setProviderCatalog(providers);
-        setCatalogError(null);
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : String(error));
-      });
+    void refreshProviderCatalog(controller.signal);
     return () => controller.abort();
-  }, [showProviderManager, providerCatalog.length]);
+  }, [showProviderManager, providerCatalog.length, refreshProviderCatalog]);
+
+  const refreshAiRouter = async () => {
+    setConnectMessage(null);
+    await Promise.all([
+      refreshConnections(),
+      showProviderManager ? refreshProviderCatalog() : Promise.resolve(),
+    ]);
+  };
 
   const filteredProviders = providerCatalog.filter((item) =>
     `${item.name} ${item.id}`.toLowerCase().includes(providerQuery.trim().toLowerCase()),
   );
 
   const subscriptionProvider = selectedProvider?.oauthProvider;
+  const selectedProviderConnections = selectedProvider
+    ? connections.filter((connection) => connection.provider === selectedProvider.id && connection.isActive !== false)
+    : [];
+
+  const createConnectionId = (provider: string) => {
+    const accountId = globalThis.crypto?.randomUUID?.()
+      || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    return `${provider}:${accountId}`;
+  };
+
+  const accountIdentity = (result: Awaited<ReturnType<typeof signInWithAiRouterCore>>) => {
+    const providerData = result.providerSpecificData || {};
+    const accountId = typeof providerData.chatgptAccountId === "string"
+      ? providerData.chatgptAccountId
+      : typeof providerData.userId === "string" ? providerData.userId : undefined;
+    return {
+      email: result.email,
+      accountLabel: result.email || accountId,
+    };
+  };
 
   const connectSubscription = async () => {
     if (!selectedProvider || !subscriptionProvider) return;
     setConnecting(true);
     setConnectMessage(null);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
     try {
-      const result = await signInWithAiRouterCore(subscriptionProvider);
+      const result = await signInWithAiRouterCore(
+        subscriptionProvider,
+        setManualAuthUrl,
+      );
       const accessToken = result.accessToken || result.apiKey;
       if (!accessToken && !result.apiKey) throw new Error("AI Router OAuth returned no usable credential.");
-      const id = `${selectedProvider.id}:default`;
+      const latestConnections = await getAiRouterConnections();
+      const providerConnections = latestConnections.filter((connection) => connection.provider === selectedProvider.id);
+      const identity = accountIdentity(result);
+      const id = createConnectionId(selectedProvider.id);
       await vaultSet(`ai-router:credential:${id}`, JSON.stringify({
         accessToken,
         apiKey: result.apiKey,
         refreshToken: result.refreshToken,
+        idToken: result.idToken,
+        email: result.email,
         projectId: result.projectId,
         expiresAt: typeof result.expiresIn === "number" ? Date.now() + result.expiresIn * 1000 : undefined,
+        lastRefreshAt: result.lastRefreshAt,
+        scope: result.scope,
         providerSpecificData: result.providerSpecificData,
       }));
       await saveAiRouterConnection({
         id,
         provider: selectedProvider.id,
         name: selectedProvider.name,
+        label: selectedProvider.name,
+        email: identity.email,
+        accountLabel: identity.accountLabel,
+        priority: providerConnections.length + 1,
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
       });
       await testAiRouterConnection(id);
-      setConnectMessage("Subscription authenticated and verified. AI Router loaded this vendor's models.");
+      setManualAuthUrl(null);
+      setManualCallbackUrl("");
+      setAuthUrlCopied(false);
+      setConnectMessage(null);
       await refreshConnections();
     } catch (error) {
       setConnectMessage(error instanceof Error ? error.message : String(error));
@@ -106,23 +159,109 @@ export function Settings() {
     }
   };
 
+  const copyManualAuthUrl = () => {
+    if (!manualAuthUrl) return;
+    void navigator.clipboard.writeText(manualAuthUrl);
+    setAuthUrlCopied(true);
+    window.setTimeout(() => setAuthUrlCopied(false), 2000);
+  };
+
+  const submitManualCallback = () => {
+    try {
+      const callback = new URL(manualCallbackUrl.trim());
+      const error = callback.searchParams.get("error");
+      if (error) {
+        setConnectMessage(callback.searchParams.get("error_description") || error);
+        return;
+      }
+      const code = callback.searchParams.get("code") || callback.searchParams.get("token");
+      if (!code) throw new Error("Callback URL does not contain an authorization code.");
+      const channel = new BroadcastChannel("v_assistant_oauth");
+      setConnectMessage("Completing subscription sign-in...");
+      channel.postMessage({
+        code,
+        state: callback.searchParams.get("state"),
+        fullUrl: callback.toString(),
+      });
+      channel.close();
+    } catch (error) {
+      setConnectMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const connectApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
     setConnecting(true);
     setConnectMessage(null);
     try {
-      const id = `${selectedProvider.id}:default`;
+      const latestConnections = await getAiRouterConnections();
+      const providerConnections = latestConnections.filter((connection) => connection.provider === selectedProvider.id);
+      const id = createConnectionId(selectedProvider.id);
       await vaultSet(`ai-router:credential:${id}`, JSON.stringify({ apiKey: apiKey.trim() }));
       await saveAiRouterConnection({
         id,
         provider: selectedProvider.id,
         name: selectedProvider.name,
+        label: selectedProvider.name,
+        accountLabel: `API key ${providerConnections.length + 1}`,
+        priority: providerConnections.length + 1,
         authType: "api-key",
         credentialRef: `ai-router:credential:${id}`,
       });
       await testAiRouterConnection(id);
       setApiKey("");
       setConnectMessage("API key stored in Vault and verified. AI Router loaded this vendor's models.");
+      await refreshConnections();
+    } catch (error) {
+      setConnectMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const saveSubscriptionCookie = async (cookieValue: string) => {
+    if (!selectedProvider) return;
+    const latestConnections = await getAiRouterConnections();
+    const providerConnections = latestConnections.filter((connection) => connection.provider === selectedProvider.id);
+    const id = createConnectionId(selectedProvider.id);
+    await vaultSet(`ai-router:credential:${id}`, JSON.stringify({ apiKey: cookieValue.trim() }));
+    await saveAiRouterConnection({
+      id,
+      provider: selectedProvider.id,
+      name: selectedProvider.name,
+      label: selectedProvider.name,
+      priority: providerConnections.length + 1,
+      authType: "subscription",
+      credentialRef: `ai-router:credential:${id}`,
+    });
+    await testAiRouterConnection(id);
+  };
+
+  const connectSubscriptionCookie = async () => {
+    if (!selectedProvider || !apiKey.trim()) return;
+    setConnecting(true);
+    setConnectMessage(null);
+    try {
+      await saveSubscriptionCookie(apiKey);
+      setApiKey("");
+      setConnectMessage("Subscription session stored in Vault and verified.");
+      await refreshConnections();
+    } catch (error) {
+      setConnectMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const captureSubscriptionCookie = async () => {
+    if (!selectedProvider) return;
+    setConnecting(true);
+    setConnectMessage("Opening Grok. Sign in there if needed; V Assistant will capture the sso session.");
+    try {
+      const cookie = await captureGrokWebSsoCookie();
+      await saveSubscriptionCookie(cookie);
+      setApiKey("");
+      setConnectMessage("Grok Web session captured, stored in Vault and verified.");
       await refreshConnections();
     } catch (error) {
       setConnectMessage(error instanceof Error ? error.message : String(error));
@@ -180,8 +319,8 @@ export function Settings() {
               <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-600">
                 <Lock className="size-3" />
                 {vaultIsSecure()
-                  ? "Keys stored in your OS keychain (Vault)"
-                  : "Keys stored locally in this browser"}
+                  ? "Connections stored in the encrypted App Vault"
+                  : "Development preview storage"}
               </div>
             </div>
             <Badge tone="green">Local user</Badge>
@@ -211,7 +350,7 @@ export function Settings() {
             </p>
           </div>
           <button
-            onClick={() => void refreshConnections()}
+            onClick={() => void refreshAiRouter()}
             title="Refresh AI Router connections"
             className="cursor-pointer rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
           >
@@ -220,7 +359,7 @@ export function Settings() {
         </div>
         {connectionError ? (
           <Card className="mt-3 text-sm text-amber-200">
-            AI Router is not running yet. Start the local sidecar before connecting a vendor.
+            AI Router unavailable: {connectionError}
           </Card>
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -229,7 +368,8 @@ export function Settings() {
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{connection.name || connection.provider}</div>
                   <div className="mt-0.5 text-xs text-neutral-500">
-                    {connection.provider}{connection.defaultModel ? ` · ${connection.defaultModel}` : ""}
+                    {connection.email || connection.accountLabel || connection.id}
+                    {connection.defaultModel ? ` · ${connection.defaultModel}` : ""}
                   </div>
                   {connection.lastError && <div className="mt-1 text-xs text-red-300">{connection.lastError}</div>}
                 </div>
@@ -285,7 +425,12 @@ export function Settings() {
                 className="w-full border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-gold-400/60"
               />
               {catalogError ? (
-                <p className="mt-3 text-sm text-red-300">{catalogError}</p>
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm text-red-300">
+                  <span>{catalogError}</span>
+                  <Button size="sm" variant="secondary" onClick={() => void refreshProviderCatalog()}>
+                    <RefreshCw className="size-4" /> Retry
+                  </Button>
+                </div>
               ) : (
                 <div className="mt-3 grid max-h-[28rem] grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
                   {filteredProviders.map((item) => (
@@ -295,6 +440,8 @@ export function Settings() {
                         setSelectedProvider(item);
                         setApiKey("");
                         setConnectMessage(null);
+                        setManualAuthUrl(null);
+                        setManualCallbackUrl("");
                       }}
                       className={cn(
                         "flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-800",
@@ -303,7 +450,9 @@ export function Settings() {
                     >
                       <span className="min-w-0 truncate">{item.name}</span>
                       <span className="shrink-0 text-[10px] text-neutral-500">
-                        {item.oauth ? "Subscription" : item.apiKey ? "API key" : "Provider"}
+                        {item.oauth && item.apiKey
+                          ? "Subscription / API key"
+                          : item.oauth || item.cookie ? "Subscription" : item.apiKey ? "API key" : "Provider"}
                       </span>
                     </button>
                   ))}
@@ -316,10 +465,68 @@ export function Settings() {
                   {subscriptionProvider && (
                     <Button className="mt-3" size="sm" onClick={() => void connectSubscription()} disabled={connecting}>
                       {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-                      Sign in with subscription
+                      {selectedProviderConnections.length ? "Add another account" : "Sign in with subscription"}
                     </Button>
                   )}
-                  {selectedProvider.apiKey && (
+                  {selectedProviderConnections.length > 0 && (
+                    <div className="mt-2 text-xs text-emerald-300">
+                      {selectedProviderConnections.length} account{selectedProviderConnections.length === 1 ? "" : "s"} connected
+                    </div>
+                  )}
+                  {selectedProvider.cookie && (
+                    <div className="mt-3">
+                      <div className="text-xs font-medium text-neutral-300">Connect Grok Web subscription</div>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {selectedProvider.authHint || "Paste the subscription session cookie from the vendor website."}
+                      </p>
+                      <Button className="mt-2" size="sm" onClick={() => void captureSubscriptionCookie()} disabled={connecting}>
+                        {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
+                        Open Grok & capture session
+                      </Button>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          value={apiKey}
+                          onChange={(event) => setApiKey(event.target.value)}
+                          type="password"
+                          placeholder="sso cookie"
+                          className="min-w-0 flex-1 border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-gold-400/60"
+                        />
+                        <Button size="sm" onClick={() => void connectSubscriptionCookie()} disabled={connecting || !apiKey.trim()}>
+                          <LogIn className="size-4" /> Connect subscription
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {manualAuthUrl && (
+                    <div className="mt-3 border border-neutral-800 bg-neutral-900 p-3">
+                      <div className="text-xs font-medium text-neutral-300">Complete subscription sign-in</div>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Follow the vendor sign-in page. If it redirects to a local callback URL, paste the full URL below.
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          readOnly
+                          value={manualAuthUrl}
+                          className="min-w-0 flex-1 border border-neutral-700 bg-neutral-950 px-2 py-2 font-mono text-xs text-neutral-400"
+                        />
+                        <Button className="w-8 px-0" size="sm" variant="secondary" onClick={copyManualAuthUrl} title="Copy sign-in URL">
+                          {authUrlCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                        </Button>
+                      </div>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          value={manualCallbackUrl}
+                          onChange={(event) => setManualCallbackUrl(event.target.value)}
+                          placeholder="http://localhost:443/callback?code=..."
+                          className="min-w-0 flex-1 border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-gold-400/60"
+                        />
+                        <Button size="sm" variant="secondary" onClick={submitManualCallback} disabled={!manualCallbackUrl.trim()}>
+                          Complete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {selectedProvider.apiKey && !selectedProvider.cookie && (
                     <details className="mt-3 border-t border-neutral-800 pt-3">
                       <summary className="cursor-pointer text-xs text-neutral-400">Advanced: connect with API key</summary>
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
