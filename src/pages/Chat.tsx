@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Eraser, SendHorizonal, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
-import { PROVIDERS, getProvider, type ProviderId } from "@/lib/catalog";
-import { MODELS, defaultModelFor } from "@/runtime/providers";
+import {
+  type ProviderConfig,
+} from "@/runtime/providers";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
 import { reflectAndLearn } from "@/runtime/selfImprove";
+import { AI_ROUTER_BASE_URL, getAiRouterModels, type AiRouterModel } from "@/runtime/aiRouter";
 import { Logo } from "@/components/Logo";
+import { ChatSessionMenu } from "@/components/ChatSessionMenu";
 import { cn } from "@/lib/utils";
 
 const engine = createEngine();
@@ -15,15 +18,17 @@ export function Chat() {
     messages,
     setMessages,
     clearChat,
-    provider,
-    setProvider,
+    chatSessions,
+    activeSessionId,
+    createChatSession,
+    switchChatSession,
+    renameChatSession,
+    deleteChatSession,
     installedAgents,
     activeAgentId,
     setActiveAgent,
     chatDraft,
     consumeChatDraft,
-    providerConfigs,
-    setProviderConfig,
     activeSkill,
     clearActiveSkill,
     agentConfigs,
@@ -31,22 +36,20 @@ export function Chat() {
     selfImprove,
     addAgentMemory,
     agents,
-    user,
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
-
-  // The model actually used for the next message: the user's override, or the
-  // provider's current default (subscription sign-ins pin nothing).
-  const activeConfig = provider ? providerConfigs[provider] : undefined;
-  const activeModel = provider
-    ? activeConfig?.model || defaultModelFor(provider, activeConfig)
-    : "";
-  const modelChoices = provider ? MODELS[provider] : [];
-  const modelLabel =
-    modelChoices.find((m) => m.id === activeModel)?.name || activeModel;
+  const [routerModels, setRouterModels] = useState<AiRouterModel[]>([]);
+  const [modelLoadError, setModelLoadError] = useState<string | null>(null);
+  const [activeModel, setActiveModel] = useState(() => localStorage.getItem("vua:ai-router-model") ?? "");
+  const modelLabel = routerModels.find((m) => m.id === activeModel)?.name || activeModel;
+  const routerConfig: ProviderConfig = {
+    baseUrl: AI_ROUTER_BASE_URL,
+    model: activeModel,
+    router: true,
+    connectionStatus: "connected",
+  };
   const bottomRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -58,6 +61,41 @@ export function Chat() {
     () => agents.filter((a) => installedAgents.includes(a.id)),
     [agents, installedAgents],
   );
+  const refreshRouterModels = useCallback(() => {
+    const controller = new AbortController();
+    void getAiRouterModels(controller.signal)
+      .then((models) => {
+        setRouterModels(models);
+        setModelLoadError(null);
+        setActiveModel((current) => current && models.some((model) => model.id === current)
+          ? current
+          : models[0]?.id ?? "");
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setModelLoadError(error instanceof Error ? error.message : String(error));
+      });
+    return controller;
+  }, []);
+
+  useEffect(() => {
+    let activeController = refreshRouterModels();
+    const refresh = () => {
+      activeController.abort();
+      activeController = refreshRouterModels();
+    };
+    const interval = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      activeController.abort();
+    };
+  }, [refreshRouterModels]);
+
+  useEffect(() => {
+    if (activeModel) localStorage.setItem("vua:ai-router-model", activeModel);
+  }, [activeModel]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -77,7 +115,7 @@ export function Chat() {
 
   const send = async () => {
     const content = input.trim();
-    if (!content || streaming || !provider) return;
+    if (!content || streaming || !activeModel) return;
     setInput("");
 
     const userMessage: ChatMessage = {
@@ -97,9 +135,10 @@ export function Chat() {
     let replyText = "";
     try {
       for await (const chunk of engine.chat(history, {
-        provider,
-        config: providerConfigs[provider],
-        providerConfigs,
+        // `openrouter` is only the legacy OpenAI-compatible message shape.
+        // Router config prevents the runtime from calling OpenRouter directly.
+        provider: "openrouter",
+        config: routerConfig,
         agentName: activeAgent?.name,
         agentDescription: activeAgent?.description,
         agentInstructions: activeAgent
@@ -116,9 +155,9 @@ export function Chat() {
           .filter((f) => f.status === "ready")
           .map((f) => f.name),
         agentId: activeAgent?.id,
+        sessionId: activeSessionId ?? undefined,
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,
-        hasSubscription: Boolean(user && providerConfigs["openrouter"]?.apiKey),
       })) {
         replyText += chunk;
         setMessages((prev) =>
@@ -129,11 +168,11 @@ export function Chat() {
       }
       // Self-improve: the active role reflects on the exchange and saves any
       // durable facts to its OWN memory (isolated per role). Fire-and-forget.
-      if (selfImprove && activeAgent && provider && replyText.trim()) {
+      if (selfImprove && activeAgent && replyText.trim()) {
         void reflectAndLearn(
           { user: content, assistant: replyText },
-          provider,
-          providerConfigs[provider],
+          "openrouter",
+          routerConfig,
           agentConfigs[activeAgent.id]?.memory ?? [],
         ).then((notes) => addAgentMemory(activeAgent.id, notes));
       }
@@ -153,12 +192,21 @@ export function Chat() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header: agent context + one-click provider switch */}
+      {/* Header: agent context + model catalog supplied by AI Router. */}
       <header className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-semibold">
             {activeAgent ? `${activeAgent.emoji} ${activeAgent.name}` : "Chat"}
           </span>
+          <ChatSessionMenu
+            sessions={chatSessions}
+            activeSessionId={activeSessionId}
+            disabled={streaming}
+            onCreate={createChatSession}
+            onSwitch={switchChatSession}
+            onRename={renameChatSession}
+            onDelete={deleteChatSession}
+          />
           {installedAgentList.length > 0 && (
             <select
               className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none"
@@ -189,13 +237,11 @@ export function Chat() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {/* Model picker — which model of the active provider answers next. */}
-          {modelChoices.length > 0 && (
+          {routerModels.length > 0 && (
             <div className="relative">
               <button
                 onClick={() => {
                   setModelPickerOpen((o) => !o);
-                  setPickerOpen(false);
                 }}
                 className="flex max-w-[10rem] cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-400 hover:bg-neutral-800"
                 title={activeModel}
@@ -205,15 +251,11 @@ export function Chat() {
               </button>
               {modelPickerOpen && (
                 <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
-                  {modelChoices.map((m) => (
+                  {routerModels.map((m) => (
                     <button
                       key={m.id}
                       onClick={() => {
-                        if (!provider) return;
-                        setProviderConfig(provider, {
-                          ...providerConfigs[provider],
-                          model: m.id,
-                        });
+                        setActiveModel(m.id);
                         setModelPickerOpen(false);
                       }}
                       className={cn(
@@ -223,7 +265,7 @@ export function Chat() {
                     >
                       {m.name}
                       <span className="block font-mono text-[10px] text-neutral-500">
-                        {m.id}
+                        {m.provider ? `${m.provider} · ${m.id}` : m.id}
                       </span>
                     </button>
                   ))}
@@ -231,42 +273,11 @@ export function Chat() {
               )}
             </div>
           )}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setPickerOpen((o) => !o);
-                setModelPickerOpen(false);
-              }}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
-            >
-              {provider ? getProvider(provider).name : "Provider"}
-              <ChevronDown className="size-3.5" />
-            </button>
-            {pickerOpen && (
-              <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
-                {PROVIDERS.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setProvider(p.id as ProviderId);
-                      setPickerOpen(false);
-                    }}
-                    className={cn(
-                      "block w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs hover:bg-neutral-800",
-                      provider === p.id
-                        ? "text-gold-300"
-                        : "text-neutral-300",
-                    )}
-                  >
-                    {p.name}
-                    <span className="block text-[10px] text-neutral-500">
-                      {p.tagline}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {modelLoadError && (
+            <span className="max-w-[14rem] truncate px-2 text-xs text-amber-300" title={modelLoadError}>
+              AI Router unavailable
+            </span>
+          )}
           <button
             onClick={clearChat}
             title="Clear conversation"
@@ -343,7 +354,7 @@ export function Chat() {
           />
           <button
             onClick={() => void send()}
-            disabled={!input.trim() || streaming}
+            disabled={!input.trim() || streaming || !activeModel}
             className="cursor-pointer rounded-xl bg-gold-400 p-2 text-neutral-950 transition-colors hover:bg-gold-300 disabled:pointer-events-none disabled:opacity-40"
           >
             <SendHorizonal className="size-4" />

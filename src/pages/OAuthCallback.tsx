@@ -47,9 +47,11 @@ export function OAuthCallbackPage() {
   const hasResult = code || token || error;
 
   if (hasResult) {
-    // Auto-close popup after a moment
+    // Auto-close the popup. When a provider returned in the main tab, return
+    // to the app instead so completeOAuthReturn can exchange the saved code.
     setTimeout(() => {
-      window.close();
+      if (window.opener) window.close();
+      else window.location.replace("/");
     }, 1200);
   }
 

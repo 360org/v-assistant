@@ -22,6 +22,7 @@ scripts/.agentimport-*.mjs
 # Dev-mode state/vault sync files — hold real API keys, never commit
 .vua_state_dev.json
 .vua_vault_dev.json
+.vua_ai_router_connections.json
 
 # Editor / OS
 .DS_Store

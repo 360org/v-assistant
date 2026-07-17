@@ -45,6 +45,8 @@
 ### 2.2 Trang Chat
 - [x] Giao diện chat streaming real-time
 - [x] Hiển thị typing indicator
+- [x] Quản lý chat sessions: tạo, chuyển, đổi tên, xóa và persist qua reload
+- [x] Mỗi UI session truyền `sessionId` riêng xuống Agent Runner để cô lập history
 - [x] Chuyển đổi provider trong 1 click
 - [x] Chọn Agent/Role khi chat
 - [x] Chọn Skill khi chat
@@ -132,9 +134,58 @@
 - [x] LocalAI / Ollama (endpoint localhost tuỳ chỉnh)
 - [x] Model override cho từng provider
 
-### 4.2 Tích hợp 9router (AI Router Proxy)
-- [ ] Kết nối đến 9router local (`http://localhost:20128/v1`) như một provider
-  `[REF: 9router/src/proxy.js + src/lib/network/ — routing logic]`
+### 4.2 AI Router (kế thừa 9router Provider Core)
+- [x] Copy snapshot 9router Provider Core v0.5.30 vào
+  `ai-router/core/open-sse` (commit nguồn `9845a17`). Bao gồm
+  registry/executor/translator/OAuth/refresh/model catalog cho tất cả vendor;
+  không phụ thuộc Git submodule, dashboard hay process 9router.
+- [x] Đổi ranh giới Runner sang provider nội bộ `ai-router`; giữ `9router` chỉ
+  là alias tương thích config cũ. Contract proxy: `http://127.0.0.1:20128/v1`.
+- [x] Chat không còn dropdown vendor. Model selector đọc `/v1/models` của AI
+  Router; request được đánh dấu router-only để không lén gọi vendor trực tiếp.
+- [~] Settings bỏ trạng thái "active provider" cũ và chỉ hiển thị connection
+  thực qua `/v1/providers`. Provider Manager dùng catalog nguồn và có hành
+  động Subscription/API key; tất cả connection có Test/Reset; không hiển thị
+  model trước khi Core probe inference thành công.
+- [x] Live catalog guard: với `connections=[]`, AI Router `/v1/models` trả
+  `0` model thay vì static catalog upstream. Đã probe loopback ngày 2026-07-15.
+- [x] Build AI Router native host chỉ expose local API `/v1` và health/models;
+  không mang dashboard, user management, billing, i18n hay MITM của 9router.
+- [ ] Chạy nguyên Provider Core đã copy qua compatibility adapter: thay các
+  dependency 9router (`@/lib/usageDb`, account store, auth/session, config)
+  bằng implementation nội bộ AI Router, không viết lại registry/executor/
+  translator của từng vendor.
+- [x] Native connection metadata store không chứa secret; credential được ghi
+  vào Vault với `ai-router:credential:<connection-id>`. `/v1/models` chỉ trả
+  models từ connection metadata, đã smoke-test Antigravity: 0 -> 9 models.
+- [x] Antigravity vertical smoke qua native Router: Vault credential reference
+  -> `/v1/chat/completions` -> inherited `handleChatCore`/`AntigravityExecutor`
+  -> OpenAI SSE. Ngày 2026-07-15 nhận HTTP 200 và content tiếng Việt thực.
+- [x] Router connection state chỉ lưu `credentialRef`; AI Router tự resolve
+  ref từ Vault dev broker. Smoke 2026-07-15 gửi request không có credential
+  header vẫn nhận HTTP 200/SSE `Vault bridge passed` từ Antigravity.
+- [~] Port OAuth/subscription Core: native host đã expose provider catalog,
+  PKCE authorize/exchange và device-code start/poll từ source copied. UI dùng
+  một browser OAuth client chung cho authorization-code providers; cần real
+  smoke theo từng subscription trước khi đánh dấu vendor Connected.
+- [x] Generic connection verification and reset: `POST /v1/providers/:id/test`
+  gọi `handleChatCore` + registry model đầu tiên; `DELETE /v1/providers/:id`
+  xóa metadata và Settings xóa Vault credential reference. Models chỉ load
+  khi `testStatus=Verified`. Smoke Antigravity ngày 2026-07-17: HTTP 200,
+  test model `antigravity/gemini-3-flash-agent`, sau đó `/v1/models` trả đúng
+  9 model của connection này.
+- [ ] Bridge Vault theo credential reference/short-lived capability từ Tauri;
+  Runner và `runner.json` không được chứa raw access token/API key.
+- [ ] Thay provider state lạc quan bằng health check thật qua AI Router; chỉ
+  hiển thị provider/model đã login, còn hiệu lực và probe thành công.
+- [ ] Real vertical smoke: Vault -> AI Router -> Agent Runner -> SQLite
+  inbound/outbound -> UI, bắt đầu với OpenRouter. Chỉ tick sau khi nhận được
+  một response thực và một tool call thực.
+- [ ] Real catalog smoke: connect two different vendor accounts in AI Router,
+  verify Settings lists both connections and Chat lists only their available
+  models; disconnect one and verify its models disappear.
+- [ ] Bật lần lượt Antigravity Gemini, Codex ChatGPT, Claude và các vendor
+  upstream khác bằng cùng bridge, với smoke test mỗi vendor.
 - [ ] RTK Token Saver — auto-compress tool_result, tiết kiệm 20-40% token
   `[REF: 9router/src/sse/ — server-sent events + token compression]`
 - [ ] Multi-account round-robin giữa nhiều API key/provider
@@ -176,7 +227,9 @@
 - [x] Adapter Google Gemini (streamGenerateContent)
 - [x] Streaming support cho tất cả adapters (AsyncIterable<ProviderEvent>)
 - [x] Tool call / function calling chuẩn hoá chung
-- [x] Continuation/session management (resume giữa các lần poll)
+- [x] Continuation/session management: state được cô lập theo
+      agent/channel/platform/thread, provider stateless persist transcript,
+      resume qua runner restart và `/clear` chỉ xóa session hiện tại
   `[REF: NanoClaw poll-loop.ts L89-L112 — continuation management + rotation]`
 
 ### 5.4 Poll Loop (Vòng lặp chính)
@@ -241,7 +294,10 @@
 - [x] `session_state` table (key-value: continuation, settings)
   `[REF: NanoClaw/container/agent-runner/src/db/session-state.ts]`
 - [x] `session_routing` table (current channel/platform/thread binding)
-  `[REF: NanoClaw/container/agent-runner/src/db/session-routing.ts]`
+  `[REF: agent-runner/src/db/session-routing.ts — stable scoped session identity]`
+- [x] Poll batch không trộn message giữa hai channel/platform/thread
+- [x] E2E session tests: isolation, restart resume, scoped clear
+  `agent-runner/scripts/session-management-check.mjs`
 - [x] Seq numbering: odd for container, even for host (tránh collision)
   `[REF: NanoClaw messages-out.ts L42-L54 — disjoint namespace]`
 - [x] Journal mode DELETE (không dùng WAL vì cross-mount visibility)
@@ -317,6 +373,9 @@
 ### 8.1 Kênh mặc định
 - [x] CLI Channel — kênh dòng lệnh cục bộ
 - [x] Telegram Bot — long-polling 2 chiều trong app
+- [x] Telegram chat được materialize thành UI session theo `telegram:<chatId>`,
+      persist transcript và hiển thị badge channel trong Chat → Sessions
+- [x] Single-instance Web Lock ngăn nhiều tab cùng poll và trả lời trùng Telegram
 
 ### 8.2 Channel Architecture (Kế thừa NanoClaw)
 - [ ] Channel adapter interface chuẩn hóa
@@ -436,6 +495,26 @@
 
 ### Audit remediation (2026-07-14)
 
+### Provider live verification (2026-07-15)
+
+- [x] OpenRouter: real `/chat/completions` smoke request returned HTTP 200
+      after capping completion output at 4096 tokens.
+- [x] Gemini Antigravity: real `loadCodeAssist` and streaming request returned
+      HTTP 200 using the account's assigned project and `gemini-3.1-pro-low`.
+- [ ] ChatGPT/Codex: current Vault credential is an OpenRouter key and the
+      real Codex endpoint returned HTTP 401. Implement Codex OAuth and rerun
+      a real chat smoke test before calling it connected.
+- [ ] Claude: current OAuth credential returned HTTP 401 from Anthropic.
+      Reconnect with a valid subscription token and rerun a real chat smoke
+      test before calling it connected.
+
+### Agent Runner verification (2026-07-15)
+
+- [x] Automated `inbound.db -> poll loop -> provider/tool loop -> outbound.db`
+      tests pass locally, including session isolation and restart persistence.
+- [ ] Real Tauri host-process smoke remains required; web preview does not enter
+      the Tauri runtime path and cannot prove child-process lifecycle/delivery.
+
 - [ ] Replace the XOR vault cipher with AES-256-GCM and a per-device key or
       user-provided master password; migrate existing `vault.db` entries.
 - [ ] Bind every Vault credential and connector token to an allowlisted origin
@@ -452,9 +531,35 @@
 - [x] On exhausted 429/529 retries, fail over this request to another configured
       vendor; OpenRouter is always the final fallback. Keep the user's selected
       provider unchanged and never switch after text has started streaming.
-- [x] Request Gemini's Generative Language OAuth scope and show a reconnect
-      action when a previously issued token returns insufficient scopes (403).
+- [x] Route Gemini subscription login through the Antigravity OAuth profile:
+      request its Code Assist scopes, resolve the assigned project with
+      `loadCodeAssist`, and stream through the Antigravity endpoint. API keys
+      remain an Advanced option only.
       Request-ID diagnostics remain a follow-up.
+- [x] Resolve provider credentials from Vault immediately before a chat request
+      as well as during startup hydration, so a message sent just after launch
+      cannot silently fall back to the preview engine. Preserve the selected
+      Antigravity model across restarts.
+- [x] Normalize Antigravity chat history into non-empty alternating Gemini
+      content turns, use a stable Cloud Code session and IDE-shaped request ID,
+      and treat temporary `503 no capacity` as eligible for retry/failover.
+- [x] Surface OpenRouter privacy guardrail blocks as an actionable fallback
+      error with the exact account settings page, rather than a generic 404.
+- [x] Continue a rate-limit/capacity fallback chain when an intermediate
+      vendor has expired credentials or rejects the request before streaming;
+      return only after every configured vendor has been attempted.
+- [x] Keep Gemini OAuth refresh tokens in Vault only and refresh its access
+      token before expiry or once after a 401; legacy sessions without a
+      refresh token explicitly require one reconnect.
+- [x] Show only directly connected, currently valid providers in the Chat
+      picker; remove expired credentials after 401/403 and do not label an
+      OpenRouter-routed credential as a direct vendor connection.
+- [x] Keep an already validated legacy OpenRouter connection available after
+      the provider-status migration; only Claude exposes the manual callback
+      UI, while OpenRouter completes PKCE through the app callback itself.
+- [x] Remove the dev-host/Vault hydration race so provider metadata arriving
+      after first render still rehydrates its stored credential before Settings
+      decides whether the provider is connected.
 
 ---
 

@@ -48,11 +48,17 @@ const safeStore = {
 export interface LoginResult {
   provider: ProviderId;
   apiKey: string;
+  projectId?: string;
+  refreshToken?: string;
+  expiresAt?: number;
 }
 
 export interface OAuthReturn {
   provider: ProviderId;
   apiKey: string;
+  projectId?: string;
+  refreshToken?: string;
+  expiresAt?: number;
   context: "onboarding" | "settings";
 }
 
@@ -84,9 +90,9 @@ function randomBase64url(bytes = PKCE_BYTES): string {
 
 // ─── OAuth configs (static) ───────────────────────────────────────────────────
 
-// Subscription sign-in với client OAuth của CLI chính chủ (Claude Code /
-// Gemini CLI) — quyết định sản phẩm của PO ngày 2026-07-14: user đăng nhập
-// bằng subscription sẵn có, không dán API key (idea.md §A, SPEC §1).
+// Subscription sign-in with the vendor's OAuth client (Claude Code and
+// Antigravity). Gemini uses Antigravity's Code Assist endpoint, not the
+// Gemini Developer API used by raw API keys.
 // ponytail: client không phải do vendor cấp cho V-Assistant — vendor có thể
 // thu hồi/chặn bất kỳ lúc nào; hướng nâng cấp là chuyển OAuth về 9router
 // server-side (CHECKLIST §4.2).
@@ -109,23 +115,41 @@ export const OAUTH_CONFIGS = {
   },
   gemini: {
     clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
-    // Gemini CLI's public installed-app credential (published in Google's own
-    // gemini-cli repo) — not a confidential secret by design.
     clientSecret: "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",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
     scopes: [
       "https://www.googleapis.com/auth/cloud-platform",
-      // Required by Gemini Developer API when authenticating with an OAuth
-      // bearer token rather than an AI Studio API key.
-      "https://www.googleapis.com/auth/generative-language.retriever",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/cclog",
+      "https://www.googleapis.com/auth/experimentsandconfigs",
     ],
-    usePkce: false,   // Gemini standard OAuth, no PKCE — per 9router gemini.js
+    usePkce: false,
     usePopup: true,
   },
 } as const;
+
+/** Resolve the project required by an Antigravity subscription chat request. */
+export async function loadAntigravityProject(accessToken: string): Promise<string> {
+  const metadata = { ideType: 9, platform: 2, pluginType: 2 };
+  const load = await fetch(devUrl("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+      "Client-Metadata": JSON.stringify(metadata),
+    },
+    body: JSON.stringify({ metadata, mode: 1 }),
+  });
+  if (!load.ok) throw new Error(`Gemini subscription setup failed (HTTP ${load.status}): ${await load.text()}`);
+  const setup = await load.json();
+  const project = setup.cloudaicompanionProject;
+  const projectId = typeof project === "string" ? project : project?.id;
+  if (!projectId) throw new Error("Gemini subscription setup returned no Antigravity project.");
+  return projectId;
+}
 
 // ─── Callback URL helper ──────────────────────────────────────────────────────
 
@@ -145,9 +169,6 @@ export const OAUTH_CONFIGS = {
  *    lands on an unreachable page whose address bar carries `?code=…`; the user
  *    pastes that URL back into the app (see ProviderConnect's manual fallback).
  *
- *  - Gemini: Google installed-app clients accept any loopback port, so the
- *    app's own /callback works and the popup relays automatically.
- *
  * ponytail: 443 is a magic number inherited from the vendor's whitelist, not a
  * choice. Hard-coding it is the only thing that works today; the durable fix is
  * to move vendor OAuth server-side into 9router (CHECKLIST §4.2).
@@ -156,6 +177,8 @@ const CLAUDE_REDIRECT_URI = "http://localhost:443/callback";
 
 function callbackUrl(provider: ProviderId): string {
   if (provider === "claude") return CLAUDE_REDIRECT_URI;
+  // OpenRouter authorizes the application's origin, not a /callback route.
+  if (provider === "openrouter") return window.location.origin;
   return `${window.location.origin}/callback`;
 }
 
@@ -200,7 +223,6 @@ async function buildAuthUrl(
 
   if (provider === "gemini") {
     const conf = OAUTH_CONFIGS.gemini;
-    // Gemini uses standard OAuth2 — no PKCE (per 9router gemini.js)
     const params = new URLSearchParams({
       client_id: conf.clientId,
       response_type: "code",
@@ -224,7 +246,7 @@ async function exchangeCode(
   verifier: string,
   redirect: string,
   state: string,
-): Promise<string> {
+): Promise<LoginResult> {
   if (provider === "openrouter") {
     const response = await fetch(devUrl("https://openrouter.ai/api/v1/auth/keys"), {
       method: "POST",
@@ -240,7 +262,7 @@ async function exchangeCode(
       throw new Error(`OpenRouter sign-in failed (HTTP ${response.status}): ${text}`);
     }
     const { key } = (await response.json()) as { key: string };
-    return key;
+    return { provider, apiKey: key };
   }
 
   if (provider === "claude") {
@@ -269,17 +291,14 @@ async function exchangeCode(
     const data = await response.json();
     const token = data.access_token || data.refresh_token;
     if (!token) throw new Error("No access_token in Claude OAuth response.");
-    return token;
+    return { provider, apiKey: token };
   }
 
   if (provider === "gemini") {
     const conf = OAUTH_CONFIGS.gemini;
-    const response = await fetch(devUrl("https://oauth2.googleapis.com/token"), {
+    const response = await fetch(devUrl(conf.tokenUrl), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         client_id: conf.clientId,
@@ -288,14 +307,19 @@ async function exchangeCode(
         redirect_uri: redirect,
       }),
     });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Gemini sign-in failed (HTTP ${response.status}): ${text}`);
-    }
+    if (!response.ok) throw new Error(`Gemini sign-in failed (HTTP ${response.status}): ${await response.text()}`);
     const data = await response.json();
-    const token = data.access_token || data.refresh_token;
-    if (!token) throw new Error("No access_token in Gemini OAuth response.");
-    return token;
+    if (!data.access_token) throw new Error("No access_token in Gemini OAuth response.");
+    const projectId = await loadAntigravityProject(data.access_token);
+    return {
+      provider,
+      apiKey: data.access_token,
+      projectId,
+      refreshToken: data.refresh_token,
+      expiresAt: typeof data.expires_in === "number"
+        ? Date.now() + data.expires_in * 1000
+        : undefined,
+    };
   }
 
   throw new Error(`Exchange not implemented for provider: ${provider}`);
@@ -303,7 +327,7 @@ async function exchangeCode(
 
 // ─── Popup + listener ─────────────────────────────────────────────────────────
 
-interface CallbackPayload {
+export interface CallbackPayload {
   code?: string | null;
   token?: string | null;
   state?: string | null;
@@ -321,7 +345,7 @@ interface CallbackPayload {
  * URL. Closing it there is the normal path, not an error — so we must not reject
  * on popup close, or the pasted URL arrives after nobody is listening.
  */
-function waitForPopupCallback(
+export function waitForPopupCallback(
   authUrl: string,
   expectedState: string,
   manualCallback = false,
@@ -453,8 +477,7 @@ async function desktopLogin(provider: ProviderId): Promise<LoginResult> {
   await invoke("open_external", { url });
 
   const code = await codePromise;
-  const key = await exchangeCode(provider, code, verifier, redirect, state);
-  return { provider, apiKey: key };
+  return await exchangeCode(provider, code, verifier, redirect, state);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -503,6 +526,9 @@ export async function signIn(
   const verifier = randomBase64url();
   const state = randomBase64url();
   const redirect = callbackUrl(provider);
+  // Also support providers that return in the current tab instead of the
+  // popup: OAuthCallbackPage sends the user back to the app to exchange it.
+  safeStore.set(PENDING_KEY, JSON.stringify({ provider, verifier, state, context: _context }));
 
   const authUrl = await buildAuthUrl(provider, redirect, verifier, state);
 
@@ -517,8 +543,7 @@ export async function signIn(
   const code = payload.code || payload.token || "";
   if (!code) throw new Error("No authorization code received.");
 
-  const apiKey = await exchangeCode(provider, code, verifier, redirect, state);
-  return { provider, apiKey };
+  return await exchangeCode(provider, code, verifier, redirect, state);
 }
 
 // ─── Legacy completeOAuthReturn (no-op in popup flow) ────────────────────────
@@ -547,14 +572,14 @@ export async function completeOAuthReturn(): Promise<OAuthReturn | null> {
   };
   window.history.replaceState({}, "", window.location.pathname);
 
-  const key = await exchangeCode(
+  const result = await exchangeCode(
     pending.provider,
     code,
     pending.verifier,
     callbackUrl(pending.provider),
     pending.state,
   );
-  return { provider: pending.provider, apiKey: key, context: pending.context };
+  return { ...result, context: pending.context };
 }
 
 // ─── Vendor account fetch ─────────────────────────────────────────────────────

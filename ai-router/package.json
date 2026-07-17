@@ -1,0 +1,19 @@
+{
+  "name": "@v-assistant/ai-router",
+  "private": true,
+  "version": "0.1.0",
+  "description": "V-Assistant local AI Router sidecar",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/sidecar.mjs",
+    "check": "node --check src/sidecar.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "node-machine-id": "^1.1.12",
+    "undici": "^8.7.0",
+    "uuid": "^14.0.1"
+  }
+}

@@ -13,6 +13,7 @@ import { getProvider, type ProviderId } from "@/lib/catalog";
 import {
   isConfigured,
   isRateLimitError,
+  streamProvider,
   streamProviderWithFallback,
   type ProviderConfig,
   type ProviderConfigs,
@@ -20,6 +21,7 @@ import {
 import { buildAgentTools } from "./tools";
 import { retrieveKnowledge, type KnowledgeExcerpt } from "./knowledge";
 import { DEMO_MODE } from "./oauth";
+import { vaultGet } from "./vault";
 
 export interface ChatMessage {
   id: string;
@@ -48,6 +50,8 @@ export interface ChatOptions {
   knowledgeExcerpts?: KnowledgeExcerpt[];
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
+  /** Active UI chat session; scopes runner history independently per chat. */
+  sessionId?: string;
   /** Active skill's name — shown to the model as the task it's running. */
   skillName?: string;
   /** Active skill's full SKILL.md instructions, injected as guidance. */
@@ -152,6 +156,16 @@ async function* streamFromProviders(
   options: ChatOptions,
   skipPrimary = false,
 ): AsyncGenerator<string> {
+  if (options.config?.router) {
+    yield* streamProvider(
+      options.provider,
+      options.config,
+      buildSystemPrompt(options),
+      messages,
+      buildAgentTools(),
+    );
+    return;
+  }
   yield* streamProviderWithFallback(
     options.provider,
     { ...options.providerConfigs, [options.provider]: options.config ?? {} },
@@ -192,8 +206,23 @@ export function createEngine(): Engine {
         ).catch(() => []);
         if (knowledgeExcerpts.length) options = { ...options, knowledgeExcerpts };
       }
+
+      // Secrets deliberately never persist in localStorage. The initial Vault
+      // rehydrate is asynchronous, so resolve the active credential here too:
+      // a message sent immediately after launch must never fall back to preview.
+      if (options.provider !== "local" && !options.config?.apiKey && !options.config?.router) {
+        const key = await vaultGet(`provider:${options.provider}`).catch(() => null);
+        if (key) {
+          const config = { ...options.config, apiKey: key };
+          options = {
+            ...options,
+            config,
+            providerConfigs: { ...options.providerConfigs, [options.provider]: config },
+          };
+        }
+      }
       const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
-      if (await engineRunning()) {
+      if (await engineRunning() && options.config?.authMode !== "antigravity") {
         let runnerEmitted = false;
         try {
           for await (const chunk of nanoclawEngine.chat(messages, options)) {
@@ -217,7 +246,7 @@ export function createEngine(): Engine {
         yield* providerEngine.chat(messages, options);
         return;
       }
-      yield* demoEngine.chat(messages, options);
+      throw new Error(`${getProvider(options.provider).name} is not connected. Connect it before sending a message.`);
     },
   };
 }
