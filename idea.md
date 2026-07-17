@@ -1,153 +1,124 @@
-# V Assistant — Product Idea & Feature Checklist
+# V-Assistant — Ý tưởng sản phẩm & Thiết kế Kiến trúc (Kế thừa NanoClaw & Đa nhà cung cấp)
 
-> AI for everyone — download, install, login, connect, start. No config, no
-> terminal, no API keys (when the provider supports it).
+> **Mục tiêu chốt chặn:** Xây dựng ứng dụng trợ lý cá nhân dạng Desktop Agentic cực nhẹ, hỗ trợ MacOS/Windows/Linux, kế thừa toàn bộ cấu trúc & tính năng agentic của NanoClaw (đọc/ghi file, thực thi lệnh Terminal, MCP tools) nhưng **loại bỏ sự lệ thuộc vào Anthropic Claude SDK** và **hỗ trợ Đa nhà cung cấp (ChatGPT, Claude, Gemini, OpenRouter, LocalAI)**.
 
-This is the single source of truth for what V Assistant is and where each
-feature stands. Build **one feature to done at a time**; a feature is done
-only when its checklist is fully ticked and verified in the running app.
-
-**Status legend:** ✅ done & verified · 🟡 partial (UI/contract done, real
-engine execution pending) · ⬜ planned/not started
+Tài liệu này đặc tả ý tưởng sản phẩm cuối cùng và làm cơ sở rà soát duyệt trước khi viết mã nguồn.
 
 ---
 
-## Vision & principles
+## 1. Tầm nhìn & Nguyên lý thiết kế
 
-- One place, the **Vault**, holds every credential (logins, API keys,
-  endpoints). Agents read from it and act — the user never re-enters a login.
-- **Skills** are standard [Agent Skills](https://agentskills.io) bundles.
-- **Agents** are configurable personas (instructions + soul + memory) that
-  can improve themselves over time.
-- The engine is **NanoClaw** (channels, agent containers, scheduling); it is
-  never surfaced in the UI.
-- If a first-time user can install and start in under 2 minutes without docs,
-  the experience bar is met.
+1. **Kế thừa Kiến trúc NanoClaw:**
+   * Giữ nguyên cơ chế giao tiếp qua database SQLite IPC (`inbound.db`/`outbound.db`) và quản lý session của NanoClaw để tránh viết lại từ đầu.
+   * Đồng bộ hóa cấu hình Agent thông qua hệ thống nhóm (`groups`) và thư mục làm việc cục bộ.
 
----
+2. **Decouple khỏi Anthropic SDK (Universal Agent Loop):**
+   * Xóa bỏ thư viện `@anthropic-ai/claude-agent-sdk` trong Agent Runner.
+   * Thay thế bằng một **Vòng lặp Agentic tùy chỉnh (Universal Agent Loop)** viết bằng TS thuần, có khả năng giao tiếp với API của mọi nhà cung cấp (OpenAI, Anthropic, Google Gemini, OpenRouter) bằng cùng một tập công cụ (Tools).
 
-## 1. Onboarding & Sign-in
-
-- [x] Login-first screen — only "Continue with …" buttons, no API key field
-- [x] One-click OAuth for every vendor via the router (ChatGPT→openai/*,
-      Claude→anthropic/*, Gemini→google/*, OpenRouter→auto)
-- [x] Desktop: real loopback OAuth (native listener + system browser)
-- [x] Web (hosted https): real PKCE redirect
-- [x] Demo build: simulated round-trip (sandbox has no OAuth/network)
-- [x] First sign-in auto-creates the local user from the vendor account
-- [x] API key available under **Advanced options** as fallback
-- [ ] Native per-vendor OAuth (needs each vendor's OAuth app credentials) ⬜
-
-## 2. AI Providers
-
-- [x] Real streaming: Anthropic Messages, Google Gemini, OpenAI-compatible
-      (OpenRouter / OpenAI / Ollama / Local AI)
-- [x] Per-provider default model + model override
-- [x] One-click provider switch (header + Settings)
-- [x] Clean error bubbles; keys never leave the device except to the vendor
-- [x] Engine selection per message: NanoClaw → provider → preview
-
-## 3. Credential Vault
-
-- [x] Secrets in OS keychain on desktop (`keyring`); namespaced localStorage on web
-- [x] Provider tokens stored in the Vault, stripped from app storage
-- [x] User-managed entries: default fields (Name, URL, Username, Password, Notes)
-- [x] Dynamic custom fields with a type picker (Text, Password, Number, URL,
-      Email, Date, Date & time); password masks with reveal
-- [x] Field icons for default + custom fields
-- [x] `findVaultEntry(label|service)` + `readField()` lookup for agents
-- [ ] Agents actually pull credentials from the Vault to run tools 🟡 → see §9
-
-## 4. Skills
-
-- [x] Built-in task skills as spec-compliant Agent Skills (`skills/*/SKILL.md`)
-- [x] Validation of skills against the Agent Skills spec (`validate-skills`)
-- [x] Install any skill from a URL (fetch + parse + persist)
-- [x] **Skills run for real** — the active skill's SKILL.md instructions are
-      injected into the system prompt; header shows an active-skill chip
-- [x] NanoClaw engine skills catalog (channels, providers, capabilities)
-- [x] Channel/provider skills configure on install (token → Vault), e.g. Telegram
-- [ ] Installed engine skills actually run (needs NanoClaw attached) ⬜
-
-## 5. Agents  ← next feature
-
-- [x] Agent Store: one-click install; installed agent → system-prompt persona
-- [x] **Instructions**: per-agent workflow/process config (ChatGPT-style),
-      injected into the system prompt — verified
-- [x] **Soul**: personality/voice description that shapes replies — verified
-- [x] Agent config screen (Configure dialog: Instructions + Soul)
-- [x] **Memory**: persistent per-agent memory notes, injected into the
-      system prompt so the agent recalls them across chats
-- [ ] **Self-improving**: learn from interactions (Hermes-style) ⬜
-- [ ] Agents read the Vault to perform real tool actions ⬜ → see §9
-
-## 6. Knowledge
-
-- [x] Drag & drop files; Processing → Ready status UI
-- [ ] Real extraction (PDF/Word/Excel) → chunks ⬜
-- [ ] Retrieval fed into chat as context (RAG) ⬜
-
-## 7. Integrations (channels)
-
-- [x] Token-based config dialog → Vault (Telegram, GitHub, Slack, Discord, Notion)
-- [x] Telegram: bot token (+ chat id) captured and stored
-- [ ] OAuth integrations (Drive, Outlook, Calendar) real login ⬜
-- [ ] Channel actually runs via the engine (send/receive) ⬜ → see §8
-
-## 8. Telegram / channels — real run
-
-- [x] Bot token stored in the Vault
-- [ ] Engine reads the token and runs the Telegram channel ⬜
-- [ ] Inbound message → agent reply → outbound (2-way), verified via
-      engine-stub loopback (no Docker) ⬜
-
-## 9. Vault ↔ Agent actions
-
-- [ ] Agent looks up a Vault entry by name during a task ⬜
-- [ ] "Post this to my blog" → agent reads URL+login → calls a tool to post
-      (mock endpoint) → verified end-to-end ⬜
-
-## 10. Scheduled tasks
-
-- [x] Menu + page: create task (name, instruction, schedule), pause/resume, delete
-- [ ] Engine actually runs tasks on schedule and messages results back ⬜
-
-## 11. NanoClaw runtime (engine boundary)
-
-- [x] SQLite inbound/outbound IPC contract (`runtime.rs`) + Tauri commands
-- [x] Per-agent groups + skills materialized for the engine
-- [x] Engine attach via `VUA_ENGINE_DIR`; falls back to preview engine
-- [x] Cross-process IPC verified (`examples/ipc_check`)
-- [ ] Real NanoClaw checkout + Docker attached ⬜
-
-## 12. Desktop app (Tauri)
-
-- [x] Loopback OAuth (`auth.rs`) — verified (`examples/oauth_loopback_check`)
-- [x] Vault via OS keychain (`vault.rs`)
-- [x] Runtime + engine lifecycle
-- [ ] End-to-end GUI run on a real desktop (needs a machine with a display) ⬜
-
-## 13. UI / Navigation
-
-- [x] Menu: Home, Chat, Agents, Skills, Knowledge, Vault, Scheduled, Integrations
-- [x] Settings moved into the bottom user cluster
-- [x] User profile shows name + "Powered by VuaAI.net"
-- [x] Responsive (mobile drawer), brand logo, light/dark handled by app theme
-
-## 14. Build & CI/CD
-
-- [x] `npm run build` (validate-skills + tsc + vite) green
-- [x] GitHub Actions CI (frontend + rust + loopback test) — verified green
-- [x] Release workflow (macOS/Windows/Linux installers via tauri-action)
-- [ ] Trigger a release build (push a `v*` tag or run from Actions on `main`) ⬜
-- [ ] Live demo hosted on https for real OAuth (e.g. demo.vuaai.net) ⬜
+3. **Chạy trực tiếp siêu nhẹ (Zero-Docker / Host Process):**
+   * Sử dụng cơ chế chạy nền trực tiếp làm tiến trình hệ thống (**Host Process** - thông qua `bun` hoặc `node` trên máy host).
+   * Không bắt buộc cài đặt Docker/Colima khi cài app, giúp cài đặt cực kỳ đơn giản (Download > Install > Login > Dùng ngay). Desktop đóng gói native sidecar cho Windows, macOS và Linux; Docker chỉ là profile triển khai server riêng.
+   * Không expose Terminal/Bash cho model. Các công cụ file chỉ hoạt động trong workspace được cấp; tác vụ bên ngoài đi qua connector capability.
+   * **Ví dụ luồng nghiệp vụ thực tế:** Người dùng ra lệnh: *"Em hãy thiết kế cho anh một chương trình quảng cáo Facebook"* -> Agent lập kế hoạch chiến dịch -> Người dùng cung cấp tài khoản/token liên kết từ Vault -> Agent tự động chạy chiến dịch qua API, tối ưu hóa ngân sách, theo dõi và xuất báo cáo tiến độ chi tiết cho người dùng.
 
 ---
 
-## Working agreement
+## 2. Thiết kế Kiến trúc Agentic Độc lập SDK
 
-- Develop on `claude/v-assistant-desktop-abs2gw`, commit + push after each
-  completed slice; **do not build installers until asked**.
-- Every feature ships with a verification (drive the running app or a
-  cross-process example), not just a green typecheck.
-- Keep this file updated: tick items as they land; never silently drop scope.
+```text
++--------------------------------------------------------------+
+|            Tauri App (V-Assistant UI & Desktop Shell)        |
+|  +------------------+                   +------------------+ |
+|  |     React UI     |                   | Telegram Bot     | |
+|  +--------+---------+                   +--------+---------+ |
+|           | (Tauri IPC)                          | (fetch)   |
+|  +--------v---------+                            |           |
+|  |Rust Desktop Shell|                            |           |
+|  +---+----------+---+                            |           |
+|      |          |                                |           |
+|      |          | (Local Encrypted DB)           |           |
+|      |     +----v--------------------+           |           |
+|      |     |  V-Assistant Vault      |           |           |
+|      |     +-------------------------+           |           |
+|      | (SQLite IPC)                              |           |
+|  +---v-------------------------------------------v--------+  |
+|  |              SQLite IPC Databases                      |  |
+|  |  +-----------------------+    +---------------------+  |  |
+|  |  | inbound.db (Messages) |    | outbound.db(Replies)|  |  |
+|  |  +-----------+-----------+    +-----------^---------+  |  |
++--+--------------|----------------------------|------------+--+
+                  | (Reads)                    | (Writes)
++-----------------|----------------------------|---------------+
+|            Universal Agent Host Process (Bun Daemon)         |
+|  +--------------v----------------------------+---------+   |
+|  |                 Universal Agent Runner            |   |
+|  +--------------------------+--------------------------+   |
+|                             |                              |
+|              +--------------v--------------+               |
+|              |     Agent Loop Executor     |               |
+|              +------+---------------+------+               |
+|                     |               |                      |
+|       +-------------v-----+   +-----v-------------+        |
+|       |   Universal LLM   |   |   Native Tools    |        |
+|       |      Client       |   | (Scoped FS, HTTP) |        |
+|       +---------+---------+   +---------+---------+        |
++-----------------|-----------------------|--------------------+
+                  |                       |
+        +---------v---------+   +---------v---------+
+        |   AI Providers    |   |   External APIs   |
+        | (ChatGPT, Gemini, |   | (Notion, Github,  |
+        |  Claude, OR...)   |   |  Slack...)        |
+        +-------------------+   +-------------------+
+```
+
+---
+
+## 3. Bản đồ Tính năng & Checklist triển khai
+
+### A. Giao diện & Đón tiếp (Onboarding)
+*   **[ ] Luồng Login Ưu tiên (OAuth/Subscription First):** 
+    * Chỉ hiển thị nút đăng nhập subscription OAuth khi chưa cấu hình.
+    * Sau khi đã login lần đầu thì đã khai báo xong local user, các lần tiếp theo khi mở app sẽ tự động chạy thẳng vào giao diện làm việc chính mà không cần hiển thị lại màn hình chào mừng (Welcome) hay bắt đăng nhập lại.
+*   **[ ] Advanced Options (API Key/Endpoint):** 
+    * Chỉ xuất hiện để chỉnh sửa sau khi đã đăng nhập thành công.
+*   **[ ] Trình quản lý Tiến trình ngầm tự động:**
+    * Tauri App tự động kích hoạt `NanoClaw` chạy nền dưới dạng Host Process (`process`) khi mở app, không hỏi Docker/Colima.
+
+### B. Universal Agent Loop (Agent-Runner)
+*   **[ ] Thay thế Claude SDK:**
+    * Phát triển module `universal-executor.ts` thực thi vòng lặp Agent: Gửi prompt -> nhận lệnh gọi tool -> chạy tool -> nạp lại lịch sử -> phản hồi.
+*   **[ ] Công cụ Cục bộ tự chế (Native Tools):**
+    * Không cung cấp `Bash`/host shell cho model.
+    * `FileRead` / `FileWrite` / `FileEdit`: Chỉ đọc, ghi và thay thế trong workspace được cấp.
+    * `Grep` / `Glob`: Tìm kiếm file và nội dung nhanh chóng.
+*   **[ ] Tự nâng cấp (Self-Improving Memory):**
+    * Agent tự suy ngẫm sau mỗi cuộc hội thoại, cập nhật tóm tắt thông tin quan trọng vào file memory riêng của Agent để kế thừa cho các phiên chat sau.
+
+### C. Kênh kết nối & Tích hợp (Telegram & Các kênh kết nối NanoClaw)
+*   **[ ] Long-polling Telegram Bot & Các cổng Chat Adapter:**
+    * Kế thừa đầy đủ cơ chế hoạt động của các kênh kết nối từ NanoClaw (mặc định tích hợp CLI, Telegram Bot).
+    * Hỗ trợ cơ chế tự đăng ký của các cổng kết nối bổ sung (như Slack, Discord, WhatsApp...) thông qua Chat SDK Bridge để nhận tin nhắn, điều phối xử lý qua SQLite IPC và trả phản hồi về kênh tương ứng của người dùng.
+
+### D. Agent (Bộ não độc lập & Tri thức RAG)
+*   **[ ] Phân tách vai trò triệt để (Role Isolation):**
+    * Mỗi Agent là một bộ não độc lập (định nghĩa bởi instructions + soul + memory riêng biệt). Việc chuyển đổi Agent không làm pha trộn dữ liệu.
+    * Người dùng có thể tạo nhiều file markdown khác nhau để định nghĩa và cấu hình cho Agent, tương tự như cách khai báo trong cấu hình Paperclip (Paperclip configuration).
+*   **[ ] Nạp tri thức cục bộ (Knowledge RAG):**
+    * Hỗ trợ tải lên tài liệu (PDF, Word, Excel, PowerPoint, Text) cục bộ.
+    * Tự động trích xuất nội dung (on-device parsing) và truy vấn ngữ cảnh (TF-IDF cục bộ) để đưa vào làm căn cứ câu trả lời cho Agent.
+
+### E. Skills (Kỹ năng thực thi)
+*   **[ ] Cài đặt & Khởi chạy Kỹ năng (Agent Skills):**
+    * Kế thừa hệ thống Agent Skills chuẩn hóa (`skills/*/SKILL.md`). Inject hướng dẫn kỹ năng vào prompt của Agent khi kỹ năng đó được kích hoạt.
+*   **[ ] Model Context Protocol (MCP Tools):**
+    * Tích hợp máy chủ MCP bên ngoài và built-in (được khai báo qua `container.json`) để Agent tự do gọi và sử dụng các tools mở rộng bên ngoài.
+
+### F. Kho bảo mật Vault & Tích hợp (Integrations & Connectors)
+*   **[ ] Vault - Kho lưu trữ bảo mật mặc định:**
+    * Là tính năng cốt lõi của V-Assistant (không phải lấy từ OS/keychain của macOS hay Windows). Đây là một cơ sở lưu trữ dữ liệu an toàn được mã hóa và quản lý trực tiếp bởi V-Assistant, chứa toàn bộ API Keys, tài khoản, Tokens và cấu hình tích hợp của người dùng.
+*   **[ ] Tích hợp & Liên kết (Integrations & Connectors) kết nối vào Vault:**
+    * Định nghĩa sẵn các cổng kết nối dịch vụ bên ngoài (GitHub, Notion, Slack, Discord, Telegram).
+    * Agent chỉ query danh sách `credential_ref` và tên biến. Trusted Connector Gateway trong AI Router mới được đọc Vault, resolve credential trong memory, bind request vào origin đã lưu và redaction response trước khi trả về Agent.
+*   **[ ] Công cụ Web HTTP linh hoạt:**
+    * `http_request` chỉ dùng cho request không xác thực. Request cần credential phải dùng `connector_request` với `vault-entry:<id>` và biến `{{credential:field}}`; Agent không được đọc password/token/auth code/API key.

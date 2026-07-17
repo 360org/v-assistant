@@ -44,7 +44,7 @@ export async function engineRunning(): Promise<boolean> {
 export const nanoclawEngine: Engine = {
   async *chat(
     messages: ChatMessage[],
-    options: { provider: ProviderId; agentName?: string; agentId?: string },
+    options: { provider: ProviderId; agentName?: string; agentId?: string; sessionId?: string },
   ) {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (!lastUser) return;
@@ -58,6 +58,9 @@ export const nanoclawEngine: Engine = {
       meta: JSON.stringify({
         provider: options.provider,
         agent: options.agentName ?? null,
+        platformId: "desktop",
+        channelType: "chat",
+        threadId: options.sessionId ?? groupId,
       }),
     });
 
@@ -89,12 +92,31 @@ async function latestOutboundId(groupId: string): Promise<number> {
 
 /** Push installed agents to the runtime so the engine has their groups. */
 export async function syncAgents(
-  agents: { id: string; name: string; description: string }[],
+  agents: { id: string; name: string; description: string; instructions?: string; soul?: string }[],
 ): Promise<void> {
   if (!inDesktopShell()) return;
   try {
     await invoke("runtime_sync", { agents });
-  } catch {
-    // Sync is best-effort; the engine rebuilds groups on next launch.
+  } catch (err) {
+    console.error("Failed to sync agents:", err);
+  }
+}
+
+/** Restart the agent runner process with new configurations. */
+export async function restartAgentRunner(
+  agentName: string,
+  baseUrl?: string | null,
+  model?: string | null,
+): Promise<boolean> {
+  if (!inDesktopShell()) return false;
+  try {
+    return await invoke<boolean>("runtime_restart_runner", {
+      agentName,
+      baseUrl: baseUrl || null,
+      model: model || null,
+    });
+  } catch (err) {
+    console.error("Failed to restart agent runner:", err);
+    return false;
   }
 }

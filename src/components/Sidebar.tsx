@@ -6,6 +6,7 @@ import {
   KeyRound,
   Library,
   MessageSquare,
+  History,
   Settings,
   Wand2,
   type LucideIcon,
@@ -17,6 +18,7 @@ import { Logo } from "@/components/Logo";
 const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "home", label: "Home", icon: Home },
   { view: "chat", label: "Chat", icon: MessageSquare },
+  { view: "sessions", label: "Sessions", icon: History },
   { view: "agents", label: "Agents", icon: Bot },
   { view: "skills", label: "Skills", icon: Wand2 },
   { view: "knowledge", label: "Knowledge", icon: Library },

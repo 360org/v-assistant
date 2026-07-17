@@ -14,7 +14,7 @@ import {
 } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
 import { signIn } from "@/runtime/oauth";
-import { routedConfig } from "@/runtime/providers";
+import { loginConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
@@ -24,8 +24,14 @@ import { cn } from "@/lib/utils";
 type Step = "welcome" | "login" | "connect";
 
 export function Onboarding() {
-  const { completeOnboarding, connectProvider, oauthReturn, oauthError } =
-    useApp();
+  const {
+    completeOnboarding,
+    connectProvider,
+    oauthReturn,
+    oauthError,
+    user,
+    providerConfigs,
+  } = useApp();
   const [step, setStep] = useState<Step>("welcome");
   const [provider, setProvider] = useState<ProviderId | null>(null);
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
@@ -56,7 +62,7 @@ export function Onboarding() {
         // routes the chosen vendor's models through the router key.
         await connectProvider(
           result.provider,
-          routedConfig(result.provider, result.apiKey),
+          loginConfig(result.provider, result.apiKey, result),
         );
         setProvider(result.provider);
         setStep("connect");
@@ -208,6 +214,7 @@ export function Onboarding() {
         <ProviderConnect
           provider={connectFor}
           context="onboarding"
+          hasSubscription={Boolean(user && providerConfigs["openrouter"]?.apiKey)}
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
             if (config) void connectProvider(connectFor, config);

@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { Onboarding } from "@/pages/Onboarding";
 import { Home } from "@/pages/Home";
 import { Chat } from "@/pages/Chat";
+import { Sessions } from "@/pages/Sessions";
 import { Agents } from "@/pages/Agents";
 import { Skills } from "@/pages/Skills";
 import { Knowledge } from "@/pages/Knowledge";
@@ -18,6 +19,7 @@ import { Settings } from "@/pages/Settings";
 const pages: Record<View, () => JSX.Element> = {
   home: Home,
   chat: Chat,
+  sessions: Sessions,
   agents: Agents,
   skills: Skills,
   knowledge: Knowledge,

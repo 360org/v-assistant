@@ -34,32 +34,32 @@ export const PROVIDERS: Provider[] = [
     keyUrl: "https://openrouter.ai/keys",
     hint: "Sign in once and use GPT, Claude, Gemini, Llama and hundreds more.",
   },
-{
+  {
     id: "chatgpt",
     name: "ChatGPT",
     loginLabel: "Continue with ChatGPT",
-    tagline: "OpenAI GPT models",
-    oauth: true,
+    tagline: "OpenAI GPT — API key or via OpenRouter",
+    oauth: false,
     keyUrl: "https://platform.openai.com/api-keys",
-    hint: "Sign in once to use GPT models — no API key needed.",
+    hint: "Direct ChatGPT sign-in coming soon. For now, paste your API key from platform.openai.com, or use 'Continue with OpenRouter' (already supports GPT-4o).",
   },
-{
+  {
     id: "claude",
     name: "Claude",
     loginLabel: "Continue with Claude",
-    tagline: "Anthropic Claude models",
+    tagline: "Anthropic Claude — sign in with your subscription",
     oauth: true,
     keyUrl: "https://console.anthropic.com/settings/keys",
-    hint: "Sign in once to use Claude models — no API key needed.",
+    hint: "Sign in with your Claude subscription — no API key needed. Advanced options let you paste a key instead.",
   },
-{
+  {
     id: "gemini",
     name: "Gemini",
     loginLabel: "Continue with Gemini",
-    tagline: "Google Gemini models",
+    tagline: "Google Gemini — sign in with your subscription",
     oauth: true,
     keyUrl: "https://aistudio.google.com/apikey",
-    hint: "Sign in once to use Gemini models — no API key needed.",
+    hint: "Sign in with your Gemini subscription. API keys remain available under Advanced options.",
   },
 {
     id: "local",

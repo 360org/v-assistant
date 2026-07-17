@@ -12,10 +12,16 @@
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import {
   isConfigured,
+  isRateLimitError,
   streamProvider,
+  streamProviderWithFallback,
   type ProviderConfig,
+  type ProviderConfigs,
 } from "./providers";
+import { buildAgentTools } from "./tools";
+import { retrieveKnowledge, type KnowledgeExcerpt } from "./knowledge";
 import { DEMO_MODE } from "./oauth";
+import { vaultGet } from "./vault";
 
 export interface ChatMessage {
   id: string;
@@ -28,6 +34,8 @@ export interface ChatOptions {
   provider: ProviderId;
   /** Credentials for the provider; real calls happen when present. */
   config?: ProviderConfig;
+  /** Other connected providers eligible for rate-limit failover. */
+  providerConfigs?: ProviderConfigs;
   agentName?: string;
   agentDescription?: string;
   /** The agent's configured workflow/process instructions. */
@@ -36,12 +44,20 @@ export interface ChatOptions {
   agentSoul?: string;
   /** The agent's persistent memory notes. */
   agentMemory?: string[];
+  /** Knowledge available to THIS role only (names of ready documents). */
+  agentKnowledge?: string[];
+  /** Excerpts retrieved from this role's documents for the current question. */
+  knowledgeExcerpts?: KnowledgeExcerpt[];
   /** Installed-agent id; maps to a NanoClaw group on the engine side. */
   agentId?: string;
+  /** Active UI chat session; scopes runner history independently per chat. */
+  sessionId?: string;
   /** Active skill's name — shown to the model as the task it's running. */
   skillName?: string;
   /** Active skill's full SKILL.md instructions, injected as guidance. */
   skillInstructions?: string;
+  /** True when the user has an active global subscription (OpenRouter key in Vault) */
+  hasSubscription?: boolean;
 }
 
 export interface Engine {
@@ -81,10 +97,17 @@ const demoEngine: Engine = {
 };
 
 /** The persona sent to real providers as the system prompt. */
-function buildSystemPrompt(options: ChatOptions): string {
+export function buildSystemPrompt(options: ChatOptions): string {
   let prompt =
     "You are V Assistant, a helpful personal AI assistant for everyday " +
-    "work. Be concise and concrete. Always answer in the user's language.";
+    "work. Be concise and concrete. Always answer in the user's language.\n\n" +
+    "You can act on the user's behalf using tools. The user keeps logins, " +
+    "API keys and endpoints in their Vault. When a task needs a credential " +
+    "(e.g. \"post this to my blog\"), call vault_list to see what is stored, " +
+    "then use connector_request with its opaque ref and " +
+    "{{credential:<field>}} variables. The trusted gateway resolves those " +
+    "values outside your context. Do not ask " +
+    "the user for a password that is already in the Vault.";
   if (options.agentName) {
     prompt +=
       `\n\nYou are currently acting as the user's ${options.agentName}. ` +
@@ -102,6 +125,23 @@ function buildSystemPrompt(options: ChatOptions): string {
         memory.map((m) => `- ${m}`).join("\n");
     }
   }
+  // Knowledge is scoped to this role only — the caller passes just the active
+  // role's documents, so one role never sees another's knowledge.
+  const knowledge = (options.agentKnowledge ?? []).filter((k) => k.trim());
+  if (knowledge.length) {
+    prompt +=
+      `\n\nKnowledge available to you in this role (do not rely on knowledge ` +
+      `from other roles):\n` +
+      knowledge.map((k) => `- ${k}`).join("\n");
+  }
+  // Retrieved excerpts ground the answer in the role's actual documents.
+  const excerpts = options.knowledgeExcerpts ?? [];
+  if (excerpts.length) {
+    prompt +=
+      `\n\nRelevant excerpts from this role's documents — ground your answer ` +
+      `on them and cite the document name when you use one:\n\n` +
+      excerpts.map((e) => `[${e.name}]\n${e.text}`).join("\n\n");
+  }
   // The active skill's full instructions steer how the model does the task.
   if (options.skillInstructions) {
     prompt +=
@@ -112,14 +152,34 @@ function buildSystemPrompt(options: ChatOptions): string {
 }
 
 /** Streams from the selected provider's real API. */
-const providerEngine: Engine = {
-  async *chat(messages, options) {
+async function* streamFromProviders(
+  messages: ChatMessage[],
+  options: ChatOptions,
+  skipPrimary = false,
+): AsyncGenerator<string> {
+  if (options.config?.router) {
     yield* streamProvider(
       options.provider,
-      options.config!,
+      options.config,
       buildSystemPrompt(options),
       messages,
+      buildAgentTools(),
     );
+    return;
+  }
+  yield* streamProviderWithFallback(
+    options.provider,
+    { ...options.providerConfigs, [options.provider]: options.config ?? {} },
+    buildSystemPrompt(options),
+    messages,
+    buildAgentTools(),
+    { skipPrimary },
+  );
+}
+
+const providerEngine: Engine = {
+  async *chat(messages, options) {
+    yield* streamFromProviders(messages, options);
   },
 };
 
@@ -137,20 +197,76 @@ export function createEngine(): Engine {
         yield* demoEngine.chat(messages, options);
         return;
       }
-      const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
-      if (await engineRunning()) {
-        yield* nanoclawEngine.chat(messages, options);
-        return;
+      // RAG: pull the excerpts from this role's documents that best match
+      // the user's question, so the reply is grounded in their files.
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      if (lastUser) {
+        const knowledgeExcerpts = await retrieveKnowledge(
+          options.agentId ?? null,
+          lastUser.content,
+        ).catch(() => []);
+        if (knowledgeExcerpts.length) options = { ...options, knowledgeExcerpts };
       }
-      if (isConfigured(options.provider, options.config)) {
+
+      // Secrets deliberately never persist in localStorage. The initial Vault
+      // rehydrate is asynchronous, so resolve the active credential here too:
+      // a message sent immediately after launch must never fall back to preview.
+      if (options.provider !== "local" && !options.config?.apiKey && !options.config?.router) {
+        const key = await vaultGet(`provider:${options.provider}`).catch(() => null);
+        if (key) {
+          const config = { ...options.config, apiKey: key };
+          options = {
+            ...options,
+            config,
+            providerConfigs: { ...options.providerConfigs, [options.provider]: config },
+          };
+        }
+      }
+      const { engineRunning, nanoclawEngine } = await import("./nanoclaw");
+      if (await engineRunning() && options.config?.authMode !== "antigravity") {
+        let runnerEmitted = false;
+        try {
+          for await (const chunk of nanoclawEngine.chat(messages, options)) {
+            runnerEmitted = true;
+            yield chunk;
+          }
+          return;
+        } catch (error) {
+          if (
+            runnerEmitted ||
+            !isRateLimitError(error) ||
+            !isConfigured(options.provider, options.config, options.hasSubscription)
+          ) {
+            throw error;
+          }
+          yield* streamFromProviders(messages, options, true);
+          return;
+        }
+      }
+      if (isConfigured(options.provider, options.config, options.hasSubscription)) {
         yield* providerEngine.chat(messages, options);
         return;
       }
-      yield* demoEngine.chat(messages, options);
+      throw new Error(`${getProvider(options.provider).name} is not connected. Connect it before sending a message.`);
     },
   };
 }
 
 export function newMessageId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Run one assistant turn to completion and return the full text — the same
+ * engine, tools and system prompt as the chat UI, but for callers that need
+ * a whole reply rather than a stream (e.g. the Telegram channel).
+ */
+export async function runAssistant(
+  messages: ChatMessage[],
+  options: ChatOptions,
+): Promise<string> {
+  const engine = createEngine();
+  let out = "";
+  for await (const chunk of engine.chat(messages, options)) out += chunk;
+  return out;
 }

@@ -1,30 +1,45 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useMemo, useRef, useState, type DragEvent } from "react";
 import { FileText, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatBytes } from "@/lib/utils";
 
 export function Knowledge() {
-  const { knowledgeFiles, addKnowledgeFiles, removeKnowledgeFile } = useApp();
+  const {
+    knowledgeFiles,
+    addKnowledgeFiles,
+    removeKnowledgeFile,
+    activeAgentId,
+    agents,
+  } = useApp();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Knowledge belongs to the active role, so switching roles never mixes it.
+  const roleName = useMemo(
+    () => agents.find((a) => a.id === activeAgentId)?.name ?? null,
+    [agents, activeAgentId],
+  );
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const files = Array.from(e.dataTransfer.files).map((f) => ({
-      name: f.name,
-      size: f.size,
-    }));
+    const files = Array.from(e.dataTransfer.files);
     if (files.length) addKnowledgeFiles(files);
   };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
-      <h1 className="text-2xl font-bold">Knowledge</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-2xl font-bold">Knowledge</h1>
+        <Badge tone={roleName ? "gold" : undefined}>
+          {roleName ? `Role: ${roleName}` : "Base assistant"}
+        </Badge>
+      </div>
       <p className="mt-1 text-neutral-400">
-        Drop in your documents and the assistant learns them automatically. No
-        indexing, no setup — it just works.
+        {roleName
+          ? `These documents belong to ${roleName} only — other roles don't see them.`
+          : "Drop in your documents and the assistant learns them automatically. Switch to a role to give that role its own separate knowledge."}
       </p>
 
       <div
@@ -45,7 +60,7 @@ export function Knowledge() {
         <UploadCloud className="size-8 text-gold-300" />
         <p className="mt-3 font-medium">Drag & drop files here</p>
         <p className="mt-1 text-sm text-neutral-500">
-          PDF · Word · Excel · PowerPoint · Folders · Websites
+          PDF · Word · Excel · PowerPoint · Text · Markdown · CSV · HTML
         </p>
         <input
           ref={inputRef}
@@ -53,10 +68,7 @@ export function Knowledge() {
           multiple
           className="hidden"
           onChange={(e) => {
-            const files = Array.from(e.target.files ?? []).map((f) => ({
-              name: f.name,
-              size: f.size,
-            }));
+            const files = Array.from(e.target.files ?? []);
             if (files.length) addKnowledgeFiles(files);
             e.target.value = "";
           }}
@@ -79,12 +91,18 @@ export function Knowledge() {
                   <div className="truncate text-sm">{f.name}</div>
                   <div className="text-xs text-neutral-500">
                     {formatBytes(f.size)}
+                    {f.status === "ready" && f.chunks
+                      ? ` · ${f.chunks} section${f.chunks === 1 ? "" : "s"} learned`
+                      : ""}
+                    {f.status === "error" && f.error ? ` · ${f.error}` : ""}
                   </div>
                 </div>
                 {f.status === "processing" ? (
                   <Badge tone="gold">
                     <Loader2 className="size-3 animate-spin" /> Processing
                   </Badge>
+                ) : f.status === "error" ? (
+                  <Badge tone="red">Failed</Badge>
                 ) : (
                   <Badge tone="green">Ready</Badge>
                 )}

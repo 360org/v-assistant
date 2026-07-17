@@ -1,7 +1,7 @@
 {
   "name": "v-assistant",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "V Assistant — AI for everyone. Download, install, login, connect, start.",
   "author": {
@@ -13,6 +13,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/validate-skills.mjs && tsc && vite build",
+    "check": "npm run build && node scripts/ai-router-contract-check.mjs && node scripts/ai-router-multi-account-check.mjs && node scripts/credential-boundary-check.mjs && node scripts/connector-capability-check.mjs && node scripts/tool-loop-check.mjs && node scripts/telegram-check.mjs && node scripts/schedule-check.mjs && node scripts/login-check.mjs && node scripts/isolation-check.mjs && node scripts/self-improve-check.mjs && node scripts/connector-check.mjs && node scripts/rag-check.mjs",
+    "version:set": "node scripts/bump-version.mjs",
     "build:demo": "vite build -c vite.demo.config.ts && node scripts/inline-demo.mjs",
     "validate:skills": "node scripts/validate-skills.mjs",
     "preview": "vite preview",
@@ -23,6 +25,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.6.0"
@@ -33,6 +36,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.25.0",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.6.3",
     "vite": "^6.0.7"

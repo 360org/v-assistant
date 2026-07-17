@@ -1,0 +1,64 @@
+# Agent Runner — Docker Compose (no build, live-mount)
+#
+# Cách dùng:
+#   docker compose -f docker-compose.agent-runner.yml up
+#
+# Test với API key thật:
+#   VUA_API_KEY=sk-xxx docker compose -f docker-compose.agent-runner.yml up
+#
+# Sửa code trên host → restart container → chạy lại ngay (không build lại image):
+#   docker compose -f docker-compose.agent-runner.yml restart agent-runner
+#
+services:
+  agent-runner:
+    image: node:20-bookworm-slim
+    container_name: v-agent-runner
+    working_dir: /app
+    command: >
+      sh -c "
+        npm install --no-audit --no-fund 2>&1 | tail -3 &&
+        npx tsx src/index.ts
+      "
+    environment:
+      VUA_DATA_DIR: /data
+      VUA_IPC_DIR: /data/ipc
+      VUA_PROVIDER: "${VUA_PROVIDER:-openai}"
+      VUA_API_KEY: "${VUA_API_KEY:-demo}"
+      VUA_BASE_URL: "${VUA_BASE_URL:-}"
+      VUA_MODEL: "${VUA_MODEL:-}"
+      VUA_ASSISTANT_NAME: V-Assistant
+      VUA_AGENT_NAME: default
+    volumes:
+      # Live-mount toàn bộ agent-runner source — sửa host = có ngay trong container
+      - ./agent-runner:/app
+      # node_modules ở trong volume riêng (tránh conflict platform)
+      - runner-node-modules:/app/node_modules
+      # IPC volume chia sẻ giữa runner và demo
+      - ipc-data:/data
+    restart: unless-stopped
+
+  # Demo sender: gửi message vào inbound.db → poll chờ response
+  demo:
+    image: node:20-bookworm-slim
+    container_name: v-agent-demo
+    working_dir: /app
+    depends_on:
+      - agent-runner
+    environment:
+      VUA_IPC_DIR: /data/ipc
+    volumes:
+      - ./agent-runner:/app
+      - runner-node-modules:/app/node_modules
+      - ipc-data:/data
+    entrypoint: >
+      sh -c "
+        echo '⏳ Waiting 8s for runner to start...' &&
+        sleep 8 &&
+        npx tsx scripts/demo-send.ts
+      "
+    # Chỉ chạy 1 lần rồi thoát
+    restart: "no"
+
+volumes:
+  runner-node-modules:
+  ipc-data:

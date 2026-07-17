@@ -1,0 +1,28 @@
+{
+  "name": "@v-assistant/agent-runner",
+  "version": "0.1.0",
+  "description": "Universal Agent Runner — Host Process for V-Assistant",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "dev:node": "npx tsx src/index.ts",
+    "mcp:serve": "tsx src/mcp-tools/server.ts",
+    "test": "tsx scripts/e2e-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
+    "check": "tsc --noEmit && tsx scripts/e2e-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "bun": ">=1.1"
+  }
+}

@@ -6,7 +6,7 @@
 # app uses the OS keychain instead).
 
 # --- Build stage ---
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 # Use npm install (not ci) so a slightly out-of-sync lockfile still builds.
 COPY package.json ./

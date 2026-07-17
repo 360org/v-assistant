@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ui",
+      "runtimeExecutable": "./dev",
+      "runtimeArgs": ["ui"],
+      "port": 1420
+    },
+    {
+      "name": "agent-runner",
+      "runtimeExecutable": "./dev",
+      "runtimeArgs": ["up"]
+    },
+    {
+      "name": "all",
+      "runtimeExecutable": "./dev",
+      "runtimeArgs": ["all"],
+      "port": 1420
+    }
+  ]
+}

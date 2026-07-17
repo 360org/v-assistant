@@ -1,12 +1,13 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-type Tone = "neutral" | "gold" | "green";
+type Tone = "neutral" | "gold" | "green" | "red";
 
 const tones: Record<Tone, string> = {
   neutral: "bg-neutral-800 text-neutral-300",
   gold: "bg-gold-400/15 text-gold-300",
   green: "bg-emerald-500/15 text-emerald-400",
+  red: "bg-red-500/15 text-red-400",
 };
 
 export function Badge({

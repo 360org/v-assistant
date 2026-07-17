@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build output
 dist/
@@ -8,6 +9,21 @@ dist-demo/
 # Tauri
 src-tauri/target/
 src-tauri/gen/schemas/
+
+# Temp check artifacts
+scripts/.tool-loop-*.mjs
+scripts/.telegram-*.mjs
+scripts/.schedule-*.mjs
+scripts/.login-*.mjs
+scripts/.isolation-*.mjs
+scripts/.selfimprove-*.mjs
+scripts/.connector-*.mjs
+scripts/.agentimport-*.mjs
+
+# Dev-mode state/vault sync files — hold real API keys, never commit
+.vua_state_dev.json
+.vua_vault_dev.json
+.vua_ai_router_connections.json
 
 # Editor / OS
 .DS_Store
