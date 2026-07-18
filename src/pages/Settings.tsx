@@ -147,12 +147,21 @@ export function Settings() {
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
       });
-      await testAiRouterConnection(id);
+      let testError: string | null = null;
+      try {
+        await testAiRouterConnection(id);
+      } catch (error) {
+        testError = error instanceof Error ? error.message : String(error);
+      }
       setManualAuthUrl(null);
       setManualCallbackUrl("");
       setAuthUrlCopied(false);
-      setConnectMessage(null);
       await refreshConnections();
+      setConnectMessage(
+        testError
+          ? `Authenticated and stored in Vault. Model test is unavailable: ${testError}`
+          : "Authenticated, stored in Vault, and model access verified.",
+      );
     } catch (error) {
       setConnectMessage(error instanceof Error ? error.message : String(error));
     } finally {
