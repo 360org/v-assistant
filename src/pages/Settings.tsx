@@ -34,6 +34,7 @@ export function Settings() {
     setSelfImprove,
     updateLocalUser,
     ensureLocalUser,
+    clearLocalUser,
   } = useApp();
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -52,6 +53,8 @@ export function Settings() {
   const [connectionActionId, setConnectionActionId] = useState<string | null>(null);
   const [editingLocalUser, setEditingLocalUser] = useState(false);
   const [localUserName, setLocalUserName] = useState("");
+  const [confirmingLocalLogout, setConfirmingLocalLogout] = useState(false);
+  const [loggingOutLocalUser, setLoggingOutLocalUser] = useState(false);
 
   const refreshConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -168,6 +171,7 @@ export function Settings() {
         provider: provider.id,
         providerLabel: provider.name,
         detail: identity.email,
+        connectionId: id,
       });
       let testError: string | null = null;
       try {
@@ -199,6 +203,28 @@ export function Settings() {
   const saveLocalUser = () => {
     updateLocalUser(localUserName);
     setEditingLocalUser(false);
+  };
+
+  const logoutLocalUser = async () => {
+    if (!user) return;
+    setLoggingOutLocalUser(true);
+    setConnectionError(null);
+    try {
+      const connection = user.connectionId
+        ? connections.find((item) => item.id === user.connectionId)
+        : connections.find((item) => item.provider === user.provider && item.isActive !== false);
+      if (connection) {
+        await deleteAiRouterConnection(connection.id);
+        if (connection.credentialRef) await vaultDelete(connection.credentialRef);
+      }
+      clearLocalUser();
+      setConfirmingLocalLogout(false);
+      await refreshConnections();
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoggingOutLocalUser(false);
+    }
   };
 
   const signInLocalAiAccount = async (providerId: string) => {
@@ -402,6 +428,9 @@ export function Settings() {
               <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser}>
                 <Pencil className="size-4" />
               </Button>
+              <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)}>
+                Log out
+              </Button>
             </div>
             <div className="w-full border-t border-neutral-800 pt-3">
               <div className="mb-2 text-xs font-medium text-neutral-300">AI accounts</div>
@@ -471,6 +500,24 @@ export function Settings() {
             <div className="mt-5 flex justify-end gap-2">
               <Button size="sm" variant="ghost" onClick={() => setEditingLocalUser(false)}>Cancel</Button>
               <Button size="sm" onClick={saveLocalUser} disabled={!localUserName.trim()}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmingLocalLogout && user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div role="dialog" aria-modal="true" aria-label="Log out local user" className="w-full max-w-sm border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
+            <h2 className="text-base font-semibold">Log out {user.name}?</h2>
+            <p className="mt-2 text-sm text-neutral-400">
+              This removes the AI account used to create this Local User from AI Router and deletes its credential from Vault. Other vendor connections stay connected.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setConfirmingLocalLogout(false)} disabled={loggingOutLocalUser}>Cancel</Button>
+              <Button size="sm" variant="danger" onClick={() => void logoutLocalUser()} disabled={loggingOutLocalUser}>
+                {loggingOutLocalUser ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                Log out
+              </Button>
             </div>
           </div>
         </div>

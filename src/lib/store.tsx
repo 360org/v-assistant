@@ -117,6 +117,8 @@ export interface LocalUser {
   providerLabel?: string;
   /** Secondary line, normally the linked account identity. */
   detail?: string;
+  /** AI Router connection that authenticated this device-local profile. */
+  connectionId?: string;
   createdAt: number;
 }
 
@@ -275,6 +277,8 @@ interface AppStore extends PersistedState {
   updateLocalUser: (name: string) => void;
   /** Create the device-local profile from its first linked AI account only. */
   ensureLocalUser: (input: Omit<LocalUser, "createdAt">) => void;
+  /** Remove the device-local profile after its linked credential is revoked. */
+  clearLocalUser: () => void;
   setProvider: (provider: ProviderId) => void;
   setProviderConfig: (
     provider: ProviderId,
@@ -717,6 +721,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...s,
       user: { ...input, createdAt: Date.now() },
     });
+  }, []);
+
+  const clearLocalUser = useCallback(() => {
+    setState((s) => ({ ...s, user: null }));
   }, []);
 
   const setProvider = useCallback((provider: ProviderId) => {
@@ -1180,6 +1188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       updateLocalUser,
       ensureLocalUser,
+      clearLocalUser,
       setProvider,
       setProviderConfig,
       connectProvider,
@@ -1220,6 +1229,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeOnboarding,
       updateLocalUser,
       ensureLocalUser,
+      clearLocalUser,
       setProvider,
       setProviderConfig,
       connectProvider,
