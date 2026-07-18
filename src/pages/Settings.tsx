@@ -100,11 +100,9 @@ export function Settings() {
   const selectedProviderConnections = selectedProvider
     ? connections.filter((connection) => connection.provider === selectedProvider.id && connection.isActive !== false)
     : [];
-  const connectedLocalAccountProviders = new Set(
-    connections
-      .filter((connection) => connection.isActive !== false)
-      .map((connection) => connection.provider),
-  );
+  // A Local User is authenticated by one AI account. Other AI Router
+  // connections are vendor credentials, not additional Local User sign-ins.
+  const localUserProvider = user?.provider;
 
   const createConnectionId = (provider: string) => {
     const accountId = globalThis.crypto?.randomUUID?.()
@@ -409,7 +407,7 @@ export function Settings() {
               <div className="mb-2 text-xs font-medium text-neutral-300">AI accounts</div>
               <div className="flex flex-wrap gap-2">
                 {LOCAL_AI_ACCOUNTS.map((account) => {
-                  const connected = connectedLocalAccountProviders.has(account.id);
+                  const connected = localUserProvider === account.id;
                   return (
                     <Button
                       key={account.id}
