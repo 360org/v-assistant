@@ -219,7 +219,7 @@ fn chrome_safe_storage_password() -> Result<String, String> {
     ];
     for args in attempts {
         let output = std::process::Command::new("security")
-            .args(args)
+            .args(*args)
             .output()
             .map_err(|error| error.to_string())?;
         if output.status.success() {
