@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, X } from "lucide-react";
 import { vaultDelete, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
-import { getProvider } from "@/lib/catalog";
+import { getProvider, type ProviderId } from "@/lib/catalog";
 import {
   captureGrokWebSsoCookie,
   deleteAiRouterConnection,
@@ -33,6 +33,7 @@ export function Settings() {
     selfImprove,
     setSelfImprove,
     updateLocalUser,
+    ensureLocalUser,
   } = useApp();
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -163,6 +164,12 @@ export function Settings() {
         priority: providerConnections.length + 1,
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
+      });
+      ensureLocalUser({
+        name: identity.accountLabel || provider.name,
+        provider: provider.id,
+        providerLabel: provider.name,
+        detail: identity.email,
       });
       let testError: string | null = null;
       try {
@@ -382,7 +389,7 @@ export function Settings() {
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{user.name}</div>
               <div className="text-xs text-neutral-500">
-                AI Router account · {getProvider(user.provider).name}
+                AI Router account · {user.providerLabel || getProvider(user.provider as ProviderId).name}
                 {user.detail ? ` · ${user.detail}` : ""}
               </div>
               <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-600">
@@ -420,17 +427,25 @@ export function Settings() {
             </div>
           </Card>
         ) : (
-          <Card className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Card className="mt-3 flex flex-col gap-3">
             <div className="flex-1">
-              <div className="font-semibold">AI Router manages accounts</div>
+              <div className="font-semibold">Create your local user</div>
               <div className="text-xs text-neutral-500">
-                Connect a vendor below. The Router owns subscription login,
-                API keys, refresh and routing for this device.
+                Sign in with an AI account. Its profile creates this device-local user;
+                a paid subscription is also connected to AI Router when available.
               </div>
             </div>
-            <Button onClick={() => setShowProviderManager(true)}>
-              Manage providers
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {LOCAL_AI_ACCOUNTS.map((account) => (
+                <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
+                  {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                  Sign in {account.name}
+                </Button>
+              ))}
+              <Button size="sm" variant="secondary" onClick={() => setShowProviderManager(true)}>
+                Manage providers
+              </Button>
+            </div>
           </Card>
         )}
       </section>

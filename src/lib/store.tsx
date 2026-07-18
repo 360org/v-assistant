@@ -109,11 +109,13 @@ export interface AgentConfig {
  * account — no separate registration. Lives only on this device.
  */
 export interface LocalUser {
-  /** Display name (vendor account label, or the provider name). */
+  /** Display name from the first linked AI account, editable by the user. */
   name: string;
-  /** Which vendor the account came from. */
-  provider: ProviderId;
-  /** Secondary line, e.g. remaining credit. */
+  /** Router/vendor identifier for the account that created this profile. */
+  provider: string;
+  /** Human name for a provider that is not in the legacy runtime catalog. */
+  providerLabel?: string;
+  /** Secondary line, normally the linked account identity. */
   detail?: string;
   createdAt: number;
 }
@@ -271,6 +273,8 @@ interface AppStore extends PersistedState {
   completeOnboarding: (provider: ProviderId, integrations: string[]) => void;
   /** Change the local profile label without changing any vendor credential. */
   updateLocalUser: (name: string) => void;
+  /** Create the device-local profile from its first linked AI account only. */
+  ensureLocalUser: (input: Omit<LocalUser, "createdAt">) => void;
   setProvider: (provider: ProviderId) => void;
   setProviderConfig: (
     provider: ProviderId,
@@ -708,6 +712,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => s.user ? { ...s, user: { ...s.user, name: clean } } : s);
   }, []);
 
+  const ensureLocalUser = useCallback((input: Omit<LocalUser, "createdAt">) => {
+    setState((s) => s.user ? s : {
+      ...s,
+      user: { ...input, createdAt: Date.now() },
+    });
+  }, []);
+
   const setProvider = useCallback((provider: ProviderId) => {
     setState((s) => ({ ...s, provider }));
   }, []);
@@ -751,6 +762,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user: s.user ?? {
           name: account?.label ?? getProvider(provider).name,
           provider,
+          providerLabel: getProvider(provider).name,
           detail: account?.detail,
           createdAt: Date.now(),
         },
@@ -1167,6 +1179,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       oauthError,
       completeOnboarding,
       updateLocalUser,
+      ensureLocalUser,
       setProvider,
       setProviderConfig,
       connectProvider,
@@ -1206,6 +1219,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       oauthError,
       completeOnboarding,
       updateLocalUser,
+      ensureLocalUser,
       setProvider,
       setProviderConfig,
       connectProvider,
