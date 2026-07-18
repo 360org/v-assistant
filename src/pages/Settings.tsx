@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, X } from "lucide-react";
 import { vaultDelete, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
 import { getProvider } from "@/lib/catalog";
@@ -19,12 +19,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+const LOCAL_AI_ACCOUNTS = [
+  { id: "antigravity", name: "Gemini" },
+  { id: "codex", name: "GPT" },
+  { id: "claude", name: "Claude" },
+  { id: "grok-cli", name: "Grok" },
+] as const;
+
 export function Settings() {
   const {
     user,
     resetApp,
     selfImprove,
     setSelfImprove,
+    updateLocalUser,
   } = useApp();
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -41,6 +49,8 @@ export function Settings() {
   const [manualCallbackUrl, setManualCallbackUrl] = useState("");
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
   const [connectionActionId, setConnectionActionId] = useState<string | null>(null);
+  const [editingLocalUser, setEditingLocalUser] = useState(false);
+  const [localUserName, setLocalUserName] = useState("");
 
   const refreshConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -89,6 +99,11 @@ export function Settings() {
   const selectedProviderConnections = selectedProvider
     ? connections.filter((connection) => connection.provider === selectedProvider.id && connection.isActive !== false)
     : [];
+  const connectedLocalAccountProviders = new Set(
+    connections
+      .filter((connection) => connection.isActive !== false)
+      .map((connection) => connection.provider),
+  );
 
   const createConnectionId = (provider: string) => {
     const accountId = globalThis.crypto?.randomUUID?.()
@@ -107,23 +122,25 @@ export function Settings() {
     };
   };
 
-  const connectSubscription = async () => {
-    if (!selectedProvider || !subscriptionProvider) return;
+  const connectSubscription = async (providerToConnect = selectedProvider) => {
+    const oauthProvider = providerToConnect?.oauthProvider;
+    if (!oauthProvider || !providerToConnect) return;
+    const provider = providerToConnect;
     setConnecting(true);
     setConnectMessage(null);
     setManualAuthUrl(null);
     setManualCallbackUrl("");
     try {
       const result = await signInWithAiRouterCore(
-        subscriptionProvider,
+        oauthProvider,
         setManualAuthUrl,
       );
       const accessToken = result.accessToken || result.apiKey;
       if (!accessToken && !result.apiKey) throw new Error("AI Router OAuth returned no usable credential.");
       const latestConnections = await getAiRouterConnections();
-      const providerConnections = latestConnections.filter((connection) => connection.provider === selectedProvider.id);
+      const providerConnections = latestConnections.filter((connection) => connection.provider === provider.id);
       const identity = accountIdentity(result);
-      const id = createConnectionId(selectedProvider.id);
+      const id = createConnectionId(provider.id);
       await vaultSet(`ai-router:credential:${id}`, JSON.stringify({
         accessToken,
         apiKey: result.apiKey,
@@ -138,9 +155,9 @@ export function Settings() {
       }));
       await saveAiRouterConnection({
         id,
-        provider: selectedProvider.id,
-        name: selectedProvider.name,
-        label: selectedProvider.name,
+        provider: provider.id,
+        name: provider.name,
+        label: provider.name,
         email: identity.email,
         accountLabel: identity.accountLabel,
         priority: providerConnections.length + 1,
@@ -167,6 +184,39 @@ export function Settings() {
     } finally {
       setConnecting(false);
     }
+  };
+
+  const editLocalUser = () => {
+    setLocalUserName(user?.name ?? "");
+    setEditingLocalUser(true);
+  };
+
+  const saveLocalUser = () => {
+    updateLocalUser(localUserName);
+    setEditingLocalUser(false);
+  };
+
+  const signInLocalAiAccount = async (providerId: string) => {
+    setShowProviderManager(true);
+    setProviderQuery("");
+    setConnectMessage(null);
+    let catalog = providerCatalog;
+    if (!catalog.length) {
+      try {
+        catalog = await getAiRouterProviderCatalog();
+        setProviderCatalog(catalog);
+      } catch (error) {
+        setConnectMessage(error instanceof Error ? error.message : String(error));
+        return;
+      }
+    }
+    const provider = catalog.find((item) => item.id === providerId);
+    if (!provider?.oauthProvider) {
+      setConnectMessage("This AI account is not available from the local AI Router.");
+      return;
+    }
+    setSelectedProvider(provider);
+    await connectSubscription(provider);
   };
 
   const copyManualAuthUrl = () => {
@@ -325,7 +375,7 @@ export function Settings() {
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-neutral-300">Account</h2>
         {user ? (
-          <Card className="mt-3 flex items-center gap-3">
+          <Card className="mt-3 flex flex-wrap items-center gap-3">
             <div className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950">
               {user.name.charAt(0).toUpperCase()}
             </div>
@@ -342,7 +392,32 @@ export function Settings() {
                   : "Development preview storage"}
               </div>
             </div>
-            <Badge tone="green">Local user</Badge>
+            <div className="ml-auto flex items-center gap-1">
+              <Badge tone="green">Local user</Badge>
+              <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser}>
+                <Pencil className="size-4" />
+              </Button>
+            </div>
+            <div className="w-full border-t border-neutral-800 pt-3">
+              <div className="mb-2 text-xs font-medium text-neutral-300">AI accounts</div>
+              <div className="flex flex-wrap gap-2">
+                {LOCAL_AI_ACCOUNTS.map((account) => {
+                  const connected = connectedLocalAccountProviders.has(account.id);
+                  return (
+                    <Button
+                      key={account.id}
+                      size="sm"
+                      variant={connected ? "secondary" : "ghost"}
+                      onClick={() => void signInLocalAiAccount(account.id)}
+                      disabled={connecting}
+                    >
+                      {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                      {connected ? `${account.name} connected` : `Sign in ${account.name}`}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
           </Card>
         ) : (
           <Card className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -359,6 +434,34 @@ export function Settings() {
           </Card>
         )}
       </section>
+
+      {editingLocalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div role="dialog" aria-modal="true" aria-label="Edit local profile" className="w-full max-w-sm border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Edit local profile</h2>
+              <Button size="sm" variant="ghost" title="Close" onClick={() => setEditingLocalUser(false)}>
+                <X className="size-4" />
+              </Button>
+            </div>
+            <label className="mt-4 block text-xs text-neutral-400" htmlFor="local-user-name">Display name</label>
+            <input
+              id="local-user-name"
+              value={localUserName}
+              onChange={(event) => setLocalUserName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") saveLocalUser();
+              }}
+              autoFocus
+              className="mt-1 w-full border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-gold-400/60"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setEditingLocalUser(false)}>Cancel</Button>
+              <Button size="sm" onClick={saveLocalUser} disabled={!localUserName.trim()}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="mt-8">
         <div className="flex items-center justify-between gap-3">

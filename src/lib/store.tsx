@@ -269,6 +269,8 @@ interface AppStore extends PersistedState {
   /** Error from a failed sign-in return, for the UI to surface. */
   oauthError: string | null;
   completeOnboarding: (provider: ProviderId, integrations: string[]) => void;
+  /** Change the local profile label without changing any vendor credential. */
+  updateLocalUser: (name: string) => void;
   setProvider: (provider: ProviderId) => void;
   setProviderConfig: (
     provider: ProviderId,
@@ -699,6 +701,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const updateLocalUser = useCallback((name: string) => {
+    const clean = name.trim().slice(0, 80);
+    if (!clean) return;
+    setState((s) => s.user ? { ...s, user: { ...s.user, name: clean } } : s);
+  }, []);
 
   const setProvider = useCallback((provider: ProviderId) => {
     setState((s) => ({ ...s, provider }));
@@ -1158,6 +1166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       oauthReturn,
       oauthError,
       completeOnboarding,
+      updateLocalUser,
       setProvider,
       setProviderConfig,
       connectProvider,
@@ -1196,6 +1205,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       oauthReturn,
       oauthError,
       completeOnboarding,
+      updateLocalUser,
       setProvider,
       setProviderConfig,
       connectProvider,
