@@ -212,10 +212,10 @@ fn chrome_cookie_key() -> Result<Vec<u8>, String> {
 
 #[cfg(target_os = "macos")]
 fn chrome_safe_storage_password() -> Result<String, String> {
-    let attempts = [
-        ["find-generic-password", "-w", "-s", "Chrome Safe Storage"],
-        ["find-generic-password", "-w", "-s", "Chrome", "-a", "Chrome"],
-        ["find-generic-password", "-w", "-s", "Google Chrome Safe Storage"],
+    let attempts: &[&[&str]] = &[
+        &["find-generic-password", "-w", "-s", "Chrome Safe Storage"],
+        &["find-generic-password", "-w", "-s", "Chrome", "-a", "Chrome"],
+        &["find-generic-password", "-w", "-s", "Google Chrome Safe Storage"],
     ];
     for args in attempts {
         let output = std::process::Command::new("security")
