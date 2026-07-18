@@ -1,11 +1,20 @@
 name: Production Release
 
-# Every main commit with a new manifest version is tagged and built as native
-# installers. Docker is intentionally not part of this path.
+# Main commits build macOS installers first. Windows and Linux are built only
+# after manual approval through workflow_dispatch. Docker is not part of this path.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      targets:
+        description: "Installer group to build"
+        required: true
+        default: other
+        type: choice
+        options:
+          - macos
+          - other
 
 permissions:
   contents: write
@@ -47,9 +56,9 @@ jobs:
           git tag -a "$tag" -m "Release $tag"
           git push origin "$tag"
 
-  build:
+  build_macos:
     needs: version
-    if: needs.version.outputs.tag != ''
+    if: needs.version.outputs.tag != '' && (github.event_name == 'push' || github.event.inputs.targets == 'macos')
     strategy:
       fail-fast: false
       matrix:
@@ -58,10 +67,6 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-latest
-            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -75,6 +80,51 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ contains(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Set installer version
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: node scripts/set-release-version.mjs
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build installers and create draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: V Assistant ${{ needs.version.outputs.tag }}
+          releaseBody: Download the installer for your platform below, then open it to install V Assistant.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  build_other:
+    needs: version
+    if: needs.version.outputs.tag != '' && github.event_name == 'workflow_dispatch' && github.event.inputs.targets == 'other'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+          - platform: windows-latest
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -99,7 +149,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build installers and create draft release
+      - name: Build remaining installers and update draft release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -109,4 +159,3 @@ jobs:
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
