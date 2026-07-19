@@ -124,8 +124,9 @@
   desktop smoke với từng subscription trước khi đánh dấu hoàn thành.
 - [~] AI Router desktop sidecar phải chạy từ bundled resource và bundled Node
   runtime, không phụ thuộc Node cài trên máy. Chờ kiểm tra DMG macOS artifact
-  có `Resources/_up_/runtime/node/node` và real provider catalog smoke. Docker
-  có contract `npm run check:desktop-bundle`; CI kiểm tra lại artifact sau build.
+  có `Resources/_up_/runtime/node/node`, runtime dependencies và real provider
+  catalog smoke. Docker có contract `npm run check:desktop-bundle`; CI kiểm tra
+  lại artifact sau build.
   `[REF: 9router/src/lib/oauth/ — OAuth flows cho nhiều provider]`
 - [ ] OAuth Drive / Outlook / Calendar
 - [ ] Token refresh tự động
