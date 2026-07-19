@@ -2,6 +2,31 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.1] - 2026-07-19
+### Added
+*   Chuyển phần kết nối model sang **AI Router native**: Provider Core được
+    vendor vào repository và chạy local sidecar, kế thừa registry/adapter của
+    upstream thay vì tạo adapter riêng cho từng vendor.
+*   Bổ sung mô hình multi-account cho AI Router: một provider có thể có nhiều
+    connection, mỗi connection có account label/email, priority và
+    `credentialRef` riêng.
+*   Bổ sung Model Packs (fallback/round-robin), account filter và model source
+    metadata cho bộ chọn model.
+
+### Changed
+*   Vault trở thành boundary bắt buộc của AI Router: UI, agent và connector chỉ
+    xử lý reference/metadata; sidecar mới resolve secret vào lúc thực thi.
+*   Local User là profile thiết bị tạo từ lần AI sign-in đầu tiên. Logout gỡ
+    profile và connection tạo profile, nhưng không xoá các vendor độc lập.
+*   Pipeline release macOS chạy sau commit `main`, tự tăng patch từ tag gần
+    nhất và tạo artifact Intel/Apple Silicon trước các nền tảng khác.
+
+### Fixed
+*   Tách trạng thái Local User account khỏi toàn bộ danh sách AI Router
+    connections để tránh báo "connected" sai.
+*   Giữ credential đã OAuth thành công khi model test thất bại do quota hoặc
+    permission upstream.
+
 ## [1.2.0] - 2026-07-12
 ### Added
 *   Đặc tả kiến trúc **Độc lập SDK (Universal Agent Loop)** loại bỏ hoàn toàn sự phụ thuộc vào `@anthropic-ai/claude-agent-sdk` và hỗ trợ đa nhà cung cấp (ChatGPT, Claude, Gemini, OpenRouter, LocalAI) trên cả 3 nền tảng macOS, Windows, Linux.
