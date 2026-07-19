@@ -36,7 +36,7 @@ const legacyConnectionPath = join(process.cwd(), ".vua_ai_router_connections.jso
 function allowedUiOrigin(request) {
   const origin = request?.headers?.origin;
   if (!origin || origin === uiOrigin) return origin || uiOrigin;
-  if (["http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"].includes(origin)) {
+  if (["http://vassistant.localhost", "https://vassistant.localhost", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"].includes(origin)) {
     return origin;
   }
   try {
@@ -826,6 +826,11 @@ const server = createServer((request, response) => {
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "claude") {
         redirectUri = "http://localhost:443/callback";
+      } else if (provider === "antigravity") {
+        // The inherited Google OAuth client only registers this loopback URI.
+        // Never forward a Tauri/WebView origin to Google: it is not an OAuth
+        // callback origin and Google rejects it before the user can sign in.
+        redirectUri = "http://localhost:1420/callback";
       } else if (provider === "xai") {
         const oauthProvider = getProvider(provider);
         const listenPort = Number(oauthProvider.fixedPort || 56121);

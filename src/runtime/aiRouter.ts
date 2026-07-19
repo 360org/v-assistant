@@ -206,7 +206,12 @@ export async function signInWithAiRouterCore(
     if (!result?.apiKey) throw new Error("OpenRouter sign-in returned no user key.");
     return { apiKey: result.apiKey };
   }
-  const redirectUri = `${window.location.origin}/callback`;
+  // Google only accepts the loopback callback registered by the inherited
+  // Antigravity OAuth client. The Tauri WebView origin is an internal app
+  // transport origin and must never be sent to an OAuth provider.
+  const redirectUri = provider === "antigravity"
+    ? "http://localhost:1420/callback"
+    : `${window.location.origin}/callback`;
   const authorizeResponse = await fetch(`${AI_ROUTER_BASE_URL}/oauth/authorize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -277,7 +282,7 @@ export async function signInWithAiRouterCore(
   if (!authorizeResponse.ok || !authorize.authUrl || !authorize.state || !authorize.redirectUri) {
     throw new Error(authorize.error || `AI Router OAuth requires ${authorize.flowType || "a different sign-in flow"} for this provider.`);
   }
-  const manualCallback = provider === "claude" || provider === "xai";
+  const manualCallback = provider === "antigravity" || provider === "claude" || provider === "xai";
   onManualAuthUrl?.(authorize.authUrl);
   const callback = await waitForPopupCallback(authorize.authUrl, authorize.state, manualCallback);
   const code = callback.code || callback.token;

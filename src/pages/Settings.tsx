@@ -731,7 +731,7 @@ export function Settings() {
                         <input
                           value={manualCallbackUrl}
                           onChange={(event) => setManualCallbackUrl(event.target.value)}
-                          placeholder="authorization code or http://localhost:443/callback?code=..."
+                          placeholder="authorization code or http://localhost:1420/callback?code=..."
                           className="min-w-0 flex-1 border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs outline-none focus:border-gold-400/60"
                         />
                         <Button size="sm" variant="secondary" onClick={submitManualCallback} disabled={!manualCallbackUrl.trim()}>

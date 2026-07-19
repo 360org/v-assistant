@@ -4,6 +4,9 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Antigravity OAuth no longer sends Tauri's internal WebView origin to
+    Google. It uses the registered local callback (`localhost:1420`) and
+    presents the explicit callback paste step after browser approval.
 *   Chat now removes provider `<think>`/`<thinking>` reasoning blocks, including
     unfinished streamed blocks, before they reach the conversation. Basic
     Markdown headings, bold text, inline code and lists render as chat content.
