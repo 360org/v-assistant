@@ -39,7 +39,8 @@
     ],
     "resources": [
       "../agent-runner/**/*",
-      "../ai-router/**/*"
+      "../ai-router/**/*",
+      "../runtime/node/**/*"
     ]
   }
 }

@@ -99,7 +99,7 @@ pub fn run() {
 
             let project_dir = std::env::var("VUA_PROJECT_DIR")
                 .map(std::path::PathBuf::from)
-                .unwrap_or(app.path().resource_dir()?);
+                .unwrap_or(runtime::resolve_project_dir(app.path().resource_dir()?));
             vault::migrate_legacy_vault(&dir).map_err(std::io::Error::other)?;
             let broker = vault::start_broker(dir.clone()).map_err(std::io::Error::other)?;
             let runtime = Runtime::new(dir, project_dir, broker).map_err(std::io::Error::other)?;

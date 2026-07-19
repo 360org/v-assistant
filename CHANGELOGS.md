@@ -4,6 +4,9 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   macOS release artifacts bundle the Node runtime required by AI Router and
+    resolve Tauri's `_up_` resource layout. Sidecar startup failures now land
+    in the app runtime log with their actual cause.
 *   Gemini and Claude desktop callback completion delegates token exchange and
     Antigravity setup to the native AI Router Core, avoiding WebView `Load
     failed` errors from direct provider requests.

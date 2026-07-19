@@ -7,6 +7,9 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 ## [Chưa phát hành]
 
 ### Sửa lỗi
+- **Standalone macOS AI Router.** Release bundle mang Node runtime tối thiểu
+  cho AI Router Core, resolver nhận đúng layout Tauri `Resources/_up_`, và ghi
+  lỗi khởi động sidecar vào `ai-router.log` thay vì chỉ trả `Load failed`.
 - **Gemini/Claude desktop OAuth.** Authorization-code exchange và Antigravity
   project setup chạy trong AI Router sidecar. WebView chỉ giữ callback code để
   dán, không còn gọi trực tiếp Google/Anthropic rồi trả lỗi mạng `Load failed`.
