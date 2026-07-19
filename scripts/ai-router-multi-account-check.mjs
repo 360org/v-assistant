@@ -59,7 +59,18 @@ try {
   const modelPayload = await fetch(`http://127.0.0.1:${port}/v1/models`).then((response) => response.json());
   const expectedModels = REGISTRY.find((provider) => provider.id === "codex").models
     .filter((model) => !model.kind || model.kind === "llm").length;
-  assert(modelPayload.data?.length === expectedModels, "Multiple accounts duplicated the provider model catalog");
+  assert(
+    modelPayload.data?.length === expectedModels * 2,
+    "Each connected account must expose its own selectable model variants"
+  );
+  for (const account of connections) {
+    const accountModels = modelPayload.data.filter((model) => model.connectionId === account.id);
+    assert(accountModels.length === expectedModels, "Connected account is missing its model variants");
+    assert(
+      accountModels.every((model) => model.accountLabel === account.accountLabel),
+      "Model variants must retain their connected account label"
+    );
+  }
 
   const deleted = await fetch(`http://127.0.0.1:${port}/v1/providers/${encodeURIComponent(connections[0].id)}`, {
     method: "DELETE",
@@ -68,7 +79,7 @@ try {
   const remaining = await fetch(`http://127.0.0.1:${port}/v1/providers`).then((response) => response.json());
   assert(remaining.connections?.length === 1 && remaining.connections[0].id === connections[1].id, "Deleting one account affected the other account");
 
-  console.log(`AI Router multi-account OK: 2 Codex accounts, ${expectedModels} unique models, independent reset`);
+  console.log(`AI Router multi-account OK: 2 Codex accounts, ${expectedModels} models per account, independent reset`);
 } finally {
   child.kill("SIGTERM");
   fs.rmSync(tempDir, { recursive: true, force: true });

@@ -98,6 +98,28 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Tauri preserves `../` resource globs beneath `_up_` in packaged apps.
+/// Development uses the checkout directly; release builds resolve that bundled
+/// project root before spawning JavaScript sidecars.
+pub fn resolve_project_dir(resource_dir: PathBuf) -> PathBuf {
+    if resource_dir.join("ai-router/src/sidecar.mjs").exists() {
+        return resource_dir;
+    }
+    let tauri_parent = resource_dir.join("_up_");
+    if tauri_parent.join("ai-router/src/sidecar.mjs").exists() {
+        return tauri_parent;
+    }
+    resource_dir
+}
+
+fn find_node(project_dir: &Path) -> Option<PathBuf> {
+    let bundled = project_dir.join("runtime/node/node");
+    if bundled.exists() {
+        return Some(bundled);
+    }
+    find_executable("node")
+}
+
 fn spawn_process(
     dir: &Path,
     project_dir: &Path,
@@ -108,7 +130,7 @@ fn spawn_process(
     let runner_dist = project_dir.join("agent-runner/dist/index.js");
 
     let npx_bin = find_executable("npx").unwrap_or_else(|| PathBuf::from("npx"));
-    let node_bin = find_executable("node").unwrap_or_else(|| PathBuf::from("node"));
+    let node_bin = find_node(project_dir).unwrap_or_else(|| PathBuf::from("node"));
 
     let mut cmd = if runner_src.exists() {
         let mut c = Command::new(&npx_bin);
@@ -180,7 +202,9 @@ fn spawn_ai_router(
     if !sidecar.exists() {
         return Err("AI Router sidecar source not found".to_string());
     }
-    let node_bin = find_executable("node").unwrap_or_else(|| PathBuf::from("node"));
+    let node_bin = find_node(project_dir).ok_or_else(|| {
+        "Bundled Node runtime not found; AI Router cannot start.".to_string()
+    })?;
     let mut command = Command::new(node_bin);
     command
         .arg(sidecar)
@@ -219,9 +243,19 @@ impl Runtime {
             connector_token: broker.connector_token.clone(),
         };
 
-        if let Ok(child) = spawn_ai_router(&dir, &project_dir, &broker) {
-            if let Ok(mut guard) = ai_router.lock() {
-                *guard = Some(child);
+        match spawn_ai_router(&dir, &project_dir, &broker) {
+            Ok(child) => {
+                if let Ok(mut guard) = ai_router.lock() {
+                    *guard = Some(child);
+                }
+            }
+            Err(error) => {
+                let message = format!(
+                    "AI Router startup failed: {error}\nproject_dir={}\n",
+                    project_dir.display()
+                );
+                eprintln!("{message}");
+                let _ = std::fs::write(dir.join("ai-router.log"), message);
             }
         }
 
@@ -506,7 +540,7 @@ impl Runtime {
             let Ok(resource_dir) = app.path().resource_dir() else {
                 return Ok(false);
             };
-            resource_dir
+            resolve_project_dir(resource_dir)
         } else {
             return Ok(false);
         };
@@ -577,6 +611,31 @@ impl Runtime {
                 let _ = child.wait();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_project_dir;
+    use std::fs;
+
+    #[test]
+    fn resolves_tauri_parent_resource_layout() {
+        let root = std::env::temp_dir().join(format!(
+            "v-assistant-resource-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock must be after the Unix epoch")
+                .as_nanos()
+        ));
+        let sidecar = root.join("_up_/ai-router/src/sidecar.mjs");
+        fs::create_dir_all(sidecar.parent().expect("sidecar must have a parent"))
+            .expect("test resource path must be created");
+        fs::write(&sidecar, "export {};").expect("test sidecar must be written");
+
+        assert_eq!(resolve_project_dir(root.clone()), root.join("_up_"));
+        fs::remove_dir_all(root).expect("test resource path must be removed");
     }
 }
 

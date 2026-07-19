@@ -69,6 +69,31 @@ export interface ManualSignInAttempt {
   redirect: string;
   verifier: string;
   state: string;
+  /** Provider name understood by the native AI Router Core. */
+  routerProvider?: string;
+}
+
+const AI_ROUTER_OAUTH_URL = "http://127.0.0.1:20128/v1/oauth";
+
+const ROUTER_OAUTH_PROVIDER: Partial<Record<ProviderId, string>> = {
+  gemini: "antigravity",
+  claude: "claude",
+};
+
+interface RouterAuthorization {
+  authUrl?: string;
+  state?: string;
+  codeVerifier?: string;
+  redirectUri?: string;
+  error?: string;
+}
+
+interface RouterTokens {
+  accessToken?: string;
+  apiKey?: string;
+  refreshToken?: string;
+  projectId?: string;
+  expiresIn?: number;
 }
 
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
@@ -196,6 +221,29 @@ function callbackUrl(provider: ProviderId): string {
  * event race. The user pastes the final callback URL/code into the app.
  */
 export async function beginManualSignIn(provider: ProviderId): Promise<ManualSignInAttempt> {
+  const routerProvider = ROUTER_OAUTH_PROVIDER[provider];
+  if (routerProvider) {
+    const response = await fetch(`${AI_ROUTER_OAUTH_URL}/authorize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // This is a browser-visible callback only. The code exchange remains in
+      // the native AI Router sidecar, which owns provider credentials and HTTP.
+      body: JSON.stringify({ provider: routerProvider, redirectUri: "http://localhost:1420/callback" }),
+    });
+    const authorization = await response.json() as RouterAuthorization;
+    if (!response.ok || !authorization.authUrl || !authorization.state || !authorization.codeVerifier || !authorization.redirectUri) {
+      throw new Error(authorization.error || `AI Router could not start ${provider} sign-in.`);
+    }
+    await openExternal(authorization.authUrl);
+    return {
+      provider,
+      authUrl: authorization.authUrl,
+      redirect: authorization.redirectUri,
+      verifier: authorization.codeVerifier,
+      state: authorization.state,
+      routerProvider,
+    };
+  }
   if (!(provider in OAUTH_CONFIGS)) {
     throw new Error(`Direct sign-in for ${provider} is not available. Use another provider or paste an API key.`);
   }
@@ -239,6 +287,33 @@ export async function completeManualSignIn(
     }
   }
   if (!code) throw new Error("No authorization code found in the pasted value.");
+
+  if (attempt.routerProvider) {
+    const response = await fetch(`${AI_ROUTER_OAUTH_URL}/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: attempt.routerProvider,
+        code,
+        redirectUri: attempt.redirect,
+        codeVerifier: attempt.verifier,
+        state: attempt.state,
+      }),
+    });
+    const payload = await response.json() as { tokens?: RouterTokens; error?: string };
+    const tokens = payload.tokens;
+    const apiKey = tokens?.accessToken || tokens?.apiKey;
+    if (!response.ok || !tokens || !apiKey) {
+      throw new Error(payload.error || `${attempt.provider} sign-in could not be completed by AI Router.`);
+    }
+    return {
+      provider: attempt.provider,
+      apiKey,
+      projectId: tokens.projectId,
+      refreshToken: tokens.refreshToken,
+      expiresAt: typeof tokens.expiresIn === "number" ? Date.now() + tokens.expiresIn * 1000 : undefined,
+    };
+  }
   return await exchangeCode(attempt.provider, code, attempt.verifier, attempt.redirect, attempt.state);
 }
 

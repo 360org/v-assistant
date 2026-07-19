@@ -71,9 +71,11 @@ jobs:
         include:
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
+            target: "aarch64-apple-darwin"
             asset_suffix: "macOS-Apple-Silicon"
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
+            target: "x86_64-apple-darwin"
             asset_suffix: "macOS-Intel"
 
     runs-on: ${{ matrix.platform }}
@@ -101,6 +103,24 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Bundle Node runtime for AI Router
+        shell: bash
+        run: |
+          case "${{ matrix.args }}" in
+            *aarch64-apple-darwin*) archive="node-v24.18.0-darwin-arm64" ;;
+            *x86_64-apple-darwin*) archive="node-v24.18.0-darwin-x64" ;;
+            *) echo "Unsupported macOS target: ${{ matrix.args }}" >&2; exit 1 ;;
+          esac
+          curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o /tmp/node.tar.gz
+          mkdir -p runtime/node
+          tar -xzf /tmp/node.tar.gz -C /tmp
+          install -m 755 "/tmp/${archive}/bin/node" runtime/node/node
+
+      - name: Verify bundled runtime input
+        run: |
+          test -x runtime/node/node
+          test -f ai-router/src/sidecar.mjs
+
       - name: Build installers and create draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -113,6 +133,14 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
           releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
+
+      - name: Verify packaged AI Router runtime
+        shell: bash
+        run: |
+          app_path="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -name 'V Assistant.app' -type d -print -quit)"
+          test -n "$app_path"
+          test -f "$app_path/Contents/Resources/_up_/ai-router/src/sidecar.mjs"
+          test -x "$app_path/Contents/Resources/_up_/runtime/node/node"
 
   build_other:
     needs: version
