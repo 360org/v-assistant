@@ -7,9 +7,9 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 ## [Chưa phát hành]
 
 ### Sửa lỗi
-- **Provider Core package nội bộ.** `open-sse` kế thừa nay được cài như một
-  dependency file-local của AI Router, nên bundle desktop không còn vô tình
-  phụ thuộc `node_modules` của Docker development.
+- **Provider Core package nội bộ.** `open-sse` kế thừa chạy trực tiếp từ một
+  bản source dưới `ai-router/core`; bundle desktop không còn vô tình load bản
+  copy trong `node_modules` với các đường dẫn nội bộ sai.
 - **Standalone macOS AI Router.** Release bundle mang Node runtime tối thiểu
   và dependency runtime (`undici`, `uuid`, `node-machine-id`) cho AI Router
   Core qua lockfile npm đã kiểm soát, resolver nhận đúng layout Tauri

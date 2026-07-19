@@ -30,8 +30,7 @@ const assertions = [
   ],
   [
     workflow.includes("Verify packaged AI Router runtime")
-      && workflow.includes("ai-router/node_modules/undici/package.json")
-      && workflow.includes("ai-router/node_modules/open-sse/package.json"),
+      && workflow.includes("ai-router/node_modules/undici/package.json"),
     "macOS release workflow must inspect AI Router dependencies in the packaged app",
   ],
 ];
