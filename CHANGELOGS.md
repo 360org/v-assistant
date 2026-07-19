@@ -9,6 +9,7 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
     presents the explicit callback paste step after browser approval.
 *   OpenAI Codex subscription sign-in now routes the fixed OAuth relay back to
     the local manual callback instead of rejecting Tauri's internal origin.
+    A late browser callback now expires safely without crashing the AI Router.
 *   Chat now removes provider `<think>`/`<thinking>` reasoning blocks, including
     unfinished streamed blocks, before they reach the conversation. Basic
     Markdown headings, bold text, inline code and lists render as chat content.

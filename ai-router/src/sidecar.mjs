@@ -99,6 +99,13 @@ function startCodexCallbackRelay(returnUri) {
         response.end("Not found");
         return;
       }
+      // A browser can arrive after the five-minute relay window expired.
+      // Return a useful response instead of crashing the native sidecar.
+      if (!codexCallbackReturnUri) {
+        response.writeHead(410, { "Content-Type": "text/plain; charset=utf-8" });
+        response.end("This V Assistant sign-in session has expired. Start sign-in again in the app.");
+        return;
+      }
       const destination = new URL(codexCallbackReturnUri);
       destination.search = callback.search;
       response.writeHead(302, { Location: destination.toString() });
