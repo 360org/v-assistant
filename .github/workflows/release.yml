@@ -75,7 +75,7 @@ jobs:
             asset_suffix: "macOS-Apple-Silicon"
           # Native Node modules such as better-sqlite3 must be compiled on an
           # Intel runner for the Intel desktop bundle. macos-latest is ARM.
-          - platform: macos-13
+          - platform: macos-15-intel
             args: "--target x86_64-apple-darwin"
             target: "x86_64-apple-darwin"
             asset_suffix: "macOS-Intel"
@@ -174,6 +174,10 @@ jobs:
     if: needs.version.outputs.tag != '' && github.event_name == 'push'
     runs-on: ubuntu-22.04
     steps:
+      # gh release edit resolves repository metadata through Git; keep a
+      # checkout here so publishing does not fail after both macOS builds pass.
+      - uses: actions/checkout@v4
+
       - name: Publish the completed macOS release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

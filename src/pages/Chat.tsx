@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Eraser, Layers3, Maximize2, Minimize2, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Eraser, Layers3, Maximize2, Minimize2, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import {
   type ProviderConfig,
@@ -51,6 +51,7 @@ export function Chat() {
   } = useApp();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [routerModels, setRouterModels] = useState<AiRouterModel[]>([]);
   const [modelLoadError, setModelLoadError] = useState<string | null>(null);
@@ -94,6 +95,7 @@ export function Chat() {
   };
   const bottomRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const agentPickerRef = useRef<HTMLDivElement>(null);
 
   const activeAgent = useMemo(
     () => agents.find((a) => a.id === activeAgentId) ?? null,
@@ -181,6 +183,17 @@ export function Chat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, streaming]);
+
+  useEffect(() => {
+    if (!agentPickerOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!agentPickerRef.current?.contains(event.target as Node)) {
+        setAgentPickerOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [agentPickerOpen]);
 
   // A skill was used: pre-fill the composer and put the cursor at the end.
   useEffect(() => {
@@ -292,18 +305,65 @@ export function Chat() {
             onDelete={deleteChatSession}
           />
           {installedAgentList.length > 0 && (
-            <select
-              className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 outline-none"
-              value={activeAgentId ?? ""}
-              onChange={(e) => setActiveAgent(e.target.value || null)}
-            >
-              <option value="">General assistant</option>
-              {installedAgentList.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <div ref={agentPickerRef} className="relative shrink-0">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={agentPickerOpen}
+                onClick={() => setAgentPickerOpen((open) => !open)}
+                className="flex h-8 max-w-44 cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 text-xs text-neutral-200 transition-colors hover:border-neutral-700 hover:bg-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70"
+                title="Switch assistant role"
+              >
+                <span className="truncate">{activeAgent ? activeAgent.name : "General assistant"}</span>
+                <ChevronDown className={`size-3.5 shrink-0 text-neutral-400 transition-transform ${agentPickerOpen ? "rotate-180" : ""}`} />
+              </button>
+              {agentPickerOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-10 z-50 w-72 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 p-1 shadow-2xl shadow-black/50"
+                >
+                  <button
+                    role="menuitem"
+                    type="button"
+                    onClick={() => {
+                      setActiveAgent(null);
+                      setAgentPickerOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-neutral-300 transition-colors hover:bg-neutral-900"
+                  >
+                    <span className="flex size-7 items-center justify-center rounded-md bg-neutral-800 text-xs">AI</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">General assistant</span>
+                      <span className="block truncate text-xs text-neutral-500">No specialized role</span>
+                    </span>
+                    {!activeAgent && <Check className="size-4 text-gold-300" />}
+                  </button>
+                  <div className="my-1 border-t border-neutral-800" />
+                  {installedAgentList.map((agent) => {
+                    const selected = agent.id === activeAgentId;
+                    return (
+                      <button
+                        key={agent.id}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setActiveAgent(agent.id);
+                          setAgentPickerOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-neutral-900 ${selected ? "bg-gold-400/10" : ""}`}
+                      >
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-neutral-800 text-base">{agent.emoji}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate text-sm font-medium ${selected ? "text-gold-200" : "text-neutral-200"}`}>{agent.name}</span>
+                          <span className="block truncate text-xs text-neutral-500">{agent.description}</span>
+                        </span>
+                        {selected && <Check className="size-4 shrink-0 text-gold-300" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
           {activeSkill && (
             <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold-400/15 px-2.5 py-0.5 text-xs font-medium text-gold-300">
