@@ -39,18 +39,24 @@ jobs:
           node-version: 24
 
       - id: release
-        name: Tag the committed application version
+        name: Tag the next patch release for this main commit
         shell: bash
         run: |
-          version="$(node -p "require('./package.json').version")"
-          tag="v$version"
           git fetch --tags --force
+          latest_tag="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)"
+          if [[ -z "$latest_tag" ]]; then
+            version="$(node -p "require('./package.json').version")"
+          else
+            base_version="${latest_tag#v}"
+            if [[ ! "$base_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Latest release tag is not a semantic version: $latest_tag" >&2
+              exit 1
+            fi
+            version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+          fi
+          tag="v$version"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "Tag $tag already exists; building installers for it."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "Release $tag"
