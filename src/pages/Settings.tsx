@@ -469,9 +469,6 @@ export function Settings() {
                   Sign in {account.name}
                 </Button>
               ))}
-              <Button size="sm" variant="secondary" onClick={() => setShowProviderManager(true)}>
-                Manage providers
-              </Button>
             </div>
           </Card>
         )}
@@ -796,7 +793,7 @@ export function Settings() {
           <div className="font-semibold text-neutral-100">
             V Assistant Desktop
           </div>
-          <div className="mt-1">Version 0.1.0</div>
+          <div className="mt-1">Version {__V_ASSISTANT_VERSION__}</div>
           <div className="mt-1">
             AI for everyone — install in 2 minutes, use immediately.
           </div>

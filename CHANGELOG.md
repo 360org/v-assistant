@@ -6,6 +6,67 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+### Sửa lỗi
+- **Desktop packaged runtime.** Bản cài dùng đúng thư mục `Contents/Resources`
+  để khởi chạy AI Router/Agent Runner đã bundle, thay vì nhầm thư mục chạy của
+  ứng dụng. Mục About lấy version từ manifest khi build, không còn hard-code
+  `0.1.0`.
+- **Desktop first sign-in.** Sau khi mở trang xác thực AI, onboarding desktop
+  hiển thị ngay bước dán callback URL hoặc authorization code. Hoàn tất đổi
+  code xong sẽ tạo kết nối, lưu qua Vault boundary hiện có và vào thẳng Chat.
+  Luồng này không còn phụ thuộc vào event callback tự động có thể đến trước khi
+  WebView kịp đăng ký listener.
+
+### Quy ước phát hành
+- Mọi tính năng hoàn tất phải có mục changelog trước khi merge vào `main`.
+- Mỗi commit `main` cắt một patch release mới; bản cài macOS Intel và Apple
+  Silicon được build trước, còn Windows/Linux chạy qua workflow thủ công.
+
+## [1.0.1] — 2026-07-19
+
+### Thêm mới
+- **AI Router native.** Provider Core được đưa vào V Assistant để quản lý hơn
+  100 vendor tại chỗ, không kết nối runtime sang 9router. Kết nối có thể dùng
+  subscription OAuth/device flow hoặc API key theo adapter của từng vendor.
+- **Vault-backed AI accounts.** Mỗi connection giữ một `credentialRef` opaque;
+  token, refresh token và cookie được AI Router lấy từ Vault, không đưa qua
+  agent/model hay hiển thị trong UI. Nhiều tài khoản cho cùng vendor được giữ
+  riêng theo account label/email.
+- **Packs cho model.** Người dùng có thể gom model đã kết nối thành pack,
+  thiết lập fallback hoặc round-robin, chỉnh sửa/xoá pack, và ưu tiên pack ở
+  đầu danh sách chọn model. Bộ chọn mở rộng hỗ trợ lọc theo account.
+- **Local User.** Đăng nhập Gemini, GPT, Claude hoặc Grok lần đầu tự tạo Local
+  User trên thiết bị. Tên hiển thị chỉnh sửa được và có logout xác nhận: gỡ
+  connection tạo profile cùng credential Vault của nó, không ảnh hưởng vendor
+  khác.
+- **Vault UI cho AI credentials.** Hiển thị tên provider, account label/email,
+  trạng thái và Vault reference; người dùng có thể sửa metadata mà không làm
+  lộ bí mật.
+
+### Thay đổi
+- Settings chỉ hiển thị model từ provider/account đã kết nối thực sự. Trạng
+  thái AI account của Local User không còn suy diễn từ toàn bộ vendor
+  connections.
+- Dropdown model hiển thị nguồn đầy đủ `provider · account`, giúp phân biệt
+  cùng model giữa nhiều tài khoản.
+- Bundle identifier desktop đổi thành `com.vuaai.assistant`.
+- Release workflow chỉ chạy khi có push vào `main`; mỗi lần chạy tự tăng patch
+  từ tag SemVer gần nhất, đồng bộ version vào package, lockfile, Tauri và Cargo.
+
+### Sửa lỗi
+- Provider bị quota/permission khi test sau OAuth không còn xoá kết quả đăng
+  nhập hợp lệ; connection và credential vẫn được giữ, lỗi test được báo riêng.
+- Sửa fallback khi vendor trả rate-limit và định tuyến lại vendor khả dụng.
+- Sửa build macOS khi đọc Chrome Keychain cho Grok session capture.
+- Sửa trạng thái `connected` của Local User để chỉ phản ánh tài khoản đã tạo
+  profile, không phải tất cả AI Router connections.
+
+### Phát hành
+- GitHub Actions đã build thành công DMG `x86_64` và `aarch64` cho v1.0.1.
+  Bản macOS hiện chưa được Developer ID code-sign/notarize.
+
+## [1.0.0] — 2026-07-17
+
 App giờ chạy engine agent **ngay trong ứng dụng** — cài, đăng nhập, dùng.
 Không Docker, không engine tách rời, không cấu hình.
 
