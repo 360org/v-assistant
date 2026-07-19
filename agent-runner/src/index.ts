@@ -79,6 +79,7 @@ function buildSystemPrompt(assistantName: string, agentName: string, agentDir: s
   parts.push('- grep: Search file contents');
   parts.push('- glob: List files by pattern');
   parts.push('- http_request: Make unauthenticated HTTP requests');
+  parts.push('- web_search: Search the public web, then use http_request to read a result');
   parts.push('- connector_request: Use an opaque connector reference through the trusted gateway');
   parts.push('');
   parts.push('Always use tools when they would help accomplish the task.');

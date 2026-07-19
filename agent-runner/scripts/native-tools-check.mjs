@@ -36,6 +36,20 @@ check('grep finds a match', !r.is_error && r.content.includes('second'));
 r = await executeTool('glob', { pattern: '*.txt', cwd: dir });
 check('glob lists the file', r.content.includes('note.txt'));
 
+// The search provider is intentionally not called in CI: only verify the
+// tool is registered, avoiding a live-network dependency in this test.
+r = await executeTool('web_search', {});
+check('web_search is registered', !r.is_error && r.content.includes('search query is required'));
+
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async () => new Response(`
+  <a class="result__a" href="https://example.test/first">First <b>result</b></a>
+  <a class="result__snippet">A useful snippet.</a>
+`);
+r = await executeTool('web_search', { query: 'test query', max_results: 1 });
+globalThis.fetch = originalFetch;
+check('web_search parses public result pages', !r.is_error && r.content.includes('First result') && r.content.includes('https://example.test/first'));
+
 // Host shell is deliberately not exposed to the model.
 r = await executeTool('bash', { command: 'echo RUNNER_OK' });
 check('bash is not exposed to the agent', r.is_error === true);
