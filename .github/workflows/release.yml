@@ -135,10 +135,10 @@ jobs:
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: V Assistant ${{ needs.version.outputs.tag }}
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
+          assetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
 
       - name: Verify packaged AI Router runtime
         shell: bash
@@ -203,5 +203,5 @@ jobs:
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: V Assistant ${{ needs.version.outputs.tag }}
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false

@@ -32,6 +32,7 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 - Mọi tính năng hoàn tất phải có mục changelog trước khi merge vào `main`.
 - Mỗi commit `main` cắt một patch release mới; bản cài macOS Intel và Apple
   Silicon được build trước, còn Windows/Linux chạy qua workflow thủ công.
+  Release thành công được publish tự động thay vì để dạng draft.
 
 ## [1.0.1] — 2026-07-19
 
