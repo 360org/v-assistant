@@ -7,10 +7,14 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 ## [Chưa phát hành]
 
 ### Sửa lỗi
+- **Provider Core package nội bộ.** `open-sse` kế thừa nay được cài như một
+  dependency file-local của AI Router, nên bundle desktop không còn vô tình
+  phụ thuộc `node_modules` của Docker development.
 - **Standalone macOS AI Router.** Release bundle mang Node runtime tối thiểu
   và dependency runtime (`undici`, `uuid`, `node-machine-id`) cho AI Router
-  Core, resolver nhận đúng layout Tauri `Resources/_up_`, và ghi lỗi khởi động
-  sidecar vào `ai-router.log` thay vì chỉ trả `Load failed`.
+  Core qua lockfile npm đã kiểm soát, resolver nhận đúng layout Tauri
+  `Resources/_up_`, và ghi lỗi khởi động sidecar vào `ai-router.log` thay vì
+  chỉ trả `Load failed`.
 - **Gemini/Claude desktop OAuth.** Authorization-code exchange và Antigravity
   project setup chạy trong AI Router sidecar. WebView chỉ giữ callback code để
   dán, không còn gọi trực tiếp Google/Anthropic rồi trả lỗi mạng `Load failed`.

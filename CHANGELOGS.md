@@ -4,7 +4,10 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
-*   macOS release artifacts bundle both Node and locked AI Router runtime
+*   The inherited `open-sse` Provider Core is installed as an explicit local
+    AI Router runtime dependency, rather than being resolved incidentally from
+    the Docker development workspace.
+*   macOS release artifacts bundle both Node and npm-locked AI Router runtime
     dependencies (`undici`, `uuid`, `node-machine-id`), then verify them inside
     the final `.app`. Tauri's `_up_` resource layout is resolved and sidecar
     startup failures land in the app runtime log with their actual cause.

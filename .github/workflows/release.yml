@@ -104,8 +104,7 @@ jobs:
         run: npm ci
 
       - name: Install AI Router runtime dependencies
-        working-directory: ai-router
-        run: corepack pnpm install --frozen-lockfile
+        run: npm ci --prefix ai-router
 
       - name: Bundle Node runtime for AI Router
         shell: bash
@@ -124,6 +123,7 @@ jobs:
         run: |
           test -x runtime/node/node
           test -f ai-router/src/sidecar.mjs
+          test -f ai-router/node_modules/open-sse/package.json
           test -f ai-router/node_modules/undici/package.json
           test -f ai-router/node_modules/uuid/package.json
           test -f ai-router/node_modules/node-machine-id/package.json
@@ -147,6 +147,7 @@ jobs:
           app_path="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -name 'V Assistant.app' -type d -print -quit)"
           test -n "$app_path"
           test -f "$app_path/Contents/Resources/_up_/ai-router/src/sidecar.mjs"
+          test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/open-sse/package.json"
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/undici/package.json"
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/uuid/package.json"
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/node-machine-id/package.json"
