@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, X } from "lucide-react";
 import { vaultDelete, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
@@ -25,6 +25,15 @@ const LOCAL_AI_ACCOUNTS = [
   { id: "claude", name: "Claude" },
   { id: "grok-cli", name: "Grok" },
 ] as const;
+
+// Local profiles created by the earlier onboarding flow used the consumer
+// provider IDs. AI Router uses its inherited provider IDs for the same login.
+const LOCAL_ACCOUNT_PROVIDER_IDS: Record<string, readonly string[]> = {
+  antigravity: ["antigravity", "gemini"],
+  codex: ["codex", "chatgpt", "openai"],
+  claude: ["claude"],
+  "grok-cli": ["grok-cli", "grok", "xai"],
+};
 
 export function Settings() {
   const {
@@ -55,6 +64,7 @@ export function Settings() {
   const [localUserName, setLocalUserName] = useState("");
   const [confirmingLocalLogout, setConfirmingLocalLogout] = useState(false);
   const [loggingOutLocalUser, setLoggingOutLocalUser] = useState(false);
+  const signInAttemptRef = useRef(0);
 
   const refreshConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -106,6 +116,15 @@ export function Settings() {
   // A Local User is authenticated by one AI account. Other AI Router
   // connections are vendor credentials, not additional Local User sign-ins.
   const localUserProvider = user?.provider;
+  const isLocalAccountConnected = (accountId: string) => {
+    const providerIds = LOCAL_ACCOUNT_PROVIDER_IDS[accountId] ?? [accountId];
+    return providerIds.includes(localUserProvider ?? "")
+      || connections.some((connection) => (
+        connection.isActive !== false
+        && providerIds.includes(connection.provider)
+        && (!user?.connectionId || connection.id === user.connectionId)
+      ));
+  };
 
   const createConnectionId = (provider: string) => {
     const accountId = globalThis.crypto?.randomUUID?.()
@@ -128,6 +147,8 @@ export function Settings() {
     const oauthProvider = providerToConnect?.oauthProvider;
     if (!oauthProvider || !providerToConnect) return;
     const provider = providerToConnect;
+    const attemptId = signInAttemptRef.current + 1;
+    signInAttemptRef.current = attemptId;
     setConnecting(true);
     setConnectMessage(null);
     setManualAuthUrl(null);
@@ -137,9 +158,11 @@ export function Settings() {
         oauthProvider,
         setManualAuthUrl,
       );
+      if (attemptId !== signInAttemptRef.current) return;
       const accessToken = result.accessToken || result.apiKey;
       if (!accessToken && !result.apiKey) throw new Error("AI Router OAuth returned no usable credential.");
       const latestConnections = await getAiRouterConnections();
+      if (attemptId !== signInAttemptRef.current) return;
       const providerConnections = latestConnections.filter((connection) => connection.provider === provider.id);
       const identity = accountIdentity(result);
       const id = createConnectionId(provider.id);
@@ -155,6 +178,7 @@ export function Settings() {
         scope: result.scope,
         providerSpecificData: result.providerSpecificData,
       }));
+      if (attemptId !== signInAttemptRef.current) return;
       await saveAiRouterConnection({
         id,
         provider: provider.id,
@@ -166,6 +190,7 @@ export function Settings() {
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
       });
+      if (attemptId !== signInAttemptRef.current) return;
       ensureLocalUser({
         name: identity.accountLabel || provider.name,
         provider: provider.id,
@@ -183,15 +208,18 @@ export function Settings() {
       setManualCallbackUrl("");
       setAuthUrlCopied(false);
       await refreshConnections();
+      if (attemptId !== signInAttemptRef.current) return;
       setConnectMessage(
         testError
           ? `Authenticated and stored in Vault. Model test is unavailable: ${testError}`
           : "Authenticated, stored in Vault, and model access verified.",
       );
     } catch (error) {
-      setConnectMessage(error instanceof Error ? error.message : String(error));
+      if (attemptId === signInAttemptRef.current) {
+        setConnectMessage(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setConnecting(false);
+      if (attemptId === signInAttemptRef.current) setConnecting(false);
     }
   };
 
@@ -207,6 +235,13 @@ export function Settings() {
 
   const logoutLocalUser = async () => {
     if (!user) return;
+    // A browser OAuth flow may still be waiting for a callback. Make its
+    // eventual result inert before removing the local profile.
+    signInAttemptRef.current += 1;
+    setConnecting(false);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
+    setConnectMessage(null);
     setLoggingOutLocalUser(true);
     setConnectionError(null);
     try {
@@ -436,7 +471,7 @@ export function Settings() {
               <div className="mb-2 text-xs font-medium text-neutral-300">AI accounts</div>
               <div className="flex flex-wrap gap-2">
                 {LOCAL_AI_ACCOUNTS.map((account) => {
-                  const connected = localUserProvider === account.id;
+                  const connected = isLocalAccountConnected(account.id);
                   return (
                     <Button
                       key={account.id}

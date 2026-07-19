@@ -4,6 +4,10 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Local User account status now recognizes the legacy Gemini, ChatGPT and
+    Grok provider identifiers used during onboarding. Logging out cancels an
+    in-flight sign-in attempt, clears its UI state, and leaves sign-in buttons
+    ready for the next account.
 *   Desktop WebView origins (`tauri.localhost` and `tauri://localhost`) are
     accepted by AI Router CORS so the onboarding can load its provider catalog.
 *   Successful main releases are now published automatically; the Tauri Action
