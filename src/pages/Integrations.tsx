@@ -1,6 +1,11 @@
 import { useState } from "react";
-import { Check, ExternalLink, Plug, X } from "lucide-react";
+import { Check, Download, ExternalLink, Plug, Settings2, X } from "lucide-react";
 import { INTEGRATIONS, type Integration } from "@/lib/catalog";
+import {
+  ENGINE_SKILL_KIND_LABEL,
+  NANOCLAW_SKILLS,
+  type EngineSkill,
+} from "@/lib/nanoclawSkills";
 import { useApp } from "@/lib/store";
 import { deleteVaultEntry, saveVaultEntry } from "@/runtime/vault";
 import { Card } from "@/components/ui/card";
@@ -13,10 +18,17 @@ const inputClass =
 
 /** Deterministic Vault id for an integration's saved config. */
 const vaultIdFor = (id: string) => `integration:${id}`;
+const engineVaultIdFor = (id: string) => `engine:${id}`;
 
 export function Integrations() {
-  const { connectedIntegrations, toggleIntegration } = useApp();
+  const {
+    connectedIntegrations,
+    installedEngineSkills,
+    toggleEngineSkill,
+    toggleIntegration,
+  } = useApp();
   const [configFor, setConfigFor] = useState<Integration | null>(null);
+  const [engineConfigFor, setEngineConfigFor] = useState<EngineSkill | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
 
   const onConnect = (integration: Integration) => {
@@ -37,6 +49,16 @@ export function Integrations() {
       await deleteVaultEntry(vaultIdFor(integration.id));
     }
     toggleIntegration(integration.id);
+  };
+
+  const installPlugin = (plugin: EngineSkill) => {
+    if (plugin.fields?.length) setEngineConfigFor(plugin);
+    else toggleEngineSkill(plugin.id);
+  };
+
+  const removePlugin = async (plugin: EngineSkill) => {
+    if (plugin.fields?.length) await deleteVaultEntry(engineVaultIdFor(plugin.id));
+    toggleEngineSkill(plugin.id);
   };
 
   return (
@@ -85,6 +107,64 @@ export function Integrations() {
         })}
       </div>
 
+      <section className="mt-12">
+        <h2 className="text-lg font-semibold">Apps & plugins</h2>
+        <p className="mt-1 text-sm text-neutral-400">
+          Install channels, providers, and runtime capabilities here. Their
+          credentials stay in your Vault.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {NANOCLAW_SKILLS.map((plugin) => {
+            const installed = installedEngineSkills.includes(plugin.id);
+            return (
+              <Card key={plugin.id} className="flex items-center gap-4">
+                <span className="text-3xl">{plugin.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{plugin.name}</h3>
+                    <Badge>{ENGINE_SKILL_KIND_LABEL[plugin.kind]}</Badge>
+                  </div>
+                  <p className="mt-0.5 text-sm text-neutral-400">
+                    {plugin.description}
+                  </p>
+                </div>
+                {installed ? (
+                  <div className="flex items-center gap-1">
+                    {plugin.fields?.length ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setEngineConfigFor(plugin)}
+                        title="Edit configuration"
+                      >
+                        <Settings2 className="size-3.5" /> Configure
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void removePlugin(plugin)}
+                      title="Remove"
+                    >
+                      <Check className="size-3.5 text-emerald-400" /> Installed
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => installPlugin(plugin)}
+                    title={plugin.command}
+                  >
+                    <Download className="size-3.5" /> Install
+                  </Button>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
       {configFor && (
         <IntegrationConfig
           integration={configFor}
@@ -95,6 +175,91 @@ export function Integrations() {
           }}
         />
       )}
+      {engineConfigFor && (
+        <EnginePluginConfig
+          plugin={engineConfigFor}
+          onClose={() => setEngineConfigFor(null)}
+          onSaved={async (values) => {
+            await saveVaultEntry({
+              id: engineVaultIdFor(engineConfigFor.id),
+              label: `${engineConfigFor.name} (plugin)`,
+              service: engineConfigFor.id,
+              fields: (engineConfigFor.fields ?? [])
+                .map((field) => ({
+                  label: field.label,
+                  value: values[field.key] ?? "",
+                  type: (field.secret ? "password" : "text") as "password" | "text",
+                }))
+                .filter((field) => field.value.trim() !== ""),
+              updatedAt: Date.now(),
+            });
+            if (!installedEngineSkills.includes(engineConfigFor.id)) {
+              toggleEngineSkill(engineConfigFor.id);
+            }
+            setEngineConfigFor(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EnginePluginConfig({
+  plugin,
+  onClose,
+  onSaved,
+}: {
+  plugin: EngineSkill;
+  onClose: () => void;
+  onSaved: (values: Record<string, string>) => void | Promise<void>;
+}) {
+  const fields = plugin.fields ?? [];
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const valid = fields
+    .filter((field) => !field.optional)
+    .every((field) => (values[field.key] ?? "").trim() !== "");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-5" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">{plugin.emoji}</span>
+            <h2 className="font-semibold">Configure {plugin.name}</h2>
+          </div>
+          <button onClick={onClose} className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800" aria-label="Close">
+            <X className="size-4" />
+          </button>
+        </div>
+        {plugin.hint && <p className="mt-3 text-xs text-neutral-400">{plugin.hint}</p>}
+        <div className="mt-4 flex flex-col gap-3">
+          {fields.map((field) => (
+            <label key={field.key} className="text-xs text-neutral-400">
+              {field.label}{field.optional ? " (optional)" : ""}
+              <input
+                className={`${inputClass} mt-1`}
+                type={field.secret ? "password" : "text"}
+                value={values[field.key] ?? ""}
+                onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}
+                placeholder={field.placeholder}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" disabled={!valid || saving} onClick={async () => {
+            setSaving(true);
+            try { await onSaved(values); } finally { setSaving(false); }
+          }}>
+            {saving ? "Saving…" : "Save & install"}
+          </Button>
+        </div>
+        <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
+          Saved to your Vault. The runtime uses this credential without exposing it to an agent.
+        </p>
+      </div>
     </div>
   );
 }
