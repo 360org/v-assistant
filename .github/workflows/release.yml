@@ -104,7 +104,8 @@ jobs:
         run: npm ci
 
       - name: Install AI Router runtime dependencies
-        run: corepack pnpm --dir ai-router install --frozen-lockfile
+        working-directory: ai-router
+        run: corepack pnpm install --frozen-lockfile
 
       - name: Bundle Node runtime for AI Router
         shell: bash
