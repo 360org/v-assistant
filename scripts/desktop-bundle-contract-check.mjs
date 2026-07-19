@@ -20,6 +20,11 @@ const assertions = [
     "AI Router must prefer its bundled Node runtime",
   ],
   [
+    runtime.includes('join("agent-runner/dist/index.js")')
+      && runtime.includes("Bundled Agent Runner dist/index.js is missing"),
+    "Desktop runtime must launch the compiled bundled Agent Runner",
+  ],
+  [
     workflow.includes("Bundle Node runtime for AI Router"),
     "macOS release workflow must bundle Node",
   ],
@@ -29,9 +34,19 @@ const assertions = [
     "macOS release workflow must install AI Router dependencies from its lockfile",
   ],
   [
+    workflow.includes("Build bundled Agent Runner runtime")
+      && workflow.includes("npm ci --prefix agent-runner"),
+    "macOS release workflow must compile and bundle the Agent Runner",
+  ],
+  [
     workflow.includes("Verify packaged AI Router runtime")
       && workflow.includes("ai-router/node_modules/undici/package.json"),
     "macOS release workflow must inspect AI Router dependencies in the packaged app",
+  ],
+  [
+    workflow.includes("agent-runner/dist/index.js")
+      && workflow.includes("agent-runner/node_modules/better-sqlite3/package.json"),
+    "macOS release workflow must verify the packaged Agent Runner runtime",
   ],
 ];
 

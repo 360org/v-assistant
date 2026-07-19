@@ -128,20 +128,23 @@ fn spawn_process(
 ) -> Result<Child, String> {
     let runner_src = project_dir.join("agent-runner/src/index.ts");
     let runner_dist = project_dir.join("agent-runner/dist/index.js");
-
-    let npx_bin = find_executable("npx").unwrap_or_else(|| PathBuf::from("npx"));
     let node_bin = find_node(project_dir).unwrap_or_else(|| PathBuf::from("node"));
 
-    let mut cmd = if runner_src.exists() {
-        let mut c = Command::new(&npx_bin);
-        c.args(["tsx", runner_src.to_str().unwrap()]);
-        c
-    } else if runner_dist.exists() {
+    // Production bundles the compiled runner and its dependencies alongside the
+    // app. Never invoke npx/tsx from a user's machine: a desktop install must
+    // be self-contained and use the Node runtime shipped in Resources.
+    let mut cmd = if runner_dist.exists() {
         let mut c = Command::new(&node_bin);
         c.arg(runner_dist.to_str().unwrap());
         c
+    } else if cfg!(debug_assertions) && runner_src.exists() {
+        let npx_bin = find_executable("npx")
+            .ok_or_else(|| "Development runner needs npx/tsx or a compiled agent-runner/dist".to_string())?;
+        let mut c = Command::new(&npx_bin);
+        c.args(["tsx", runner_src.to_str().unwrap()]);
+        c
     } else {
-        return Err("Runner source or dist not found".to_string());
+        return Err("Bundled Agent Runner dist/index.js is missing".to_string());
     };
 
     // Construct a robust PATH env including common local bins
