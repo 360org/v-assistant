@@ -7,6 +7,10 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 ## [Chưa phát hành]
 
 ### Sửa lỗi
+- **Desktop packaged runtime.** Bản cài dùng đúng thư mục `Contents/Resources`
+  để khởi chạy AI Router/Agent Runner đã bundle, thay vì nhầm thư mục chạy của
+  ứng dụng. Mục About lấy version từ manifest khi build, không còn hard-code
+  `0.1.0`.
 - **Desktop first sign-in.** Sau khi mở trang xác thực AI, onboarding desktop
   hiển thị ngay bước dán callback URL hoặc authorization code. Hoàn tất đổi
   code xong sẽ tạo kết nối, lưu qua Vault boundary hiện có và vào thẳng Chat.

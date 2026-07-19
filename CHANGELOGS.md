@@ -4,6 +4,8 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Packaged desktop runtime resolves its bundled AI Router/Agent Runner from
+    Tauri resources. The About view receives the build manifest version.
 *   Desktop first sign-in now uses an explicit callback URL/authorization-code
     completion screen and enters Chat after the exchange succeeds. This avoids
     losing a fast browser callback before the Tauri webview subscribes.

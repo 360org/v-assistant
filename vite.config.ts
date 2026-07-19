@@ -6,6 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { readNanoClawSessions } from "./server/nanoclaw-sessions";
 
+const appVersion = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")).version;
+
 function mergeNanoClawSessions(state: Record<string, any>): Record<string, any> {
   try {
     const remote = readNanoClawSessions();
@@ -28,6 +30,9 @@ function mergeNanoClawSessions(state: Record<string, any>): Record<string, any> 
 // Vite config tuned for Tauri development.
 // https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
+  define: {
+    __V_ASSISTANT_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     react(),
     tailwindcss(),

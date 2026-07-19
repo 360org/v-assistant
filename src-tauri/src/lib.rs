@@ -87,7 +87,10 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?.join("runtime");
             
-            // Set VUA_PROJECT_DIR dynamically in dev mode to help locate agent-runner
+            // Only development resolves the project from the current checkout.
+            // A packaged app must use Tauri's resource directory, where the
+            // bundled agent-runner and AI Router sidecar live.
+            #[cfg(debug_assertions)]
             if std::env::var("VUA_PROJECT_DIR").is_err() {
                 if let Ok(cwd) = std::env::current_dir() {
                     std::env::set_var("VUA_PROJECT_DIR", cwd);
