@@ -127,7 +127,7 @@ jobs:
           test -f ai-router/node_modules/uuid/package.json
           test -f ai-router/node_modules/node-machine-id/package.json
 
-      - name: Build installers and create draft release
+      - name: Build installers and upload to draft release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,7 +135,7 @@ jobs:
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: V Assistant ${{ needs.version.outputs.tag }}
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
           assetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
@@ -150,6 +150,17 @@ jobs:
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/uuid/package.json"
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/node-machine-id/package.json"
           test -x "$app_path/Contents/Resources/_up_/runtime/node/node"
+
+  publish_macos:
+    needs: [version, build_macos]
+    if: needs.version.outputs.tag != '' && github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Publish the completed macOS release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false
 
   build_other:
     needs: version
@@ -195,7 +206,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build remaining installers and update draft release
+      - name: Build remaining installers and upload to draft release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -203,5 +214,16 @@ jobs:
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: V Assistant ${{ needs.version.outputs.tag }}
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
+
+  publish_other:
+    needs: [version, build_other]
+    if: needs.version.outputs.tag != '' && github.event_name == 'workflow_dispatch' && github.event.inputs.targets == 'other'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Publish the completed cross-platform release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false
