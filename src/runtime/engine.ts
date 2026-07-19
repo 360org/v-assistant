@@ -232,14 +232,18 @@ export function createEngine(): Engine {
           }
           return;
         } catch (error) {
+          // The Runner is an execution layer, not the only path to a model.
+          // If it fails before yielding anything (for example it is restarting
+          // after a sidecar crash), send the turn through AI Router directly.
+          // Once it has emitted text we must preserve that partial response and
+          // surface the error instead of risking a duplicate provider request.
           if (
             runnerEmitted ||
-            !isRateLimitError(error) ||
             !isConfigured(options.provider, options.config, options.hasSubscription)
           ) {
             throw error;
           }
-          yield* streamFromProviders(messages, options, true);
+          yield* streamFromProviders(messages, options, isRateLimitError(error));
           return;
         }
       }
