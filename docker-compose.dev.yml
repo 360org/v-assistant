@@ -24,6 +24,9 @@ services:
       # Polling makes file-watching reliable across the host↔container mount
       # (notably on macOS and Windows Docker Desktop).
       CHOKIDAR_USEPOLLING: "true"
+      # Used only by the Docker OAuth contract test. The browser runtime keeps
+      # using its localhost AI Router URL.
+      AI_ROUTER_BASE_URL: "http://ai-router:20128/v1"
     volumes:
       # Live-mount the project; edits on the host reload in the browser.
       - .:/app

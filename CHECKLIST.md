@@ -118,7 +118,10 @@
 - [x] Đăng nhập qua OpenRouter (1-click OAuth)
 - [x] Đăng nhập trực tiếp vendor: ChatGPT / Claude / Gemini (dán API key)
 - [x] Local user creation sau OAuth thành công
-- [ ] Native OAuth flow cho từng vendor (không cần dán key thủ công)
+- [~] Native OAuth flow cho từng vendor (không cần dán key thủ công). Desktop
+  manual callback Gemini/Claude đã chuyển authorize/exchange sang AI Router
+  sidecar và có Docker contract `npm run check:desktop-oauth`; còn cần real
+  desktop smoke với từng subscription trước khi đánh dấu hoàn thành.
   `[REF: 9router/src/lib/oauth/ — OAuth flows cho nhiều provider]`
 - [ ] OAuth Drive / Outlook / Calendar
 - [ ] Token refresh tự động
