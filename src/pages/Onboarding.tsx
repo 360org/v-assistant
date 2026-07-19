@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Check, Copy, Loader2 } from "lucide-react";
 import {
   INTEGRATIONS,
   PROVIDERS,
@@ -13,7 +13,13 @@ import {
   type ProviderId,
 } from "@/lib/catalog";
 import { useApp } from "@/lib/store";
-import { signIn } from "@/runtime/oauth";
+import {
+  beginManualSignIn,
+  completeManualSignIn,
+  type ManualSignInAttempt,
+  signIn,
+} from "@/runtime/oauth";
+import { inDesktopShell } from "@/runtime/proxy";
 import { loginConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +27,7 @@ import { Logo } from "@/components/Logo";
 import { ProviderConnect } from "@/components/ProviderConnect";
 import { cn } from "@/lib/utils";
 
-type Step = "welcome" | "login" | "connect";
+type Step = "welcome" | "login" | "manual" | "connect";
 
 export function Onboarding() {
   const {
@@ -36,16 +42,20 @@ export function Onboarding() {
   const [provider, setProvider] = useState<ProviderId | null>(null);
   const [connectFor, setConnectFor] = useState<ProviderId | null>(null);
   const [signingIn, setSigningIn] = useState<ProviderId | null>(null);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [manualAttempt, setManualAttempt] = useState<ManualSignInAttempt | null>(null);
+  const [manualCallback, setManualCallback] = useState("");
+  const [copiedAuthUrl, setCopiedAuthUrl] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
-  // Back from a provider's sign-in page: the account is connected, resume
-  // at the integrations step.
+  // Browser-mode OAuth may still relay a completed callback through app state.
+  // Desktop onboarding uses the explicit callback form below instead.
   useEffect(() => {
     if (oauthReturn) {
       setProvider(oauthReturn.provider);
-      setStep("connect");
+      completeOnboarding(oauthReturn.provider, []);
     }
-  }, [oauthReturn]);
+  }, [completeOnboarding, oauthReturn]);
 
   const choose = async (id: ProviderId) => {
     // Providers with direct sign-in log in one click; others open the
@@ -54,19 +64,50 @@ export function Onboarding() {
       setConnectFor(id);
       return;
     }
+    setSignInError(null);
     setSigningIn(id);
     try {
+      if (inDesktopShell()) {
+        const attempt = await beginManualSignIn(id);
+        setManualAttempt(attempt);
+        setManualCallback("");
+        setStep("manual");
+        return;
+      }
       const result = await signIn(id, "onboarding");
       if (result) {
-        // Demo mode returns here; real mode has navigated away. The sign-in
-        // routes the chosen vendor's models through the router key.
+        // A successful first sign-in creates the local profile, then enters
+        // the app. Integrations remain optional and are configurable later.
         await connectProvider(
           result.provider,
           loginConfig(result.provider, result.apiKey, result),
         );
-        setProvider(result.provider);
-        setStep("connect");
+        completeOnboarding(result.provider, []);
       }
+    } catch (error) {
+      setSignInError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSigningIn(null);
+    }
+  };
+
+  const copyAuthUrl = () => {
+    if (!manualAttempt) return;
+    void navigator.clipboard.writeText(manualAttempt.authUrl);
+    setCopiedAuthUrl(true);
+    window.setTimeout(() => setCopiedAuthUrl(false), 2000);
+  };
+
+  const completeManualLogin = async () => {
+    if (!manualAttempt) return;
+    setSigningIn(manualAttempt.provider);
+    setSignInError(null);
+    try {
+      const result = await completeManualSignIn(manualAttempt, manualCallback);
+      await connectProvider(result.provider, loginConfig(result.provider, result.apiKey, result));
+      completeOnboarding(result.provider, []);
+    } catch (error) {
+      setSignInError(error instanceof Error ? error.message : String(error));
     } finally {
       setSigningIn(null);
     }
@@ -116,9 +157,9 @@ export function Onboarding() {
               <p className="mt-2 text-center text-sm text-neutral-400">
                 Use the AI account you already have. You can switch anytime.
               </p>
-              {oauthError && (
+              {(oauthError || signInError) && (
                 <p className="mt-3 text-center text-xs text-red-400">
-                  ⚠️ {oauthError}
+                  ⚠️ {signInError || oauthError}
                 </p>
               )}
               <div className="mt-6 flex flex-col gap-2.5">
@@ -159,6 +200,50 @@ export function Onboarding() {
                 className="mt-4 w-full cursor-pointer text-center text-sm text-neutral-500 hover:text-neutral-300"
               >
                 Try the preview without an account
+              </button>
+            </div>
+          )}
+
+          {step === "manual" && manualAttempt && (
+            <div>
+              <h2 className="text-center text-2xl font-bold">Complete sign in</h2>
+              <p className="mt-2 text-center text-sm text-neutral-400">
+                Finish approval in your browser, then paste the callback URL or code here. You will enter Chat immediately after verification.
+              </p>
+              <div className="mt-6 border border-neutral-800 bg-neutral-900 p-3">
+                <div className="text-xs font-medium text-neutral-300">Sign-in URL</div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    readOnly
+                    value={manualAttempt.authUrl}
+                    className="min-w-0 flex-1 border border-neutral-700 bg-neutral-950 px-2 py-2 font-mono text-xs text-neutral-400"
+                  />
+                  <Button size="sm" variant="secondary" title="Copy sign-in URL" onClick={copyAuthUrl}>
+                    {copiedAuthUrl ? <Check className="size-4" /> : <Copy className="size-4" />}
+                  </Button>
+                </div>
+                <label className="mt-4 block text-xs font-medium text-neutral-300" htmlFor="oauth-callback">
+                  Callback URL or authorization code
+                </label>
+                <input
+                  id="oauth-callback"
+                  value={manualCallback}
+                  onChange={(event) => setManualCallback(event.target.value)}
+                  placeholder="http://localhost/.../callback?code=..."
+                  className="mt-2 w-full border border-neutral-700 bg-neutral-950 px-3 py-2 font-mono text-xs outline-none focus:border-gold-400/60"
+                />
+                {signInError && <p className="mt-2 text-xs text-red-400">⚠️ {signInError}</p>}
+                <Button className="mt-3 w-full" disabled={!manualCallback.trim() || signingIn !== null} onClick={() => void completeManualLogin()}>
+                  {signingIn ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                  Continue to chat
+                </Button>
+              </div>
+              <button className="mt-4 w-full text-center text-sm text-neutral-500 hover:text-neutral-300" onClick={() => {
+                setSignInError(null);
+                setManualAttempt(null);
+                setStep("login");
+              }}>
+                Choose a different account
               </button>
             </div>
           )}

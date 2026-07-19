@@ -2,6 +2,12 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [Unreleased]
+### Fixed
+*   Desktop first sign-in now uses an explicit callback URL/authorization-code
+    completion screen and enters Chat after the exchange succeeds. This avoids
+    losing a fast browser callback before the Tauri webview subscribes.
+
 ## [1.0.1] - 2026-07-19
 ### Added
 *   Chuyển phần kết nối model sang **AI Router native**: Provider Core được

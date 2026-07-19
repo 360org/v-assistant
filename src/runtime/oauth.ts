@@ -62,6 +62,15 @@ export interface OAuthReturn {
   context: "onboarding" | "settings";
 }
 
+/** OAuth attempt whose callback is completed explicitly in the desktop UI. */
+export interface ManualSignInAttempt {
+  provider: ProviderId;
+  authUrl: string;
+  redirect: string;
+  verifier: string;
+  state: string;
+}
+
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 
 function base64url(bytes: Uint8Array): string {
@@ -180,6 +189,57 @@ function callbackUrl(provider: ProviderId): string {
   // OpenRouter authorizes the application's origin, not a /callback route.
   if (provider === "openrouter") return window.location.origin;
   return `${window.location.origin}/callback`;
+}
+
+/**
+ * Start the first-login desktop flow without depending on a browser-to-webview
+ * event race. The user pastes the final callback URL/code into the app.
+ */
+export async function beginManualSignIn(provider: ProviderId): Promise<ManualSignInAttempt> {
+  if (!(provider in OAUTH_CONFIGS)) {
+    throw new Error(`Direct sign-in for ${provider} is not available. Use another provider or paste an API key.`);
+  }
+  const verifier = randomBase64url();
+  const state = randomBase64url();
+  const redirect = provider === "claude"
+    ? CLAUDE_REDIRECT_URI
+    : provider === "gemini"
+      ? "http://localhost:1420/callback"
+      : provider === "openrouter"
+        ? "http://127.0.0.1:1420"
+        : callbackUrl(provider);
+  const authUrl = await buildAuthUrl(provider, redirect, verifier, state);
+  await openExternal(authUrl);
+  return { provider, authUrl, redirect, verifier, state };
+}
+
+/** Complete a manual desktop sign-in after the user pastes its callback URL. */
+export async function completeManualSignIn(
+  attempt: ManualSignInAttempt,
+  callbackValue: string,
+): Promise<LoginResult> {
+  const rawValue = callbackValue.trim();
+  if (!rawValue) throw new Error("Paste the callback URL or authorization code.");
+  let code = rawValue;
+  try {
+    const callback = new URL(rawValue);
+    const error = callback.searchParams.get("error");
+    if (error) throw new Error(callback.searchParams.get("error_description") || error);
+    code = callback.searchParams.get("code") || callback.searchParams.get("token") || "";
+    const returnedState = callback.searchParams.get("state");
+    if (returnedState && returnedState !== attempt.state) {
+      throw new Error("OAuth state mismatch. Please start sign-in again.");
+    }
+  } catch (error) {
+    if (error instanceof TypeError) {
+      // A provider can display an authorization code instead of redirecting.
+      code = rawValue;
+    } else {
+      throw error;
+    }
+  }
+  if (!code) throw new Error("No authorization code found in the pasted value.");
+  return await exchangeCode(attempt.provider, code, attempt.verifier, attempt.redirect, attempt.state);
 }
 
 /** True when the vendor redirects somewhere the app cannot listen on, so the
@@ -451,33 +511,46 @@ async function desktopLogin(provider: ProviderId): Promise<LoginResult> {
   const { invoke } = await import("@tauri-apps/api/core");
   const { listen } = await import("@tauri-apps/api/event");
 
-  const port = await invoke<number>("oauth_listen");
   const verifier = randomBase64url();
   const state = randomBase64url();
+  let resolveCode!: (code: string) => void;
+  let rejectCode!: (error: Error) => void;
+  const codePromise = new Promise<string>((resolve, reject) => {
+    resolveCode = resolve;
+    rejectCode = reject;
+  });
+
+  // Register Tauri listeners before opening the loopback listener. Otherwise a
+  // fast browser redirect can emit oauth-code before the webview is listening.
+  const unlistenCode = await listen<string>("oauth-code", (event) => resolveCode(event.payload));
+  const unlistenError = await listen<string>("oauth-error", (event) => rejectCode(new Error(event.payload)));
+
   // Must match the loopback redirect the vendor OAuth clients whitelist:
   // `http://localhost:<port>/callback` (host `localhost`, path `/callback`).
   // Using 127.0.0.1 or omitting /callback makes claude.ai reject the request
   // as "Invalid request format" (matches 9router's proven flow).
-  const redirect = `http://localhost:${port}/callback`;
+  const timeout = setTimeout(
+    () => rejectCode(new Error("Sign-in timed out. Please try again.")),
+    300_000,
+  );
 
-  const codePromise = new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("Sign-in timed out. Please try again.")),
-      300_000,
-    );
-    void listen<string>("oauth-code", (event) => { clearTimeout(timeout); resolve(event.payload); });
-    void listen<string>("oauth-error", (event) => { clearTimeout(timeout); reject(new Error(event.payload)); });
-  });
+  try {
+    const port = await invoke<number>("oauth_listen");
+    const redirect = `http://localhost:${port}/callback`;
+    if (!(provider in OAUTH_CONFIGS)) {
+      throw new Error(`Direct sign-in for ${provider} is not available. Use another provider or paste an API key.`);
+    }
 
-  if (!(provider in OAUTH_CONFIGS)) {
-    throw new Error(`Direct sign-in for ${provider} is not available. Use another provider or paste an API key.`);
+    const url = await buildAuthUrl(provider, redirect, verifier, state);
+    await invoke("open_external", { url });
+
+    const code = await codePromise;
+    return await exchangeCode(provider, code, verifier, redirect, state);
+  } finally {
+    clearTimeout(timeout);
+    unlistenCode();
+    unlistenError();
   }
-
-  const url = await buildAuthUrl(provider, redirect, verifier, state);
-  await invoke("open_external", { url });
-
-  const code = await codePromise;
-  return await exchangeCode(provider, code, verifier, redirect, state);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

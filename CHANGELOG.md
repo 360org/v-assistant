@@ -6,6 +6,13 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+### Sửa lỗi
+- **Desktop first sign-in.** Sau khi mở trang xác thực AI, onboarding desktop
+  hiển thị ngay bước dán callback URL hoặc authorization code. Hoàn tất đổi
+  code xong sẽ tạo kết nối, lưu qua Vault boundary hiện có và vào thẳng Chat.
+  Luồng này không còn phụ thuộc vào event callback tự động có thể đến trước khi
+  WebView kịp đăng ký listener.
+
 ### Quy ước phát hành
 - Mọi tính năng hoàn tất phải có mục changelog trước khi merge vào `main`.
 - Mỗi commit `main` cắt một patch release mới; bản cài macOS Intel và Apple
