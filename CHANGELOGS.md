@@ -4,6 +4,22 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Pack editor expansion now opens in a dedicated modal surface with a
+    backdrop instead of being clipped inside the model dropdown. Pack routing
+    uses visible Fallback and Round robin controls rather than a native select.
+*   Antigravity OAuth no longer sends Tauri's internal WebView origin to
+    Google. It uses the registered local callback (`localhost:1420`) and
+    presents the explicit callback paste step after browser approval.
+*   OpenAI Codex subscription sign-in now routes the fixed OAuth relay back to
+    the local manual callback instead of rejecting Tauri's internal origin.
+    A late browser callback now expires safely without crashing the AI Router.
+*   Chat now removes provider `<think>`/`<thinking>` reasoning blocks, including
+    unfinished streamed blocks, before they reach the conversation. Basic
+    Markdown headings, bold text, inline code and lists render as chat content.
+*   Local User account status now recognizes the legacy Gemini, ChatGPT and
+    Grok provider identifiers used during onboarding. Logging out cancels an
+    in-flight sign-in attempt, clears its UI state, and leaves sign-in buttons
+    ready for the next account.
 *   Release now keeps matrix artifacts in a draft until both macOS builds finish,
     then publishes once. This prevents Intel artifacts from being blocked by an
     already-published immutable release.
