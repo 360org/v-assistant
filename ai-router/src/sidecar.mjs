@@ -465,7 +465,9 @@ async function credentialsFromVault(connection) {
     apiKey: typeof stored.apiKey === "string" ? stored.apiKey : undefined,
     refreshToken: typeof stored.refreshToken === "string" ? stored.refreshToken : undefined,
     projectId: typeof stored.projectId === "string" ? stored.projectId : undefined,
-    expiresAt: typeof stored.expiresAt === "number" ? stored.expiresAt : undefined,
+    expiresAt: typeof stored.expiresAt === "number" || typeof stored.expiresAt === "string"
+      ? stored.expiresAt
+      : undefined,
     idToken: typeof stored.idToken === "string" ? stored.idToken : undefined,
     email: typeof stored.email === "string" ? stored.email : undefined,
     lastRefreshAt: typeof stored.lastRefreshAt === "string" ? stored.lastRefreshAt : undefined,
@@ -474,6 +476,30 @@ async function credentialsFromVault(connection) {
       ? stored.providerSpecificData
       : undefined,
   };
+}
+
+async function persistRefreshedCredentials(connection, refreshed) {
+  const credentialRef = typeof connection?.credentialRef === "string" ? connection.credentialRef : "";
+  if (!credentialRef.startsWith("ai-router:credential:")) {
+    throw new Error("AI Router connection has no valid Vault credential reference.");
+  }
+
+  const raw = await readVaultValue(credentialRef);
+  let stored;
+  try { stored = typeof raw === "string" ? JSON.parse(raw) : null; } catch { stored = null; }
+  if (!stored || typeof stored !== "object") {
+    throw new Error("AI Router Vault credential is invalid.");
+  }
+
+  // Persist only the refreshed credential shape. The secret itself remains sealed in Vault.
+  const next = { ...stored };
+  for (const key of ["accessToken", "apiKey", "refreshToken", "idToken", "expiresAt", "expiresIn", "lastRefreshAt", "projectId"]) {
+    if (refreshed?.[key] !== undefined) next[key] = refreshed[key];
+  }
+  if (refreshed?.providerSpecificData && typeof refreshed.providerSpecificData === "object") {
+    next.providerSpecificData = { ...(stored.providerSpecificData || {}), ...refreshed.providerSpecificData };
+  }
+  await writeVaultValue(credentialRef, JSON.stringify(next));
 }
 
 async function providerAccountIdentity(connection, credentials) {
@@ -692,6 +718,7 @@ async function handleChat(request, response, input) {
           apiKey: credentials.apiKey || credentials.accessToken,
           log: routerLog(),
           clientRawRequest: { endpoint: request.url || "/v1/chat/completions", body, headers: request.headers },
+          onCredentialsRefreshed: (refreshed) => persistRefreshedCredentials(connection, refreshed),
         });
         const upstream = result?.response;
         if (!upstream) {
@@ -765,6 +792,7 @@ async function testConnection(id) {
       apiKey: credentials.apiKey || credentials.accessToken,
       log: routerLog(),
       clientRawRequest: { endpoint: "/v1/providers/test", body, headers: {} },
+      onCredentialsRefreshed: (refreshed) => persistRefreshedCredentials(connection, refreshed),
     });
     const upstream = result?.response;
     if (!upstream) throw new Error(result?.error || "AI Router received no provider response.");
