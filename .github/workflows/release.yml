@@ -71,8 +71,10 @@ jobs:
         include:
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
+            asset_suffix: "macOS-Apple-Silicon"
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
+            asset_suffix: "macOS-Intel"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -110,6 +112,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+          releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
 
   build_other:
     needs: version
