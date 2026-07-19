@@ -7,6 +7,8 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 ## [Chưa phát hành]
 
 ### Sửa lỗi
+- **Desktop AI Router CORS.** Router tin cậy origin WebView của Tauri, nên
+  onboarding và Settings có thể tải catalog vendor thay vì chỉ hiện `Load failed`.
 - **Provider Core package nội bộ.** `open-sse` kế thừa chạy trực tiếp từ một
   bản source dưới `ai-router/core`; bundle desktop không còn vô tình load bản
   copy trong `node_modules` với các đường dẫn nội bộ sai.
@@ -32,6 +34,7 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 - Mọi tính năng hoàn tất phải có mục changelog trước khi merge vào `main`.
 - Mỗi commit `main` cắt một patch release mới; bản cài macOS Intel và Apple
   Silicon được build trước, còn Windows/Linux chạy qua workflow thủ công.
+  Release thành công được publish tự động thay vì để dạng draft.
 
 ## [1.0.1] — 2026-07-19
 

@@ -4,6 +4,10 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Desktop WebView origins (`tauri.localhost` and `tauri://localhost`) are
+    accepted by AI Router CORS so the onboarding can load its provider catalog.
+*   Successful main releases are now published automatically; the Tauri Action
+    asset naming input uses its supported `assetNamePattern` option.
 *   The inherited `open-sse` Provider Core is resolved directly from its
     single bundled source tree, avoiding an npm-copied duplicate with broken
     internal paths in the desktop application.
