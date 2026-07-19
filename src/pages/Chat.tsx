@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Eraser, Layers3, Maximize2, Minimize2, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import {
@@ -19,6 +20,10 @@ import { MessageContent, visibleAssistantText } from "@/components/MessageConten
 import { cn } from "@/lib/utils";
 
 const engine = createEngine();
+
+function PortalWhen({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+  return enabled ? createPortal(children, document.body) : <>{children}</>;
+}
 
 export function Chat() {
   const {
@@ -376,16 +381,17 @@ export function Chat() {
                     </button>
                   ))}
                   {packEditorOpen && (
-                    <div
-                      className={cn(
-                        packExpanded
-                          ? "fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-                          : "m-1",
-                      )}
-                      onClick={() => {
-                        if (packExpanded) setPackExpanded(false);
-                      }}
-                    >
+                    <PortalWhen enabled={packExpanded}>
+                      <div
+                        className={cn(
+                          packExpanded
+                            ? "fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+                            : "m-1",
+                        )}
+                        onClick={() => {
+                          if (packExpanded) setPackExpanded(false);
+                        }}
+                      >
                       <div
                         className={cn(
                           "border border-neutral-700 bg-neutral-950 shadow-2xl",
@@ -509,7 +515,8 @@ export function Chat() {
                       </button>
                       {packError && <p className="mt-1 text-[10px] text-red-300">{packError}</p>}
                       </div>
-                    </div>
+                      </div>
+                    </PortalWhen>
                   )}
                   <details className="mt-1 border-t border-neutral-800">
                     <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase text-neutral-500 hover:text-neutral-300">
