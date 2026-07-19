@@ -24,8 +24,14 @@ const assertions = [
     "macOS release workflow must bundle Node",
   ],
   [
-    workflow.includes("Verify packaged AI Router runtime"),
-    "macOS release workflow must inspect the packaged app",
+    workflow.includes("Install AI Router runtime dependencies")
+      && workflow.includes("corepack pnpm --dir ai-router install --frozen-lockfile"),
+    "macOS release workflow must install AI Router dependencies from its lockfile",
+  ],
+  [
+    workflow.includes("Verify packaged AI Router runtime")
+      && workflow.includes("ai-router/node_modules/undici/package.json"),
+    "macOS release workflow must inspect AI Router dependencies in the packaged app",
   ],
 ];
 
