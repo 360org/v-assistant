@@ -25,7 +25,8 @@ const assertions = [
   ],
   [
     workflow.includes("Install AI Router runtime dependencies")
-      && workflow.includes("corepack pnpm --dir ai-router install --frozen-lockfile"),
+      && workflow.includes("working-directory: ai-router")
+      && workflow.includes("corepack pnpm install --frozen-lockfile"),
     "macOS release workflow must install AI Router dependencies from its lockfile",
   ],
   [
