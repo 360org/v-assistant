@@ -20,6 +20,9 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
     Grok provider identifiers used during onboarding. Logging out cancels an
     in-flight sign-in attempt, clears its UI state, and leaves sign-in buttons
     ready for the next account.
+*   Release now keeps matrix artifacts in a draft until both macOS builds finish,
+    then publishes once. This prevents Intel artifacts from being blocked by an
+    already-published immutable release.
 *   Desktop WebView origins (`tauri.localhost` and `tauri://localhost`) are
     accepted by AI Router CORS so the onboarding can load its provider catalog.
 *   Successful main releases are now published automatically; the Tauri Action
