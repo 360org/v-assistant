@@ -160,7 +160,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.version.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
 
   build_other:
     needs: version
@@ -226,4 +226,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.version.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
