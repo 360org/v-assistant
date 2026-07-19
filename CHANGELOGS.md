@@ -4,6 +4,9 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Pack editor expansion now opens in a dedicated modal surface with a
+    backdrop instead of being clipped inside the model dropdown. Pack routing
+    uses visible Fallback and Round robin controls rather than a native select.
 *   Antigravity OAuth no longer sends Tauri's internal WebView origin to
     Google. It uses the registered local callback (`localhost:1420`) and
     presents the explicit callback paste step after browser approval.

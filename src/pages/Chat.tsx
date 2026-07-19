@@ -378,14 +378,24 @@ export function Chat() {
                   {packEditorOpen && (
                     <div
                       className={cn(
-                        "border border-neutral-700 bg-neutral-950 p-3 shadow-2xl",
                         packExpanded
-                          ? "fixed inset-4 z-50 flex flex-col sm:inset-10 lg:inset-x-[18%] lg:inset-y-[8%]"
+                          ? "fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
                           : "m-1",
                       )}
-                      onClick={(event) => event.stopPropagation()}
+                      onClick={() => {
+                        if (packExpanded) setPackExpanded(false);
+                      }}
                     >
-                      <div className="flex items-center justify-between">
+                      <div
+                        className={cn(
+                          "border border-neutral-700 bg-neutral-950 shadow-2xl",
+                          packExpanded
+                            ? "flex h-[min(48rem,calc(100vh-2rem))] w-[min(72rem,calc(100vw-2rem))] flex-col p-4"
+                            : "p-3",
+                        )}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                      <div className="flex items-center justify-between gap-3">
                         <span className="text-xs font-medium">{editingPackId ? "Edit pack" : "New pack"}</span>
                         <div className="flex items-center gap-1">
                           <button
@@ -404,14 +414,32 @@ export function Chat() {
                         placeholder="Pack name"
                         className="mt-2 w-full border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs outline-none focus:border-gold-400/60"
                       />
-                      <select
-                        value={packStrategy}
-                        onChange={(event) => setPackStrategy(event.target.value as "fallback" | "round-robin")}
-                        className="mt-2 w-full border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs outline-none"
-                      >
-                        <option value="fallback">Fallback in order</option>
-                        <option value="round-robin">Round robin</option>
-                      </select>
+                      <div className="mt-2 grid grid-cols-2 border border-neutral-700 bg-neutral-900 p-1" role="radiogroup" aria-label="Pack routing strategy">
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={packStrategy === "fallback"}
+                          onClick={() => setPackStrategy("fallback")}
+                          className={cn(
+                            "cursor-pointer px-3 py-2 text-left text-xs transition-colors",
+                            packStrategy === "fallback" ? "bg-gold-400 text-neutral-950" : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200",
+                          )}
+                        >
+                          Fallback
+                        </button>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={packStrategy === "round-robin"}
+                          onClick={() => setPackStrategy("round-robin")}
+                          className={cn(
+                            "cursor-pointer px-3 py-2 text-left text-xs transition-colors",
+                            packStrategy === "round-robin" ? "bg-gold-400 text-neutral-950" : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200",
+                          )}
+                        >
+                          Round robin
+                        </button>
+                      </div>
                       {packExpanded && <details className="relative mt-2">
                         <summary className="flex cursor-pointer list-none items-center justify-between border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-300 hover:border-neutral-600">
                           <span>Accounts</span>
@@ -480,6 +508,7 @@ export function Chat() {
                         {editingPackId ? "Save pack" : "Create pack"}
                       </button>
                       {packError && <p className="mt-1 text-[10px] text-red-300">{packError}</p>}
+                      </div>
                     </div>
                   )}
                   <details className="mt-1 border-t border-neutral-800">
