@@ -282,7 +282,7 @@ export async function signInWithAiRouterCore(
   if (!authorizeResponse.ok || !authorize.authUrl || !authorize.state || !authorize.redirectUri) {
     throw new Error(authorize.error || `AI Router OAuth requires ${authorize.flowType || "a different sign-in flow"} for this provider.`);
   }
-  const manualCallback = provider === "antigravity" || provider === "claude" || provider === "xai";
+  const manualCallback = provider === "antigravity" || provider === "claude" || provider === "codex" || provider === "xai";
   onManualAuthUrl?.(authorize.authUrl);
   const callback = await waitForPopupCallback(authorize.authUrl, authorize.state, manualCallback);
   const code = callback.code || callback.token;

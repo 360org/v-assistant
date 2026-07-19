@@ -822,7 +822,10 @@ const server = createServer((request, response) => {
       let redirectUri = typeof input.redirectUri === "string" ? input.redirectUri : "";
       if (!provider || !redirectUri) throw new Error("OAuth provider and redirect URI are required.");
       if (provider === "codex") {
-        await startCodexCallbackRelay(redirectUri);
+        // The OpenAI Codex OAuth client redirects to the fixed local relay.
+        // A Tauri WebView origin is not a valid callback destination, so the
+        // relay always returns the browser to the app's local manual callback.
+        await startCodexCallbackRelay("http://localhost:1420/callback");
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "claude") {
         redirectUri = "http://localhost:443/callback";
