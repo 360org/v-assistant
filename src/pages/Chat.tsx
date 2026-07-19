@@ -15,6 +15,7 @@ import {
 } from "@/runtime/aiRouter";
 import { Logo } from "@/components/Logo";
 import { ChatSessionMenu } from "@/components/ChatSessionMenu";
+import { MessageContent, visibleAssistantText } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 
 const engine = createEngine();
@@ -207,7 +208,7 @@ export function Chat() {
     ]);
 
     setStreaming(true);
-    let replyText = "";
+    let rawReplyText = "";
     try {
       for await (const chunk of engine.chat(history, {
         // `openrouter` is only the legacy OpenAI-compatible message shape.
@@ -234,16 +235,19 @@ export function Chat() {
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,
       })) {
-        replyText += chunk;
+        rawReplyText += chunk;
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + chunk } : m,
+            m.id === assistantId
+              ? { ...m, content: visibleAssistantText(rawReplyText) }
+              : m,
           ),
         );
       }
       // Self-improve: the active role reflects on the exchange and saves any
       // durable facts to its OWN memory (isolated per role). Fire-and-forget.
-      if (selfImprove && activeAgent && replyText.trim()) {
+      const replyText = visibleAssistantText(rawReplyText);
+      if (selfImprove && activeAgent && replyText) {
         void reflectAndLearn(
           { user: content, assistant: replyText },
           "openrouter",
@@ -551,7 +555,9 @@ export function Chat() {
                       : "bg-neutral-800/80 text-neutral-100",
                   )}
                 >
-                  {m.content ||
+                  {m.content ? (
+                    <MessageContent content={m.content} assistant={m.role === "assistant"} />
+                  ) :
                     (streaming && (
                       <span className="inline-block animate-pulse">…</span>
                     ))}

@@ -4,6 +4,9 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 ### Fixed
+*   Chat now removes provider `<think>`/`<thinking>` reasoning blocks, including
+    unfinished streamed blocks, before they reach the conversation. Basic
+    Markdown headings, bold text, inline code and lists render as chat content.
 *   Local User account status now recognizes the legacy Gemini, ChatGPT and
     Grok provider identifiers used during onboarding. Logging out cancels an
     in-flight sign-in attempt, clears its UI state, and leaves sign-in buttons
