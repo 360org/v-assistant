@@ -256,6 +256,60 @@ const httpRequestTool: NativeTool = {
   },
 };
 
+function decodeHtml(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// --- Web Search Tool ---
+const webSearchTool: NativeTool = {
+  definition: {
+    name: 'web_search',
+    description: 'Search the public web. Returns titles, links, and snippets from web results. Use http_request to read a selected public page.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+        max_results: { type: 'number', description: 'Maximum number of results, from 1 to 10', default: 5 },
+      },
+      required: ['query'],
+    },
+  },
+  async execute(args): Promise<string> {
+    const query = String(args.query || '').trim();
+    if (!query) return 'A search query is required.';
+    const requested = Number(args.max_results ?? 5);
+    const maxResults = Number.isFinite(requested) ? Math.min(Math.max(Math.trunc(requested), 1), 10) : 5;
+
+    try {
+      const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+        headers: { 'User-Agent': 'V-Assistant/1.0 (+https://vuaai.net)' },
+      });
+      if (!response.ok) return `Web search failed (HTTP ${response.status}).`;
+      const html = await response.text();
+      const resultPattern = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+      const results: string[] = [];
+      let match: RegExpExecArray | null;
+      while ((match = resultPattern.exec(html)) && results.length < maxResults) {
+        const url = match[1].startsWith('//') ? `https:${match[1]}` : match[1];
+        results.push(`${results.length + 1}. ${decodeHtml(match[2])}\n${url}\n${decodeHtml(match[3])}`);
+      }
+      return results.length > 0
+        ? results.join('\n\n')
+        : 'No web results found. Try a more specific query.';
+    } catch (error) {
+      return `Web search failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  },
+};
+
 // --- Credentialed Connector Gateway Tool ---
 const connectorRequestTool: NativeTool = {
   definition: {
@@ -342,6 +396,7 @@ export const NATIVE_TOOLS: NativeTool[] = [
   grepTool,
   globTool,
   httpRequestTool,
+  webSearchTool,
   connectorRequestTool,
   vaultListTool,
 ];

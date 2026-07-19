@@ -73,7 +73,9 @@ jobs:
             args: "--target aarch64-apple-darwin"
             target: "aarch64-apple-darwin"
             asset_suffix: "macOS-Apple-Silicon"
-          - platform: macos-latest
+          # Native Node modules such as better-sqlite3 must be compiled on an
+          # Intel runner for the Intel desktop bundle. macos-latest is ARM.
+          - platform: macos-13
             args: "--target x86_64-apple-darwin"
             target: "x86_64-apple-darwin"
             asset_suffix: "macOS-Intel"
@@ -133,6 +135,12 @@ jobs:
           test -f ai-router/node_modules/node-machine-id/package.json
           test -f agent-runner/dist/index.js
           test -f agent-runner/node_modules/better-sqlite3/package.json
+          test -f agent-runner/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) expected_arch="arm64" ;;
+            x86_64-apple-darwin) expected_arch="x86_64" ;;
+          esac
+          file agent-runner/node_modules/better-sqlite3/build/Release/better_sqlite3.node | grep -q "$expected_arch"
 
       - name: Build installers and upload to draft release
         uses: tauri-apps/tauri-action@v0
@@ -159,6 +167,7 @@ jobs:
           test -x "$app_path/Contents/Resources/_up_/runtime/node/node"
           test -f "$app_path/Contents/Resources/_up_/agent-runner/dist/index.js"
           test -f "$app_path/Contents/Resources/_up_/agent-runner/node_modules/better-sqlite3/package.json"
+          file "$app_path/Contents/Resources/_up_/agent-runner/node_modules/better-sqlite3/build/Release/better_sqlite3.node" | grep -q "$expected_arch"
 
   publish_macos:
     needs: [version, build_macos]
