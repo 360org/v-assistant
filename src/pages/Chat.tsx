@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Eraser, Layers3, Maximize2, Minimize2, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Eraser, FileText, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import {
   type ProviderConfig,
@@ -45,11 +45,14 @@ export function Chat() {
     clearActiveSkill,
     agentConfigs,
     knowledgeFiles,
+    addKnowledgeFiles,
+    removeKnowledgeFile,
     selfImprove,
     addAgentMemory,
     agents,
   } = useApp();
   const [input, setInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [streaming, setStreaming] = useState(false);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -667,7 +670,57 @@ export function Chat() {
 
       {/* Composer */}
       <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
+        {/* Attachment files list */}
+        {knowledgeFiles.length > 0 && (
+          <div className="mx-auto mb-2 flex max-w-2xl flex-wrap gap-2 px-1">
+            {knowledgeFiles.map((f) => (
+              <div
+                key={f.id}
+                className="flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1 text-xs"
+              >
+                <FileText className="size-3.5 text-neutral-500" />
+                <span className="max-w-[120px] truncate" title={f.name}>
+                  {f.name}
+                </span>
+                {f.status === "processing" ? (
+                  <Loader2 className="size-3 animate-spin text-gold-300" />
+                ) : f.status === "error" ? (
+                  <span className="text-[10px] text-red-400" title={f.error}>Failed</span>
+                ) : (
+                  <span className="text-[10px] text-green-400">Ready</span>
+                )}
+                <button
+                  onClick={() => removeKnowledgeFile(f.id)}
+                  className="ml-1 cursor-pointer rounded-full p-0.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
+                  title="Remove file"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-2xl border border-neutral-700 bg-neutral-900 p-2 focus-within:border-gold-400/60">
+          <input
+            type="file"
+            multiple
+            ref={fileInputRef}
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length) addKnowledgeFiles(files);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach files (PDF, Word, Excel, Text...)"
+            className="cursor-pointer rounded-xl p-2 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 transition-colors"
+          >
+            <Paperclip className="size-4" />
+          </button>
+
           <textarea
             ref={composerRef}
             rows={1}

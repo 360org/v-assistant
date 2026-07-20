@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Provider reasoning is transport metadata, not chat content. Keeping an
@@ -12,14 +13,60 @@ export function visibleAssistantText(content: string): string {
     .trim();
 }
 
+const openLink = async (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+  e.preventDefault();
+  const inDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+  if (inDesktop) {
+    try {
+      await invoke("open_external", { url });
+    } catch (err) {
+      console.error("Failed to open link via Tauri:", err);
+      window.open(url, "_blank");
+    }
+  } else {
+    window.open(url, "_blank");
+  }
+};
+
 function inlineMarkdown(value: string): ReactNode[] {
-  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<]+[^<.,:;"')\s])/g);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={index}>{part.slice(2, -2)}</strong>;
     }
     if (part.startsWith("`") && part.endsWith("`")) {
-      return <code key={index} className="rounded bg-neutral-950/60 px-1 py-0.5 font-mono text-[0.85em]">{part.slice(1, -1)}</code>;
+      return (
+        <code key={index} className="rounded bg-neutral-950/60 px-1 py-0.5 font-mono text-[0.85em]">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    const mdLinkMatch = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (mdLinkMatch) {
+      const text = mdLinkMatch[1];
+      const url = mdLinkMatch[2];
+      return (
+        <a
+          key={index}
+          href={url}
+          onClick={(e) => void openLink(e, url)}
+          className="text-gold-400 hover:text-gold-300 underline cursor-pointer font-medium"
+        >
+          {text}
+        </a>
+      );
+    }
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          onClick={(e) => void openLink(e, part)}
+          className="text-gold-400 hover:text-gold-300 underline cursor-pointer font-medium"
+        >
+          {part}
+        </a>
+      );
     }
     return <Fragment key={index}>{part}</Fragment>;
   });

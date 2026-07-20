@@ -261,6 +261,39 @@ function AgentConfigDialog({
 
   const { customSkills } = useApp();
 
+  const handleExport = () => {
+    const skillsList = enabledSkills.map((s) => `- ${s}`).join("\n");
+    const memoriesList = memory.map((m) => `- ${m}`).join("\n");
+    const md = `---
+name: ${agent.name}
+emoji: ${agent.emoji}
+category: ${agent.category}
+description: ${agent.description}
+---
+
+# Instructions
+${instructions || "No instructions provided."}
+
+# Soul
+${soul || "No soul provided."}
+
+# Memory
+${memoriesList || "No memory entries."}
+
+# Skills
+${skillsList || "No skills enabled."}
+`;
+
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${agent.id}-config.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const allSkills = useMemo(() => {
     const builtIn = SKILLS.map((s) => ({
       id: s.id,
@@ -438,6 +471,14 @@ function AgentConfigDialog({
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExport}
+            title="Export configuration as Markdown file"
+          >
+            <Download className="size-3.5" /> Export MD
+          </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
