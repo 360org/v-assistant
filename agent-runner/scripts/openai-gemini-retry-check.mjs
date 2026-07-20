@@ -49,5 +49,34 @@ const geminiPass = await checkRetry(
   geminiResponse,
 );
 
+let toolLoopRequest = null;
+globalThis.fetch = async (_url, init) => {
+  toolLoopRequest = JSON.parse(String(init?.body || '{}'));
+  return new Response('data: [DONE]\n\n', {
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+};
+
+for await (const _event of createOpenAIProvider({ apiKey: 'test-key' }).query({
+  prompt: '',
+  messages: [
+    {
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'call_glob', name: 'glob', arguments: { pattern: '*' } }],
+    },
+    { role: 'tool', content: '[]', tool_call_id: 'call_glob', name: 'glob' },
+  ],
+}).events) {
+  // Consume the stream so the request is issued.
+}
+
+const normalizedToolCall = toolLoopRequest?.messages?.[0]?.tool_calls?.[0];
+const toolLoopPass = normalizedToolCall?.type === 'function'
+  && normalizedToolCall?.function?.name === 'glob'
+  && normalizedToolCall?.function?.arguments === '{"pattern":"*"}'
+  && toolLoopRequest?.messages?.[1]?.name === undefined;
+console.log(`${toolLoopPass ? '✓' : '✗'} OpenAI-compatible tool history uses the function envelope`);
+
 globalThis.fetch = originalFetch;
-process.exit(openAIPass && geminiPass ? 0 : 1);
+process.exit(openAIPass && geminiPass && toolLoopPass ? 0 : 1);

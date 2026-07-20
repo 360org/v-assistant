@@ -80,6 +80,33 @@ interface OpenAINonStreamResponse {
   }>;
 }
 
+/**
+ * The Runner keeps tool calls in its provider-neutral shape. AI Router's
+ * OpenAI-compatible endpoint, and upstream OpenAI-compatible APIs, require
+ * the wire-format function envelope when that history is sent back.
+ */
+function toOpenAIMessage(message: ChatMessage): Record<string, unknown> {
+  const { tool_calls: toolCalls, name: _name, ...rest } = message;
+
+  if (message.role === 'assistant' && toolCalls?.length) {
+    return {
+      ...rest,
+      tool_calls: toolCalls.map((call) => ({
+        id: call.id,
+        type: 'function',
+        function: {
+          name: call.name,
+          arguments: JSON.stringify(call.arguments ?? {}),
+        },
+      })),
+    };
+  }
+
+  // OpenAI tool-result messages are paired through tool_call_id. The internal
+  // tool name is intentionally omitted from the wire payload.
+  return rest;
+}
+
 export function createOpenAIProvider(options: ProviderOptions): AgentProvider {
   const apiKey = options.apiKey || '';
   const baseUrl = (options.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
@@ -103,7 +130,7 @@ export function createOpenAIProvider(options: ProviderOptions): AgentProvider {
       // Conversation history
       if (input.messages) {
         for (const msg of input.messages) {
-          messages.push({ ...msg });
+          messages.push(toOpenAIMessage(msg));
         }
       }
 
