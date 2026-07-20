@@ -149,9 +149,17 @@ async function extractPptx(buf: ArrayBuffer): Promise<string> {
 /** PDF needs a real parser (fonts, CMaps) — lazy-load pdfjs on demand. */
 async function extractPdf(buf: ArrayBuffer): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerSrc) {
-    const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-    pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
+    try {
+      // @ts-ignore
+      const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
+      // @ts-ignore
+      pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
+    } catch (e) {
+      console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+      const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+    }
   }
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
   const pages: string[] = [];
