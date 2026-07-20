@@ -6,6 +6,15 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+## [1.0.15] - 2026-07-20
+
+### Sửa lỗi
+- **OAuth credential rotation trong AI Router.** Khi provider trả `401` và refresh token tạo access/refresh token mới, AI Router ghi ngay credential đã refresh về App Vault. Các lần chat sau hoặc sau khi khởi động lại không còn quay về token cũ đã hết hạn.
+- **Trạng thái session bị thu hồi.** Claude, Grok và các provider OAuth khác trả `401`/`403` giờ chuyển connection sang `Failed` với hướng dẫn Reset và đăng nhập lại, thay vì giữ nhãn `Verified` hoặc hiển thị JSON lỗi upstream thô.
+
+### Kiểm chứng
+- **Runtime desktop macOS.** Đã kiểm tra trực tiếp AI Router trong ứng dụng cài đặt: Gemini/Antigravity và ChatGPT/Codex trả `200` từ upstream. Grok Build có token bị xAI thu hồi được báo rõ cần đăng nhập lại.
+
 ### Sửa lỗi
 - **Desktop AI Router CORS.** Router tin cậy origin WebView của Tauri, nên
   onboarding và Settings có thể tải catalog vendor thay vì chỉ hiện `Load failed`.
