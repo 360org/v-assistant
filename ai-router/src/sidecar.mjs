@@ -502,6 +502,16 @@ async function persistRefreshedCredentials(connection, refreshed) {
   await writeVaultValue(credentialRef, JSON.stringify(next));
 }
 
+function connectionErrorSummary(connection, status, detail = "") {
+  const label = connection?.label || connection?.name || connection?.provider || "This provider";
+  const authFailure = status === 401 || status === 403 ||
+    /authentication_error|invalid_api_key|invalid credentials|access token has been revoked|permissiondenied/i.test(detail);
+  if (authFailure) {
+    return `${label} sign-in expired or was revoked. Reset and sign in again.`;
+  }
+  return detail || `${label} returned HTTP ${status}.`;
+}
+
 async function providerAccountIdentity(connection, credentials) {
   try {
     const token = credentials.apiKey || credentials.accessToken;
@@ -727,8 +737,18 @@ async function handleChat(request, response, input) {
           return new Response(JSON.stringify({ error: { message: lastError } }), { status: 502, headers: { "content-type": "application/json" } });
         }
         const retryable = [401, 403, 408, 409, 429, 500, 502, 503, 504, 529].includes(upstream.status);
+        if (!upstream.ok && (upstream.status === 401 || upstream.status === 403)) {
+          lastError = connectionErrorSummary(connection, upstream.status);
+          await updateConnection(connection.id, {
+            testStatus: "Failed",
+            lastError,
+            lastErrorAt: new Date().toISOString(),
+          });
+        }
         if (hasNextAccount && retryable) {
-          lastError = `Account ${connection.accountLabel || connection.id} returned HTTP ${upstream.status}.`;
+          if (upstream.status !== 401 && upstream.status !== 403) {
+            lastError = `Account ${connection.accountLabel || connection.id} returned HTTP ${upstream.status}.`;
+          }
           await upstream.body?.cancel().catch(() => {});
           await updateConnection(connection.id, { lastError, lastErrorAt: new Date().toISOString() });
           continue;
@@ -812,7 +832,8 @@ async function testConnection(id) {
     });
     return { valid: true, connection: updated, model: `${provider.id}/${model.id}` };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const detail = error instanceof Error ? error.message : String(error);
+    const message = connectionErrorSummary(connection, 0, detail);
     await updateConnection(connection.id, {
       testStatus: "Failed",
       lastError: message,
