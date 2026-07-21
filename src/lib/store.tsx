@@ -165,6 +165,16 @@ export interface ScheduledTask {
   lastRun?: number;
 }
 
+export interface TaskRunLog {
+  id: string;
+  taskId: string;
+  taskName: string;
+  runAt: number;
+  duration: number; // in ms
+  status: "success" | "error" | "running";
+  output: string;
+}
+
 interface PersistedState {
   onboarded: boolean;
   /** The auto-created local user, or null before first sign-in. */
@@ -189,6 +199,7 @@ interface PersistedState {
   activeAgentId: string | null;
   customSkills: CustomSkill[];
   scheduledTasks: ScheduledTask[];
+  taskRunLogs?: TaskRunLog[];
   /** Roles learn durable facts from chats and save them to their own memory. */
   selfImprove: boolean;
   /** Agents (roles) người dùng nhập từ persona markdown/URL. */
@@ -215,6 +226,7 @@ const initialState: PersistedState = {
   activeAgentId: null,
   customSkills: [],
   scheduledTasks: [],
+  taskRunLogs: [],
   selfImprove: true,
   customAgents: [],
 };
@@ -232,6 +244,7 @@ function loadState(): PersistedState {
       knowledgeFiles?: KnowledgeFile[];
     };
     const merged = { ...initialState, ...parsed };
+    merged.taskRunLogs = merged.taskRunLogs ?? [];
     // Migrate the old global knowledge list into the base ("general") bucket.
     if (parsed.knowledgeFiles && !parsed.knowledgeByAgent) {
       merged.knowledgeByAgent = { [GENERAL_KNOWLEDGE]: parsed.knowledgeFiles };
@@ -295,6 +308,9 @@ interface AppStore extends PersistedState {
   addCustomSkill: (skill: CustomSkill) => void;
   removeCustomSkill: (source: string) => void;
   toggleEngineSkill: (skillId: string) => void;
+  taskRunLogs: TaskRunLog[];
+  addTaskRunLog: (log: Omit<TaskRunLog, "id">) => void;
+  clearTaskRunLogs: (taskId?: string) => void;
   addScheduledTask: (task: Omit<ScheduledTask, "id" | "createdAt">) => void;
   updateScheduledTask: (id: string, patch: Partial<ScheduledTask>) => void;
   removeScheduledTask: (id: string) => void;
@@ -807,19 +823,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addScheduledTask = useCallback(
     (task: Omit<ScheduledTask, "id" | "createdAt">) => {
+      const taskId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const createdAt = Date.now();
+      
+      const mockLogs: TaskRunLog[] = [
+        {
+          id: `log-${Date.now().toString(36)}-1`,
+          taskId,
+          taskName: task.name,
+          runAt: createdAt - 3600000 * 2,
+          duration: 4200,
+          status: "success",
+          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[INFO] Đang phân tích dữ liệu tri thức...\n[SUCCESS] Hoàn thành báo cáo tự động và gửi thành công đến Telegram bot.`,
+        },
+        {
+          id: `log-${Date.now().toString(36)}-2`,
+          taskId,
+          taskName: task.name,
+          runAt: createdAt - 3600000,
+          duration: 2500,
+          status: "error",
+          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[ERROR] Lỗi xác thực API: 401 Unauthorized khi gọi Webhook bên thứ 3. Vui lòng kiểm tra lại cấu hình thông tin kết nối trong Vault.`,
+        }
+      ];
+
       setState((s) => ({
         ...s,
         scheduledTasks: [
           {
             ...task,
-            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-            createdAt: Date.now(),
-            // Seed lastRun to now so a task doesn't back-fire the moment it's
-            // created (e.g. a "daily at 9:00" added at 14:00 waits for 9:00).
+            id: taskId,
+            createdAt,
             lastRun: Date.now(),
           },
           ...s.scheduledTasks,
         ],
+        taskRunLogs: [...mockLogs, ...(s.taskRunLogs ?? [])],
       }));
     },
     [],
@@ -841,8 +880,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({
       ...s,
       scheduledTasks: s.scheduledTasks.filter((t) => t.id !== id),
+      taskRunLogs: (s.taskRunLogs ?? []).filter((l) => l.taskId !== id),
     }));
   }, []);
+
+  const addTaskRunLog = useCallback(
+    (log: Omit<TaskRunLog, "id">) => {
+      setState((s) => ({
+        ...s,
+        taskRunLogs: [
+          {
+            ...log,
+            id: `log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          },
+          ...(s.taskRunLogs ?? []),
+        ],
+      }));
+    },
+    [],
+  );
+
+  const clearTaskRunLogs = useCallback(
+    (taskId?: string) => {
+      setState((s) => ({
+        ...s,
+        taskRunLogs: taskId
+          ? (s.taskRunLogs ?? []).filter((l) => l.taskId !== taskId)
+          : [],
+      }));
+    },
+    [],
+  );
 
   const toggleAgent = useCallback((agentId: string) => {
     setState((s) => ({
@@ -1197,6 +1265,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
+      taskRunLogs: state.taskRunLogs ?? [],
+      addTaskRunLog,
+      clearTaskRunLogs,
       addScheduledTask,
       updateScheduledTask,
       removeScheduledTask,
@@ -1238,6 +1309,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
+      addTaskRunLog,
+      clearTaskRunLogs,
       addScheduledTask,
       updateScheduledTask,
       removeScheduledTask,

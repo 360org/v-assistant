@@ -175,6 +175,59 @@ async function extractPdf(buf: ArrayBuffer): Promise<string> {
   return pages.join("\n\n");
 }
 
+async function extractZip(buf: ArrayBuffer): Promise<string> {
+  const zip = openZip(buf);
+  const out: string[] = [];
+
+  const textFiles = zip.names.filter((name) => {
+    if (name.startsWith("__MACOSX/") || name.includes("/.") || name.endsWith("/")) return false;
+    const innerExt = name.toLowerCase().split(".").pop() ?? "";
+    return [
+      "txt", "md", "markdown", "pdf", "docx", "xlsx", "pptx", 
+      "html", "htm", "json", "js", "ts", "jsx", "tsx", 
+      "py", "sh", "yaml", "yml", "ini", "conf", "csv"
+    ].includes(innerExt);
+  });
+
+  for (const name of textFiles) {
+    try {
+      const data = await zip.read(name);
+      if (!data) continue;
+
+      const innerExt = name.toLowerCase().split(".").pop() ?? "";
+      let text = "";
+      const fileBuf = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+
+      if (innerExt === "pdf") {
+        text = await extractPdf(fileBuf);
+      } else if (innerExt === "docx") {
+        text = await extractDocx(fileBuf);
+      } else if (innerExt === "xlsx") {
+        text = await extractXlsx(fileBuf);
+      } else if (innerExt === "pptx") {
+        text = await extractPptx(fileBuf);
+      } else {
+        text = new TextDecoder().decode(data);
+        if (innerExt === "html" || innerExt === "htm") {
+          text = stripTags(text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " "));
+        }
+      }
+
+      if (text.trim()) {
+        out.push(`--- File: ${name} ---\n${text.trim()}`);
+      }
+    } catch (e) {
+      console.warn(`Failed to extract file "${name}" from ZIP:`, e);
+    }
+  }
+
+  if (!out.length) {
+    throw new Error("No readable text files found in this ZIP archive");
+  }
+
+  return out.join("\n\n");
+}
+
 /** Extracts plain text from a dropped file, by format. */
 export async function extractText(file: File): Promise<string> {
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
@@ -183,6 +236,7 @@ export async function extractText(file: File): Promise<string> {
   if (ext === "docx") return extractDocx(await buf());
   if (ext === "xlsx") return extractXlsx(await buf());
   if (ext === "pptx") return extractPptx(await buf());
+  if (ext === "zip") return extractZip(await buf());
   if (ext === "doc" || ext === "xls" || ext === "ppt")
     throw new Error(`Legacy .${ext} format isn't supported — save it as .${ext}x`);
   const text = await file.text();
@@ -190,7 +244,7 @@ export async function extractText(file: File): Promise<string> {
     return stripTags(text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " "));
   // Everything else is treated as text (txt, md, csv, json, code…); reject
   // binaries, which decode with NUL/replacement characters.
-  const junk = (text.slice(0, 2000).match(/[\0�]/g) ?? []).length;
+  const junk = (text.slice(0, 2000).match(/[\0]/g) ?? []).length;
   if (junk > 4) throw new Error("This file type isn't supported");
   return text;
 }
