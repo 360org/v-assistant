@@ -185,7 +185,8 @@ async function extractZip(buf: ArrayBuffer): Promise<string> {
     return [
       "txt", "md", "markdown", "pdf", "docx", "xlsx", "pptx", 
       "html", "htm", "json", "js", "ts", "jsx", "tsx", 
-      "py", "sh", "yaml", "yml", "ini", "conf", "csv"
+      "py", "sh", "yaml", "yml", "ini", "conf", "csv",
+      "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"
     ].includes(innerExt);
   });
 
@@ -198,6 +199,7 @@ async function extractZip(buf: ArrayBuffer): Promise<string> {
       let text = "";
       const fileBuf = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
 
+      const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
       if (innerExt === "pdf") {
         text = await extractPdf(fileBuf);
       } else if (innerExt === "docx") {
@@ -206,6 +208,8 @@ async function extractZip(buf: ArrayBuffer): Promise<string> {
         text = await extractXlsx(fileBuf);
       } else if (innerExt === "pptx") {
         text = await extractPptx(fileBuf);
+      } else if (imgExtensions.includes(innerExt)) {
+        text = `[Tệp hình ảnh: ${name} | Định dạng: ${innerExt.toUpperCase()} | Kích thước: ${(data.byteLength / 1024).toFixed(1)} KB]\n(Tệp tin hình ảnh được tải lên làm tài liệu tri thức cho Agent. AI có thể sử dụng thông tin này để nhận biết sự hiện diện của tệp tin.)`;
       } else {
         text = new TextDecoder().decode(data);
         if (innerExt === "html" || innerExt === "htm") {
@@ -239,6 +243,12 @@ export async function extractText(file: File): Promise<string> {
   if (ext === "zip") return extractZip(await buf());
   if (ext === "doc" || ext === "xls" || ext === "ppt")
     throw new Error(`Legacy .${ext} format isn't supported — save it as .${ext}x`);
+  
+  const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+  if (imgExtensions.includes(ext)) {
+    return `[Tệp hình ảnh: ${file.name} | Định dạng: ${ext.toUpperCase()} | Kích thước: ${(file.size / 1024).toFixed(1)} KB]\n(Tệp tin hình ảnh được tải lên làm tài liệu tri thức cho Agent. AI có thể sử dụng thông tin này để nhận biết sự hiện diện của tệp tin.)`;
+  }
+
   const text = await file.text();
   if (ext === "html" || ext === "htm")
     return stripTags(text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " "));

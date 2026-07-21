@@ -60,7 +60,7 @@ export function Knowledge() {
         <UploadCloud className="size-8 text-gold-300" />
         <p className="mt-3 font-medium">Drag & drop files here</p>
         <p className="mt-1 text-sm text-neutral-500">
-          PDF · Word · Excel · PowerPoint · Text · Markdown · CSV · HTML
+          PDF · Word · Excel · PowerPoint · Image · Text · Markdown · CSV · HTML
         </p>
         <input
           ref={inputRef}
