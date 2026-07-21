@@ -4366,7 +4366,7 @@ dependencies = [
 
 [[package]]
 name = "v-assistant"
-version = "1.0.19"
+version = "1.0.25"
 dependencies = [
  "aes",
  "cbc",

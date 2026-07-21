@@ -4,7 +4,7 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
-## [1.0.19] - 2026-07-21
+## [1.0.25] - 2026-07-21
 ### Added
 *   Triển khai giao diện Quản lý lịch sử chạy (Task Logs) cho Scheduled Tasks dạng Console-style trực quan, hỗ trợ tự sinh mock logs mẫu để kiểm thử cục bộ.
 *   Bổ sung nút Phóng to (Maximize/Minimize) cho Dialog cấu hình Agent trên UI, chuyển sang giao diện 2 cột thông minh giúp nâng tầm trải nghiệm viết Prompt dài.
