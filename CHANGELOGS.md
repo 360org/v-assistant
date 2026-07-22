@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.34] - 2026-07-22
+### Security & Auth Lock
+*   Siết chặt logic Auth Lock: Khi người dùng bấm **Log out** hoặc chưa đăng nhập `user` local, ứng dụng lập tức thoát ra ngoài và hiển thị màn hình Onboarding / Đăng nhập, đồng thời vô hiệu hóa hoàn toàn ô nhập liệu Chat cho tới khi người dùng Đăng nhập lại.
+
 ## [1.0.33] - 2026-07-22
 ### Added & Improved
 *   Nâng cấp **Media Gallery**: Gom toàn bộ hình ảnh đính kèm từ tất cả các phiên chat (`chatSessions`) vào bộ sưu tập, bổ sung nhãn badge `💬 [Tên phiên chat]` trên từng card và nút **Go Direct to Chat Conversation** giúp nhảy thẳng tới đoạn chat tương ứng.

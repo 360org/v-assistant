@@ -103,6 +103,7 @@ export function Chat() {
   const [mediaTab, setMediaTab] = useState<"media" | "link" | "docs">("media");
 
   const {
+    user,
     messages,
     setMessages,
     clearChat,
@@ -366,6 +367,10 @@ export function Chat() {
   }, [messages, searchQuery]);
 
   const send = async () => {
+    if (!user) {
+      alert("Bạn chưa đăng nhập người dùng local. Vui lòng đăng nhập tài khoản để Chat!");
+      return;
+    }
     const readyFiles = knowledgeFiles.filter((f) => !sentFileIds.has(f.id) && f.status === "ready");
     const textContent = input.trim();
     if ((!textContent && readyFiles.length === 0) || streaming || !activeModel) return;

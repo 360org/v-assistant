@@ -742,7 +742,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearLocalUser = useCallback(() => {
-    setState((s) => ({ ...s, user: null }));
+    setState((s) => ({ ...s, user: null, onboarded: false }));
   }, []);
 
   const setProvider = useCallback((provider: ProviderId) => {

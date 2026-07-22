@@ -32,10 +32,10 @@ const pages: Record<View, () => JSX.Element> = {
 };
 
 export default function App() {
-  const { onboarded, view } = useApp();
+  const { onboarded, user, view } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  if (!onboarded) {
+  if (!onboarded || !user) {
     return <Onboarding />;
   }
 
