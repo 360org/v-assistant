@@ -27,6 +27,73 @@ function PortalWhen({ enabled, children }: { enabled: boolean; children: ReactNo
   return enabled ? createPortal(children, document.body) : <>{children}</>;
 }
 
+function InlineAttachmentPreview({
+  att,
+  onOpenPreview,
+}: {
+  att: { id: string; name: string };
+  onOpenPreview: () => void;
+}) {
+  const ext = att.name.toLowerCase().split(".").pop() ?? "";
+  const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext);
+  const [imgSrc, setImgSrc] = useState<string | null>(fileObjectURLs.get(att.id) || null);
+
+  useEffect(() => {
+    if (!isImg || imgSrc) return;
+    let cancelled = false;
+
+    void getKnowledgeFileRecord(att.id).then((rec) => {
+      if (cancelled) return;
+      if (rec?.dataUrl) {
+        setImgSrc(rec.dataUrl);
+      } else if (rec?.chunks?.[0]?.startsWith("data:image/")) {
+        setImgSrc(rec.chunks[0]);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [att.id, isImg, imgSrc]);
+
+  if (isImg) {
+    return (
+      <div
+        onClick={onOpenPreview}
+        className="group relative overflow-hidden rounded-xl border border-neutral-700/80 bg-neutral-950 cursor-pointer transition-all hover:border-gold-400 max-w-[280px] max-h-[220px] shadow-md"
+        title={`Xem ảnh phóng to: ${att.name}`}
+      >
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt={att.name}
+            className="max-h-[220px] w-full object-cover rounded-xl transition-transform duration-200 group-hover:scale-105 select-none"
+          />
+        ) : (
+          <div className="flex items-center gap-2 p-3 text-xs text-gold-300">
+            <Image className="size-4 shrink-0 animate-pulse text-gold-400" />
+            <span className="truncate max-w-[180px]">{att.name}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+          <span className="text-[10px] text-white truncate font-medium">{att.name}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={onOpenPreview}
+      className="flex items-center gap-2 rounded-xl border border-gold-500/40 bg-gold-400/10 px-3 py-1.5 text-xs font-medium text-gold-300 hover:bg-gold-400/20 hover:border-gold-400 transition-all cursor-pointer shadow-xs"
+      title={`Bấm để xem trước: ${att.name}`}
+    >
+      <Paperclip className="size-3.5 text-gold-400 shrink-0" />
+      <span className="max-w-[180px] truncate">{att.name}</span>
+    </button>
+  );
+}
+
 export function Chat() {
   const [sentFileIds, setSentFileIds] = useState<Set<string>>(new Set());
   const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
@@ -818,50 +885,13 @@ export function Chat() {
                       {/* Inline Image & File Previews (WhatsApp / Telegram style) */}
                       {m.attachments && m.attachments.length > 0 && (
                         <div className="mb-2 flex flex-wrap gap-2.5">
-                          {m.attachments.map((att) => {
-                            const ext = att.name.toLowerCase().split(".").pop() ?? "";
-                            const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext);
-                            const imgSrc = fileObjectURLs.get(att.id);
-
-                            if (isImg) {
-                              return (
-                                <div
-                                  key={att.id}
-                                  onClick={() => setPreviewFile({ id: att.id, name: att.name })}
-                                  className="group relative overflow-hidden rounded-xl border border-neutral-700/80 bg-neutral-950 cursor-pointer transition-all hover:border-gold-400 max-w-[280px] max-h-[220px] shadow-md"
-                                  title={`Xem ảnh lớn: ${att.name}`}
-                                >
-                                  {imgSrc ? (
-                                    <img
-                                      src={imgSrc}
-                                      alt={att.name}
-                                      className="max-h-[220px] w-full object-cover rounded-xl transition-transform duration-200 group-hover:scale-105 select-none"
-                                    />
-                                  ) : (
-                                    <div className="flex items-center gap-2 p-3 text-xs text-gold-300">
-                                      <Image className="size-4 shrink-0" />
-                                      <span className="truncate max-w-[180px]">{att.name}</span>
-                                    </div>
-                                  )}
-                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                                    <span className="text-[10px] text-white truncate font-medium">{att.name}</span>
-                                  </div>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <button
-                                key={att.id}
-                                onClick={() => setPreviewFile({ id: att.id, name: att.name })}
-                                className="flex items-center gap-2 rounded-xl border border-gold-500/40 bg-gold-400/10 px-3 py-1.5 text-xs font-medium text-gold-300 hover:bg-gold-400/20 hover:border-gold-400 transition-all cursor-pointer shadow-xs"
-                                title={`Bấm để xem trước: ${att.name}`}
-                              >
-                                <Paperclip className="size-3.5 text-gold-400 shrink-0" />
-                                <span className="max-w-[180px] truncate">{att.name}</span>
-                              </button>
-                            );
-                          })}
+                          {m.attachments.map((att) => (
+                            <InlineAttachmentPreview
+                              key={att.id}
+                              att={att}
+                              onOpenPreview={() => setPreviewFile({ id: att.id, name: att.name })}
+                            />
+                          ))}
                         </div>
                       )}
 

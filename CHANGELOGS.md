@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.29] - 2026-07-22
+### Fixed & Improved
+*   Tích hợp component `InlineAttachmentPreview` tự động truy xuất Base64 Data URL từ IndexedDB, đảm bảo hiển thị trực tiếp bức ảnh thu nhỏ (Inline Image Thumbnail) trên bong bóng chat ngay cả khi ứng dụng bị reload hoặc khi mở lại lịch sử các phiên chat cũ.
+
 ## [1.0.28] - 2026-07-22
 ### Added & Improved
 *   Hiển thị trực tiếp ảnh thu nhỏ (Inline Image Preview Thumbnail) ngay trong bong bóng tin nhắn chat chuẩn phong cách WhatsApp / Telegram, nhấp vào để xem ảnh phóng to full HD.
