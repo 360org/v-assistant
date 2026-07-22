@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, X } from "lucide-react";
-import { vaultDelete, vaultIsSecure, vaultSet } from "@/runtime/vault";
+import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
 import { getProvider, type ProviderId } from "@/lib/catalog";
 import {
+  AI_ROUTER_BASE_URL,
   captureGrokWebSsoCookie,
   deleteAiRouterConnection,
   getAiRouterConnections,
@@ -405,6 +406,84 @@ export function Settings() {
     }
   };
 
+  const renewConnectionToken = async (connection: AiRouterConnection) => {
+    setConnectionActionId(connection.id);
+    setConnectionError(null);
+    try {
+      const vaultKey = `ai-router:credential:${connection.id}`;
+      const credRaw = await vaultGet(vaultKey);
+      let cred: { apiKey?: string; refreshToken?: string } = {};
+      if (credRaw) {
+        try {
+          cred = JSON.parse(credRaw);
+        } catch {
+          cred = { apiKey: credRaw };
+        }
+      }
+
+      let renewed = false;
+      const provider = connection.provider || connection.id.split("-")[0];
+
+      if (cred.refreshToken) {
+        try {
+          const refreshRes = await fetch(`${AI_ROUTER_BASE_URL}/oauth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              provider,
+              refreshToken: cred.refreshToken,
+            }),
+          });
+          if (refreshRes.ok) {
+            const payload = (await refreshRes.json()) as { tokens?: { apiKey?: string; accessToken?: string; refreshToken?: string } };
+            const newKey = payload.tokens?.apiKey || payload.tokens?.accessToken;
+            if (newKey) {
+              const updatedCred = {
+                ...cred,
+                apiKey: newKey,
+                ...(payload.tokens?.refreshToken ? { refreshToken: payload.tokens.refreshToken } : {}),
+              };
+              await vaultSet(vaultKey, JSON.stringify(updatedCred));
+              renewed = true;
+            }
+          }
+        } catch (e) {
+          console.warn("Silent OAuth refresh failed, falling back to interactive renew:", e);
+        }
+      }
+
+      if (!renewed) {
+        if (provider === "xai" || connection.id.includes("grok")) {
+          const cookie = await captureGrokWebSsoCookie();
+          await vaultSet(vaultKey, JSON.stringify({ ...cred, apiKey: cookie.trim() }));
+          renewed = true;
+        } else {
+          const tokens = await signInWithAiRouterCore(provider, (manualUrl) => {
+            setConnectionError(`Vui lòng xác thực OAuth tại trình duyệt để làm mới Token: ${manualUrl}`);
+          });
+          const newKey = tokens.apiKey || tokens.accessToken;
+          if (newKey) {
+            const updatedCred = {
+              ...cred,
+              apiKey: newKey,
+              ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
+            };
+            await vaultSet(vaultKey, JSON.stringify(updatedCred));
+            renewed = true;
+          }
+        }
+      }
+
+      await testAiRouterConnection(connection.id);
+      await refreshConnections();
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : String(error));
+      await refreshConnections();
+    } finally {
+      setConnectionActionId(null);
+    }
+  };
+
   const testConnection = async (connection: AiRouterConnection) => {
     setConnectionActionId(connection.id);
     setConnectionError(null);
@@ -412,7 +491,17 @@ export function Settings() {
       await testAiRouterConnection(connection.id);
       await refreshConnections();
     } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : String(error));
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (errMsg.toLowerCase().includes("expired") || errMsg.toLowerCase().includes("401") || errMsg.toLowerCase().includes("revoked")) {
+        try {
+          await renewConnectionToken(connection);
+          return;
+        } catch (renewErr) {
+          setConnectionError(renewErr instanceof Error ? renewErr.message : String(renewErr));
+        }
+      } else {
+        setConnectionError(errMsg);
+      }
       await refreshConnections();
     } finally {
       setConnectionActionId(null);
@@ -601,6 +690,21 @@ export function Settings() {
                     >
                       {connectionActionId === connection.id ? <LoaderCircle className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}
                       Test
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      title="Làm mới OAuth Token (Renew token mà không cần reset tài khoản)"
+                      onClick={() => void renewConnectionToken(connection)}
+                      disabled={connectionActionId === connection.id}
+                      className="border-gold-500/30 text-gold-300 hover:bg-gold-500/10"
+                    >
+                      {connectionActionId === connection.id ? (
+                        <LoaderCircle className="size-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="size-4" />
+                      )}
+                      Renew
                     </Button>
                     <Button
                       size="sm"

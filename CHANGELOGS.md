@@ -2,11 +2,15 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
-## [Unreleased]
-### Fixed & Improved
+## [1.0.28] - 2026-07-22
+### Added & Improved
+*   Hiển thị trực tiếp ảnh thu nhỏ (Inline Image Preview Thumbnail) ngay trong bong bóng tin nhắn chat chuẩn phong cách WhatsApp / Telegram, nhấp vào để xem ảnh phóng to full HD.
+*   Bổ sung nút **Renew** (Renew/Refresh OAuth Token) trực tiếp trên trang Settings. Cho phép làm mới access token khi bị hết hạn mà không cần Reset hay đăng nhập lại từ đầu.
+*   Hỗ trợ Paste hình ảnh & tệp đính kèm trực tiếp từ Clipboard (`Cmd+V`) vào ô chat composer.
+*   Tích hợp Side Panel "Shared Media & Files" lọc theo 3 tab (Media / Link / Docs) bên cạnh phải trang Chat.
+*   Bổ sung thanh Tìm kiếm Lịch sử Chat (Search Chat History) trên Header trang Chat.
 *   Sửa dứt điểm lỗi đính kèm file còn sót lại trên thanh chat composer sau khi gửi (tự động xóa sạch đính kèm sau khi bấm Send/Enter, không bị gửi lặp lại khi reload).
-*   Lưu Data URL (Base64) của tệp hình ảnh vào IndexedDB, cho phép mở Modal Preview ảnh gốc sắc nét 100% giống Codex/Gemini/Claude (dù reload trang hay chuyển tab).
-*   Gắn thẻ tệp đính kèm (Attachment Chips) ngay trên bong bóng tin nhắn chat, hỗ trợ nhấp trực tiếp vào để mở Modal xem trước tài liệu/hình ảnh.
+*   Lưu Data URL (Base64) của tệp hình ảnh vào IndexedDB, cho phép mở Modal Preview ảnh gốc sắc nét 100% giống Codex/Gemini/Claude.
 
 ## [1.0.27] - 2026-07-21
 ### Added

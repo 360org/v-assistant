@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Eraser, FileText, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { getKnowledgeFileRecord } from "@/runtime/knowledge";
@@ -30,6 +30,11 @@ function PortalWhen({ enabled, children }: { enabled: boolean; children: ReactNo
 export function Chat() {
   const [sentFileIds, setSentFileIds] = useState<Set<string>>(new Set());
   const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSharedMedia, setShowSharedMedia] = useState(false);
+  const [mediaTab, setMediaTab] = useState<"media" | "link" | "docs">("media");
+
   const {
     messages,
     setMessages,
@@ -213,6 +218,85 @@ export function Chat() {
       el.setSelectionRange(chatDraft.length, chatDraft.length);
     }
   }, [chatDraft, consumeChatDraft]);
+
+  const sharedMediaItems = useMemo(() => {
+    const mediaList: { id: string; name: string; date: string; dataUrl?: string }[] = [];
+    const linkList: { url: string; date: string }[] = [];
+    const docList: { id: string; name: string; date: string }[] = [];
+
+    const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+    const urlRegex = /(https?:\/\/[^\s<">]+)/g;
+
+    messages.forEach((m) => {
+      const dateStr = new Date(m.createdAt).toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+
+      const matches = m.content.match(urlRegex);
+      if (matches) {
+        matches.forEach((u) => {
+          if (!linkList.some((l) => l.url === u)) {
+            linkList.push({ url: u, date: dateStr });
+          }
+        });
+      }
+
+      if (m.attachments) {
+        m.attachments.forEach((att) => {
+          const ext = att.name.toLowerCase().split(".").pop() ?? "";
+          if (imgExtensions.includes(ext)) {
+            if (!mediaList.some((item) => item.id === att.id)) {
+              mediaList.push({
+                id: att.id,
+                name: att.name,
+                date: dateStr,
+                dataUrl: fileObjectURLs.get(att.id),
+              });
+            }
+          } else {
+            if (!docList.some((item) => item.id === att.id)) {
+              docList.push({ id: att.id, name: att.name, date: dateStr });
+            }
+          }
+        });
+      }
+    });
+
+    knowledgeFiles.forEach((f) => {
+      if (f.status === "ready") {
+        const ext = f.name.toLowerCase().split(".").pop() ?? "";
+        const dateStr = new Date().toLocaleDateString("vi-VN");
+        if (imgExtensions.includes(ext)) {
+          if (!mediaList.some((item) => item.id === f.id)) {
+            mediaList.push({
+              id: f.id,
+              name: f.name,
+              date: dateStr,
+              dataUrl: fileObjectURLs.get(f.id),
+            });
+          }
+        } else {
+          if (!docList.some((item) => item.id === f.id)) {
+            docList.push({ id: f.id, name: f.name, date: dateStr });
+          }
+        }
+      }
+    });
+
+    return { media: mediaList, links: linkList, docs: docList };
+  }, [messages, knowledgeFiles]);
+
+  const filteredMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter(
+      (m) =>
+        m.content.toLowerCase().includes(q) ||
+        m.attachments?.some((att) => att.name.toLowerCase().includes(q))
+    );
+  }, [messages, searchQuery]);
 
   const send = async () => {
     const readyFiles = knowledgeFiles.filter((f) => !sentFileIds.has(f.id) && f.status === "ready");
@@ -634,6 +718,26 @@ export function Chat() {
             </span>
           )}
           <button
+            onClick={() => setShowSearch((prev) => !prev)}
+            title="Search chat history"
+            className={cn(
+              "cursor-pointer rounded-lg p-1.5 transition-colors",
+              showSearch ? "bg-gold-400/20 text-gold-300" : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+            )}
+          >
+            <Search className="size-4" />
+          </button>
+          <button
+            onClick={() => setShowSharedMedia((prev) => !prev)}
+            title="Shared Media & Files"
+            className={cn(
+              "cursor-pointer rounded-lg p-1.5 transition-colors",
+              showSharedMedia ? "bg-gold-400/20 text-gold-300" : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+            )}
+          >
+            <FolderOpen className="size-4" />
+          </button>
+          <button
             onClick={clearChat}
             title="Clear conversation"
             className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
@@ -643,22 +747,44 @@ export function Chat() {
         </div>
       </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6" data-selectable>
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <Logo className="size-14 opacity-95" />
-            <h2 className="mt-4 text-lg font-semibold">
-              How can I help you today?
-            </h2>
-            <p className="mt-1 max-w-sm text-sm text-neutral-500">
-              Write an email, summarize a document, build a plan — or pick an
-              installed agent above for specialist help.
-            </p>
-          </div>
-        ) : (
-          <div className="mx-auto flex max-w-2xl flex-col gap-4">
-            {messages.map((m) => {
+      {/* Search Bar */}
+      {showSearch && (
+        <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/90 px-4 py-2 text-xs">
+          <Search className="size-3.5 text-neutral-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Tìm kiếm nội dung đã chat..."
+            className="flex-1 bg-transparent outline-none text-neutral-200 placeholder:text-neutral-500"
+            autoFocus
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="text-neutral-500 hover:text-neutral-300 cursor-pointer">
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Main Body Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6" data-selectable>
+          {filteredMessages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <Logo className="size-14 opacity-95" />
+              <h2 className="mt-4 text-lg font-semibold">
+                How can I help you today?
+              </h2>
+              <p className="mt-1 max-w-sm text-sm text-neutral-500">
+                Write an email, summarize a document, build a plan — or pick an
+                installed agent above for specialist help.
+              </p>
+            </div>
+          ) : (
+            <div className="mx-auto flex max-w-2xl flex-col gap-4">
+              {filteredMessages.map((m) => {
               const isUser = m.role === "user";
               const formattedTime = new Date(m.createdAt).toLocaleTimeString("vi-VN", {
                 hour: "2-digit",
@@ -689,25 +815,61 @@ export function Chat() {
                           : "bg-neutral-850 border border-neutral-800/80 text-neutral-100 rounded-2xl rounded-tl-xs",
                       )}
                     >
-                      {/* Attached files chips inside the bubble (Gemini/Claude style) */}
+                      {/* Inline Image & File Previews (WhatsApp / Telegram style) */}
                       {m.attachments && m.attachments.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-2">
-                          {m.attachments.map((att) => (
-                            <button
-                              key={att.id}
-                              onClick={() => setPreviewFile({ id: att.id, name: att.name })}
-                              className="flex items-center gap-1.5 rounded-xl border border-gold-500/40 bg-gold-400/10 px-2.5 py-1 text-xs font-medium text-gold-300 hover:bg-gold-400/20 hover:border-gold-400 transition-all cursor-pointer shadow-xs"
-                              title={`Bấm để xem trước: ${att.name}`}
-                            >
-                              <Paperclip className="size-3.5 text-gold-400" />
-                              <span className="max-w-[160px] truncate">{att.name}</span>
-                            </button>
-                          ))}
+                        <div className="mb-2 flex flex-wrap gap-2.5">
+                          {m.attachments.map((att) => {
+                            const ext = att.name.toLowerCase().split(".").pop() ?? "";
+                            const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext);
+                            const imgSrc = fileObjectURLs.get(att.id);
+
+                            if (isImg) {
+                              return (
+                                <div
+                                  key={att.id}
+                                  onClick={() => setPreviewFile({ id: att.id, name: att.name })}
+                                  className="group relative overflow-hidden rounded-xl border border-neutral-700/80 bg-neutral-950 cursor-pointer transition-all hover:border-gold-400 max-w-[280px] max-h-[220px] shadow-md"
+                                  title={`Xem ảnh lớn: ${att.name}`}
+                                >
+                                  {imgSrc ? (
+                                    <img
+                                      src={imgSrc}
+                                      alt={att.name}
+                                      className="max-h-[220px] w-full object-cover rounded-xl transition-transform duration-200 group-hover:scale-105 select-none"
+                                    />
+                                  ) : (
+                                    <div className="flex items-center gap-2 p-3 text-xs text-gold-300">
+                                      <Image className="size-4 shrink-0" />
+                                      <span className="truncate max-w-[180px]">{att.name}</span>
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                    <span className="text-[10px] text-white truncate font-medium">{att.name}</span>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <button
+                                key={att.id}
+                                onClick={() => setPreviewFile({ id: att.id, name: att.name })}
+                                className="flex items-center gap-2 rounded-xl border border-gold-500/40 bg-gold-400/10 px-3 py-1.5 text-xs font-medium text-gold-300 hover:bg-gold-400/20 hover:border-gold-400 transition-all cursor-pointer shadow-xs"
+                                title={`Bấm để xem trước: ${att.name}`}
+                              >
+                                <Paperclip className="size-3.5 text-gold-400 shrink-0" />
+                                <span className="max-w-[180px] truncate">{att.name}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
 
                       {m.content ? (
-                        <MessageContent content={m.content} assistant={m.role === "assistant"} />
+                        <MessageContent
+                          content={m.content.replace(/(\n\n)?📎 Đã gửi tệp:.*$/g, "").trim() || (m.attachments?.length ? "" : m.content)}
+                          assistant={m.role === "assistant"}
+                        />
                       ) : (
                         streaming && (
                           <div className="flex items-center gap-1 py-1">
@@ -738,6 +900,151 @@ export function Chat() {
             <div ref={bottomRef} />
           </div>
         )}
+      </div>
+
+      {/* Shared Media Side Panel (Telegram / WhatsApp Style Drawer) */}
+      {showSharedMedia && (
+        <div className="w-80 border-l border-neutral-800 bg-neutral-900/95 flex flex-col shrink-0 animate-fadeIn transition-all">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-neutral-800 shrink-0">
+            <div>
+              <h3 className="font-semibold text-neutral-200 text-sm">Files & Media</h3>
+              <p className="text-[10px] text-neutral-400 mt-0.5">Media, liên kết và tài liệu đã chia sẻ</p>
+            </div>
+            <button
+              onClick={() => setShowSharedMedia(false)}
+              className="cursor-pointer rounded-lg p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 transition-colors"
+              title="Đóng"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex border-b border-neutral-800 p-1.5 gap-1 bg-neutral-950/40 shrink-0">
+            <button
+              onClick={() => setMediaTab("media")}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                mediaTab === "media"
+                  ? "bg-gold-400/20 text-gold-300 border border-gold-400/30"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850"
+              )}
+            >
+              Media ({sharedMediaItems.media.length})
+            </button>
+            <button
+              onClick={() => setMediaTab("link")}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                mediaTab === "link"
+                  ? "bg-gold-400/20 text-gold-300 border border-gold-400/30"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850"
+              )}
+            >
+              Link ({sharedMediaItems.links.length})
+            </button>
+            <button
+              onClick={() => setMediaTab("docs")}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                mediaTab === "docs"
+                  ? "bg-gold-400/20 text-gold-300 border border-gold-400/30"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850"
+              )}
+            >
+              Docs ({sharedMediaItems.docs.length})
+            </button>
+          </div>
+
+          {/* Panel Content */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {mediaTab === "media" && (
+              sharedMediaItems.media.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-center text-neutral-500 text-xs">
+                  <Image className="size-8 mb-2 opacity-40" />
+                  Chưa có hình ảnh nào được chia sẻ
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {sharedMediaItems.media.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setPreviewFile({ id: item.id, name: item.name })}
+                      className="group relative aspect-square rounded-xl bg-neutral-950 border border-neutral-800 overflow-hidden cursor-pointer hover:border-gold-400 transition-all shadow-xs"
+                      title={item.name}
+                    >
+                      {item.dataUrl ? (
+                        <img src={item.dataUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 select-none" />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-neutral-850 text-neutral-400">
+                          <FileText className="size-5" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1">
+                        <span className="text-[9px] text-neutral-200 truncate w-full">{item.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {mediaTab === "link" && (
+              sharedMediaItems.links.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-center text-neutral-500 text-xs">
+                  <Globe className="size-8 mb-2 opacity-40" />
+                  Chưa có liên kết URL nào
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {sharedMediaItems.links.map((link, idx) => (
+                    <a
+                      key={idx}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-start gap-2.5 p-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-850 hover:border-gold-400/50 transition-all text-xs group"
+                    >
+                      <Link2 className="size-4 text-gold-400 shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-neutral-200 truncate group-hover:text-gold-300">{link.url}</p>
+                        <span className="text-[10px] text-neutral-500 mt-0.5 block">{link.date}</span>
+                      </div>
+                      <ExternalLink className="size-3 text-neutral-500 shrink-0 mt-0.5 group-hover:text-gold-400" />
+                    </a>
+                  ))}
+                </div>
+              )
+            )}
+
+            {mediaTab === "docs" && (
+              sharedMediaItems.docs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-center text-neutral-500 text-xs">
+                  <FileCode className="size-8 mb-2 opacity-40" />
+                  Chưa có tài liệu nào
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {sharedMediaItems.docs.map((doc) => (
+                    <div
+                      key={doc.id}
+                      onClick={() => setPreviewFile({ id: doc.id, name: doc.name })}
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-850 hover:border-gold-400/50 transition-all text-xs cursor-pointer group"
+                    >
+                      <FileText className="size-4 text-gold-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-neutral-200 truncate group-hover:text-gold-300">{doc.name}</p>
+                        <span className="text-[10px] text-neutral-500 mt-0.5 block">{doc.date}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Composer */}
@@ -818,6 +1125,12 @@ export function Chat() {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 void send();
+              }
+            }}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files ?? []);
+              if (files.length > 0) {
+                addKnowledgeFiles(files);
               }
             }}
             className="max-h-40 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-neutral-500"
@@ -910,14 +1223,29 @@ function FilePreviewModal({
               <Loader2 className="size-7 animate-spin text-gold-300" />
               <span className="text-xs">Đang tải nội dung xem trước...</span>
             </div>
-          ) : isImage && imageSrc ? (
-            <div className="flex items-center justify-center w-full h-full p-2">
-              <img
-                src={imageSrc}
-                alt={fileName}
-                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg select-none"
-              />
-            </div>
+          ) : isImage ? (
+            imageSrc ? (
+              <div className="flex items-center justify-center w-full h-full p-2">
+                <img
+                  src={imageSrc}
+                  alt={fileName}
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg select-none"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 text-center p-6 bg-neutral-900/60 rounded-xl border border-neutral-800 max-w-md">
+                <div className="size-16 rounded-2xl bg-gold-400/10 border border-gold-400/30 flex items-center justify-center text-gold-300">
+                  <FileText className="size-8" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-neutral-200 text-sm truncate max-w-xs">{fileName}</h4>
+                  <p className="text-xs text-neutral-400 mt-1">Tệp hình ảnh tri thức đã được trích xuất cho Agent</p>
+                </div>
+                <div className="text-[11px] text-neutral-400 font-mono bg-neutral-950 px-3 py-2 rounded-lg border border-neutral-850 w-full text-left whitespace-pre-wrap">
+                  {content || `[Tệp hình ảnh: ${fileName} | Định dạng: ${ext.toUpperCase()}]`}
+                </div>
+              </div>
+            )
           ) : (
             <div className="w-full h-full text-left font-mono text-xs text-neutral-300 whitespace-pre-wrap select-text leading-relaxed p-2">
               {content || "Không có nội dung văn bản nào được trích xuất từ tệp này."}
