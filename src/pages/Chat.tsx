@@ -18,7 +18,7 @@ import {
 } from "@/runtime/aiRouter";
 import { Logo } from "@/components/Logo";
 import { ChatSessionMenu } from "@/components/ChatSessionMenu";
-import { MessageContent, visibleAssistantText } from "@/components/MessageContent";
+import { MessageContent, openExternalUrl, visibleAssistantText } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 
 const engine = createEngine();
@@ -1034,7 +1034,11 @@ export function Chat() {
                       href={link.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-start gap-2.5 p-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-850 hover:border-gold-400/50 transition-all text-xs group"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void openExternalUrl(link.url);
+                      }}
+                      className="flex items-start gap-2.5 p-2.5 rounded-xl border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-850 hover:border-gold-400/50 transition-all text-xs group cursor-pointer"
                     >
                       <Link2 className="size-4 text-gold-400 shrink-0 mt-0.5" />
                       <div className="min-w-0 flex-1">

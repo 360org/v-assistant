@@ -13,19 +13,19 @@ export function visibleAssistantText(content: string): string {
     .trim();
 }
 
-const openLink = async (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
-  e.preventDefault();
-  const inDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-  if (inDesktop) {
-    try {
-      await invoke("open_external", { url });
-    } catch (err) {
-      console.error("Failed to open link via Tauri:", err);
-      window.open(url, "_blank");
-    }
-  } else {
-    window.open(url, "_blank");
+export async function openExternalUrl(url: string) {
+  try {
+    await invoke("open_external", { url: url.trim() });
+  } catch (err) {
+    console.warn("Tauri open_external invoke failed, fallback to window.open:", err);
+    window.open(url, "_blank", "noopener,noreferrer");
   }
+}
+
+const openLink = (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+  e.preventDefault();
+  e.stopPropagation();
+  void openExternalUrl(url);
 };
 
 function inlineMarkdown(value: string): ReactNode[] {
