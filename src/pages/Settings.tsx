@@ -665,59 +665,82 @@ export function Settings() {
             AI Router unavailable: {connectionError}
           </Card>
         ) : (
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             {connections.map((connection) => (
-              <Card key={connection.id} className="flex items-start justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{connection.name || connection.provider}</div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {connection.email || connection.accountLabel || connection.id}
-                    {connection.defaultModel ? ` · ${connection.defaultModel}` : ""}
+              <div
+                key={connection.id}
+                className="flex flex-col justify-between gap-3 p-4 rounded-2xl border border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900 transition-all shadow-md"
+              >
+                {/* Header: Name, Email & Status Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-sm text-neutral-100 truncate">
+                      {connection.name || connection.provider}
+                    </div>
+                    <div className="mt-0.5 text-xs text-neutral-400 truncate">
+                      {connection.email || connection.accountLabel || connection.id}
+                      {connection.defaultModel ? ` · ${connection.defaultModel}` : ""}
+                    </div>
                   </div>
-                  {connection.lastError && <div className="mt-1 text-xs text-red-300">{connection.lastError}</div>}
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <Badge tone={connection.isActive === false ? "neutral" : connection.testStatus === "Verified" ? "green" : "gold"}>
+                  <Badge
+                    tone={connection.isActive === false ? "neutral" : connection.testStatus === "Verified" ? "green" : "gold"}
+                    className="shrink-0 font-medium"
+                  >
                     {connection.isActive === false ? "Disabled" : connection.testStatus || "Pending test"}
                   </Badge>
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      title="Test connection"
-                      onClick={() => void testConnection(connection)}
-                      disabled={connectionActionId === connection.id}
-                    >
-                      {connectionActionId === connection.id ? <LoaderCircle className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}
-                      Test
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      title="Làm mới OAuth Token (Renew token mà không cần reset tài khoản)"
-                      onClick={() => void renewConnectionToken(connection)}
-                      disabled={connectionActionId === connection.id}
-                      className="border-gold-500/30 text-gold-300 hover:bg-gold-500/10"
-                    >
-                      {connectionActionId === connection.id ? (
-                        <LoaderCircle className="size-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="size-4" />
-                      )}
-                      Renew
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title="Reset connection and remove its Vault credential"
-                      onClick={() => void resetConnection(connection)}
-                      disabled={connectionActionId === connection.id}
-                    >
-                      <RotateCcw className="size-4" /> Reset
-                    </Button>
-                  </div>
                 </div>
-              </Card>
+
+                {/* Error message (If present) */}
+                {connection.lastError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words">
+                    {connection.lastError}
+                  </div>
+                )}
+
+                {/* Bottom Row: Action Buttons */}
+                <div className="flex items-center justify-end gap-1.5 pt-2.5 border-t border-neutral-800/80">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    title="Test connection"
+                    onClick={() => void testConnection(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                  >
+                    {connectionActionId === connection.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <FlaskConical className="size-3.5" />
+                    )}
+                    Test
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    title="Làm mới OAuth Token (Renew token mà không cần reset tài khoản)"
+                    onClick={() => void renewConnectionToken(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium border border-gold-500/30 text-gold-300 hover:bg-gold-500/15"
+                  >
+                    {connectionActionId === connection.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                    Renew
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Reset connection and remove its Vault credential"
+                    onClick={() => void resetConnection(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
+                  >
+                    <RotateCcw className="size-3.5" /> Reset
+                  </Button>
+                </div>
+              </div>
             ))}
             {!loadingConnections && connections.length === 0 && (
               <Card className="text-sm text-neutral-400 sm:col-span-2">

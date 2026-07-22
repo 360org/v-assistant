@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.35] - 2026-07-22
+### UI & Design Polish
+*   Tái thiết kế toàn bộ khu vực **AI Router Connections** trong Settings thành dạng Block Card siêu sang trọng, phân tách rõ ràng dòng thông tin tài khoản, thông báo lỗi (Error container) và thanh công cụ thao tác Test / Renew / Reset phía dưới, giải quyết triệt để lỗi chồng lấp nút bấm.
+
 ## [1.0.34] - 2026-07-22
 ### Security & Auth Lock
 *   Siết chặt logic Auth Lock: Khi người dùng bấm **Log out** hoặc chưa đăng nhập `user` local, ứng dụng lập tức thoát ra ngoài và hiển thị màn hình Onboarding / Đăng nhập, đồng thời vô hiệu hóa hoàn toàn ô nhập liệu Chat cho tới khi người dùng Đăng nhập lại.
