@@ -18,6 +18,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 
 const LOCAL_AI_ACCOUNTS = [
@@ -491,18 +492,19 @@ export function Settings() {
       await testAiRouterConnection(connection.id);
       await refreshConnections();
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
+      let errMsg = error instanceof Error ? error.message : String(error);
       if (errMsg.toLowerCase().includes("expired") || errMsg.toLowerCase().includes("401") || errMsg.toLowerCase().includes("revoked")) {
         try {
           await renewConnectionToken(connection);
           return;
         } catch (renewErr) {
-          setConnectionError(renewErr instanceof Error ? renewErr.message : String(renewErr));
+          errMsg = renewErr instanceof Error ? renewErr.message : String(renewErr);
         }
-      } else {
-        setConnectionError(errMsg);
       }
-      await refreshConnections();
+      // Keep error confined to this specific account card instead of wiping the UI
+      setConnections((prev) =>
+        prev.map((c) => (c.id === connection.id ? { ...c, lastError: errMsg, testStatus: "Failed" } : c)),
+      );
     } finally {
       setConnectionActionId(null);
     }
@@ -690,10 +692,21 @@ export function Settings() {
                   </Badge>
                 </div>
 
-                {/* Error message (If present) */}
+                {/* Error message (If present - confined strictly to this card) */}
                 {connection.lastError && (
-                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words">
-                    {connection.lastError}
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
+                    <span>{connection.lastError}</span>
+                    {connection.lastError.includes("http") && (
+                      <button
+                        onClick={() => {
+                          const match = connection.lastError?.match(/(https?:\/\/[^\s<">]+)/);
+                          if (match?.[1]) void openExternalUrl(match[1]);
+                        }}
+                        className="flex items-center gap-1.5 self-start rounded-lg border border-gold-500/40 bg-gold-400/15 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:bg-gold-400/25 transition-colors cursor-pointer"
+                      >
+                        <ExternalLink className="size-3 text-gold-400" /> Xác thực lại tại trình duyệt
+                      </button>
+                    )}
                   </div>
                 )}
 
