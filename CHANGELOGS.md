@@ -2,6 +2,14 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.33] - 2026-07-22
+### Added & Improved
+*   Nâng cấp **Media Gallery**: Gom toàn bộ hình ảnh đính kèm từ tất cả các phiên chat (`chatSessions`) vào bộ sưu tập, bổ sung nhãn badge `💬 [Tên phiên chat]` trên từng card và nút **Go Direct to Chat Conversation** giúp nhảy thẳng tới đoạn chat tương ứng.
+
+## [1.0.32] - 2026-07-22
+### Fixed & Improved
+*   Sửa dứt điểm lỗi đính kèm hình ảnh rơi vào icon fallback: Xử lý tệp hình ảnh không có văn bản đọc được trong `indexKnowledgeFile` mà không throw lỗi, lưu trực tiếp Base64 Data URL vào IndexedDB và `ChatMessage.attachments`, đảm bảo hiển thị 100% hình ảnh thu nhỏ căng nét rạng rỡ.
+
 ## [1.0.31] - 2026-07-22
 ### Added & Improved
 *   Xây dựng giao diện **Media Gallery** nghệ thuật (phong cách Midjourney/Pinterest) với hàng Featured Templates carousel và lưới Masonry Gallery tự điều chỉnh tỷ lệ khung hình cho tất cả media assets trong ứng dụng.

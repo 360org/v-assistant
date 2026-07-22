@@ -342,19 +342,32 @@ export async function indexKnowledgeFile(
   fileId: string,
   file: File,
 ): Promise<number> {
-  const text = await extractText(file);
-  const chunks = chunkText(text);
-  if (!chunks.length)
-    throw new Error("No readable text in this file (is it a scanned image?)");
-
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
   const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+  const isImage = imgExtensions.includes(ext) || file.type.startsWith("image/");
+
   let dataUrl: string | undefined = undefined;
-  if (imgExtensions.includes(ext) || file.type.startsWith("image/")) {
+  if (isImage) {
     try {
       dataUrl = await fileToDataUrl(file);
     } catch (e) {
       console.warn("Failed to read image as data URL:", e);
+    }
+  }
+
+  let text = "";
+  try {
+    text = await extractText(file);
+  } catch (e) {
+    text = isImage ? `[Hình ảnh: ${file.name}]` : "";
+  }
+
+  let chunks = chunkText(text);
+  if (!chunks.length) {
+    if (isImage) {
+      chunks = [`[Hình ảnh: ${file.name}]`];
+    } else {
+      throw new Error("No readable text in this file");
     }
   }
 

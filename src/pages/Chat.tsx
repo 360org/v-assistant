@@ -31,12 +31,12 @@ function InlineAttachmentPreview({
   att,
   onOpenPreview,
 }: {
-  att: { id: string; name: string };
+  att: { id: string; name: string; dataUrl?: string };
   onOpenPreview: () => void;
 }) {
   const ext = att.name.toLowerCase().split(".").pop() ?? "";
-  const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(ext);
-  const [imgSrc, setImgSrc] = useState<string | null>(fileObjectURLs.get(att.id) || null);
+  const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"].includes(ext);
+  const [imgSrc, setImgSrc] = useState<string | null>(att.dataUrl || fileObjectURLs.get(att.id) || null);
 
   useEffect(() => {
     if (!isImg || imgSrc) return;
@@ -319,7 +319,7 @@ export function Chat() {
                 id: att.id,
                 name: att.name,
                 date: dateStr,
-                dataUrl: fileObjectURLs.get(att.id),
+                dataUrl: att.dataUrl || fileObjectURLs.get(att.id),
               });
             }
           } else {
@@ -390,7 +390,11 @@ export function Chat() {
       role: "user",
       content,
       createdAt: Date.now(),
-      attachments: readyFiles.map((f) => ({ id: f.id, name: f.name })),
+      attachments: readyFiles.map((f) => ({
+        id: f.id,
+        name: f.name,
+        dataUrl: fileObjectURLs.get(f.id) || undefined,
+      })),
     };
     const assistantId = newMessageId();
     const history = [...messages, userMessage];

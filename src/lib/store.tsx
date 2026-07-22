@@ -36,7 +36,6 @@ import {
 } from "@/runtime/telegram";
 import {
   clearKnowledge,
-  deleteKnowledgeFile,
   indexKnowledgeFile,
 } from "@/runtime/knowledge";
 import { runDueTasks } from "@/runtime/scheduler";
@@ -1081,7 +1080,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const removeKnowledgeFile = useCallback((fileId: string) => {
-    void deleteKnowledgeFile(fileId);
     setState((s) => {
       const key = knowledgeBucket(s.activeAgentId);
       return {
