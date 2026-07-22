@@ -20,6 +20,8 @@
     "build:demo": "vite build -c vite.demo.config.ts && node scripts/inline-demo.mjs",
     "validate:skills": "node scripts/validate-skills.mjs",
     "preview": "vite preview",
+    "install:local": "node scripts/install-local.mjs",
+    "build:local": "npx tauri build && node scripts/install-local.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
