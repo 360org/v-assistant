@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.36] - 2026-07-22
+### Security & Per-User Storage Isolation
+*   Xây dựng cơ chế **Per-User Storage Isolation (Cô lập không gian dữ liệu riêng cho từng Local User)**: Khi người dùng **Log out**, hệ thống cất giữ và bảo vệ 100% dữ liệu (chat, tài liệu, kết nối AI) vào kho lưu trữ riêng của User đó, đồng thời làm sạch toàn bộ bộ nhớ tạm trên màn hình. Đảm bảo khi 2 người dùng xài chung 1 máy, tài khoản nào đăng nhập chỉ truy cập đúng dữ liệu riêng của mình, không bị rò rỉ hay dính dáng tới tài khoản khác.
+
 ## [1.0.35] - 2026-07-22
 ### UI & Design Polish
 *   Tái thiết kế toàn bộ khu vực **AI Router Connections** trong Settings thành dạng Block Card siêu sang trọng, phân tách rõ ràng dòng thông tin tài khoản, thông báo lỗi (Error container) và thanh công cụ thao tác Test / Renew / Reset phía dưới, giải quyết triệt để lỗi chồng lấp nút bấm.

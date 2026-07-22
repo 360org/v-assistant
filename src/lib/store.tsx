@@ -238,16 +238,21 @@ const GENERAL_KNOWLEDGE = "general";
 const knowledgeBucket = (agentId: string | null): string =>
   agentId ?? GENERAL_KNOWLEDGE;
 
-function loadState(): PersistedState {
+function getUserStorageKey(user: LocalUser | null): string {
+  if (!user) return "v-assistant-guest-state";
+  const id = user.detail || user.name || "user";
+  return `v-assistant-user-${id.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+}
+
+function loadStateForUser(key: string): PersistedState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return initialState;
     const parsed = JSON.parse(raw) as Partial<PersistedState> & {
       knowledgeFiles?: KnowledgeFile[];
     };
     const merged = { ...initialState, ...parsed };
     merged.taskRunLogs = merged.taskRunLogs ?? [];
-    // Migrate the old global knowledge list into the base ("general") bucket.
     if (parsed.knowledgeFiles && !parsed.knowledgeByAgent) {
       merged.knowledgeByAgent = { [GENERAL_KNOWLEDGE]: parsed.knowledgeFiles };
     }
@@ -271,6 +276,11 @@ function loadState(): PersistedState {
   } catch {
     return initialState;
   }
+}
+
+function loadState(): PersistedState {
+  const lastActiveKey = localStorage.getItem("v-assistant-last-active-user-key") || STORAGE_KEY;
+  return loadStateForUser(lastActiveKey);
 }
 
 interface AppStore extends PersistedState {
@@ -505,7 +515,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ]),
       );
       const safe = { ...state, providerConfigs };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
+      const currentKey = getUserStorageKey(state.user);
+      localStorage.setItem(currentKey, JSON.stringify(safe));
+      if (state.user) {
+        localStorage.setItem("v-assistant-last-active-user-key", currentKey);
+      }
 
       // Also sync state to host dev server if running in standard browser dev mode
       if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
@@ -735,14 +749,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const ensureLocalUser = useCallback((input: Omit<LocalUser, "createdAt">) => {
-    setState((s) => s.user ? s : {
-      ...s,
-      user: { ...input, createdAt: Date.now() },
+    const newUser: LocalUser = { ...input, createdAt: Date.now() };
+    const userKey = getUserStorageKey(newUser);
+    const existingState = loadStateForUser(userKey);
+
+    setState({
+      ...existingState,
+      user: newUser,
+      onboarded: true,
     });
   }, []);
 
   const clearLocalUser = useCallback(() => {
-    setState((s) => ({ ...s, user: null, onboarded: false }));
+    localStorage.removeItem("v-assistant-last-active-user-key");
+    setState(initialState);
   }, []);
 
   const setProvider = useCallback((provider: ProviderId) => {
