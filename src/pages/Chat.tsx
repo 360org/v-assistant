@@ -1,7 +1,9 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Eraser, FileText, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
-import { useApp } from "@/lib/store";
+import { useApp, fileObjectURLs } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { getKnowledgeFileRecord } from "@/runtime/knowledge";
 import {
   type ProviderConfig,
 } from "@/runtime/providers";
@@ -26,6 +28,8 @@ function PortalWhen({ enabled, children }: { enabled: boolean; children: ReactNo
 }
 
 export function Chat() {
+  const [sentFileIds, setSentFileIds] = useState<Set<string>>(new Set());
+  const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
   const {
     messages,
     setMessages,
@@ -211,15 +215,31 @@ export function Chat() {
   }, [chatDraft, consumeChatDraft]);
 
   const send = async () => {
-    const content = input.trim();
-    if (!content || streaming || !activeModel) return;
+    const readyFiles = knowledgeFiles.filter((f) => !sentFileIds.has(f.id) && f.status === "ready");
+    const textContent = input.trim();
+    if ((!textContent && readyFiles.length === 0) || streaming || !activeModel) return;
+
+    let content = textContent;
+    if (readyFiles.length > 0) {
+      const fileNames = readyFiles.map((f) => f.name).join(", ");
+      content = textContent
+        ? `${textContent}\n\n📎 Đã gửi tệp: ${fileNames}`
+        : `📎 Đã gửi tệp: ${fileNames}`;
+    }
+
     setInput("");
+
+    if (readyFiles.length > 0) {
+      setSentFileIds((prev) => new Set([...prev, ...readyFiles.map((f) => f.id)]));
+      readyFiles.forEach((f) => removeKnowledgeFile(f.id));
+    }
 
     const userMessage: ChatMessage = {
       id: newMessageId(),
       role: "user",
       content,
       createdAt: Date.now(),
+      attachments: readyFiles.map((f) => ({ id: f.id, name: f.name })),
     };
     const assistantId = newMessageId();
     const history = [...messages, userMessage];
@@ -637,32 +657,84 @@ export function Chat() {
             </p>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-2xl flex-col gap-5">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={cn(
-                  "flex",
-                  m.role === "user" ? "justify-end" : "justify-start",
-                )}
-              >
+          <div className="mx-auto flex max-w-2xl flex-col gap-4">
+            {messages.map((m) => {
+              const isUser = m.role === "user";
+              const formattedTime = new Date(m.createdAt).toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              return (
                 <div
+                  key={m.id}
                   className={cn(
-                    "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-                    m.role === "user"
-                      ? "bg-gold-400 text-neutral-950"
-                      : "bg-neutral-800/80 text-neutral-100",
+                    "flex items-start",
+                    isUser ? "justify-end" : "justify-start",
                   )}
                 >
-                  {m.content ? (
-                    <MessageContent content={m.content} assistant={m.role === "assistant"} />
-                  ) :
-                    (streaming && (
-                      <span className="inline-block animate-pulse">…</span>
-                    ))}
+                  {!isUser && (
+                    <div
+                      className="size-7 rounded-full bg-neutral-850 border border-neutral-800 flex items-center justify-center text-sm shrink-0 mr-2.5 mt-0.5 shadow-md select-none"
+                      title={activeAgent?.name || "V Assistant"}
+                    >
+                      {activeAgent?.emoji || "🤖"}
+                    </div>
+                  )}
+                  <div className="flex flex-col max-w-[85%]">
+                    <div
+                      className={cn(
+                        "whitespace-pre-wrap px-4 py-2.5 text-sm leading-relaxed shadow-md transition-all duration-200",
+                        isUser
+                          ? "bg-gold-500/10 border border-gold-500/25 text-neutral-100 rounded-2xl rounded-tr-xs"
+                          : "bg-neutral-850 border border-neutral-800/80 text-neutral-100 rounded-2xl rounded-tl-xs",
+                      )}
+                    >
+                      {/* Attached files chips inside the bubble (Gemini/Claude style) */}
+                      {m.attachments && m.attachments.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          {m.attachments.map((att) => (
+                            <button
+                              key={att.id}
+                              onClick={() => setPreviewFile({ id: att.id, name: att.name })}
+                              className="flex items-center gap-1.5 rounded-xl border border-gold-500/40 bg-gold-400/10 px-2.5 py-1 text-xs font-medium text-gold-300 hover:bg-gold-400/20 hover:border-gold-400 transition-all cursor-pointer shadow-xs"
+                              title={`Bấm để xem trước: ${att.name}`}
+                            >
+                              <Paperclip className="size-3.5 text-gold-400" />
+                              <span className="max-w-[160px] truncate">{att.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {m.content ? (
+                        <MessageContent content={m.content} assistant={m.role === "assistant"} />
+                      ) : (
+                        streaming && (
+                          <div className="flex items-center gap-1 py-1">
+                            <span className="size-1.5 rounded-full bg-gold-400/80 animate-bounce [animation-delay:-0.3s]" />
+                            <span className="size-1.5 rounded-full bg-gold-400/80 animate-bounce [animation-delay:-0.15s]" />
+                            <span className="size-1.5 rounded-full bg-gold-400/80 animate-bounce" />
+                          </div>
+                        )
+                      )}
+                      
+                      {/* Meta/Timestamp footer inside the bubble */}
+                      <div className="mt-1 flex items-center justify-end gap-1 select-none">
+                        <span className={cn(
+                          "text-[9px] font-normal leading-none",
+                          isUser ? "text-gold-400/50" : "text-neutral-500"
+                        )}>
+                          {formattedTime}
+                        </span>
+                        {isUser && (
+                          <span className="text-[10px] text-gold-400/70 font-bold leading-none select-none">✓✓</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
         )}
@@ -671,15 +743,26 @@ export function Chat() {
       {/* Composer */}
       <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
         {/* Attachment files list */}
-        {knowledgeFiles.length > 0 && (
+        {knowledgeFiles.filter((f) => !sentFileIds.has(f.id)).length > 0 && (
           <div className="mx-auto mb-2 flex max-w-2xl flex-wrap gap-2 px-1">
-            {knowledgeFiles.map((f) => (
+            {knowledgeFiles.filter((f) => !sentFileIds.has(f.id)).map((f) => (
               <div
                 key={f.id}
                 className="flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1 text-xs"
               >
                 <FileText className="size-3.5 text-neutral-500" />
-                <span className="max-w-[120px] truncate" title={f.name}>
+                <span
+                  onClick={() => {
+                    if (f.status === "ready") {
+                      setPreviewFile({ id: f.id, name: f.name });
+                    }
+                  }}
+                  className={cn(
+                    "max-w-[120px] truncate",
+                    f.status === "ready" ? "cursor-pointer hover:underline hover:text-gold-300" : ""
+                  )}
+                  title={f.name}
+                >
                   {f.name}
                 </span>
                 {f.status === "processing" ? (
@@ -741,7 +824,7 @@ export function Chat() {
           />
           <button
             onClick={() => void send()}
-            disabled={!input.trim() || streaming || !activeModel}
+            disabled={(!input.trim() && knowledgeFiles.filter((f) => !sentFileIds.has(f.id) && f.status === "ready").length === 0) || streaming || !activeModel}
             className="cursor-pointer rounded-xl bg-gold-400 p-2 text-neutral-950 transition-colors hover:bg-gold-300 disabled:pointer-events-none disabled:opacity-40"
           >
             <SendHorizonal className="size-4" />
@@ -750,6 +833,103 @@ export function Chat() {
         <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-neutral-600">
           Enter to send · Shift+Enter for a new line
         </p>
+      </div>
+
+      {previewFile && (
+        <FilePreviewModal
+          fileId={previewFile.id}
+          fileName={previewFile.name}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FilePreviewModal({
+  fileId,
+  fileName,
+  onClose,
+}: {
+  fileId: string;
+  fileName: string;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [content, setContent] = useState<string | null>(null);
+  const [imageSrc, setImageSrc] = useState<string | null>(fileObjectURLs.get(fileId) ?? null);
+
+  const ext = fileName.toLowerCase().split(".").pop() ?? "";
+  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"].includes(ext);
+
+  useEffect(() => {
+    getKnowledgeFileRecord(fileId)
+      .then((rec) => {
+        if (rec) {
+          if (rec.dataUrl) {
+            setImageSrc(rec.dataUrl);
+          }
+          if (rec.chunks && rec.chunks.length > 0) {
+            setContent(rec.chunks.join("\n\n"));
+          }
+        }
+        setLoading(false);
+      })
+      .catch((e) => {
+        console.error("Failed to load preview record:", e);
+        setLoading(false);
+      });
+  }, [fileId]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs animate-fadeIn"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl rounded-2xl border border-neutral-800 bg-neutral-900 p-5 flex flex-col max-h-[90vh] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between shrink-0 border-b border-neutral-800 pb-3">
+          <div className="min-w-0 flex-1 pr-4">
+            <h3 className="font-semibold text-neutral-200 truncate text-base">{fileName}</h3>
+            <p className="text-[11px] text-neutral-400 mt-0.5">Xem trước tài liệu tri thức của Agent</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 transition-colors"
+            aria-label="Close"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 flex-1 overflow-auto bg-neutral-950 rounded-xl border border-neutral-800/80 p-4 flex items-center justify-center min-h-[350px]">
+          {loading ? (
+            <div className="flex flex-col items-center gap-2 text-neutral-400">
+              <Loader2 className="size-7 animate-spin text-gold-300" />
+              <span className="text-xs">Đang tải nội dung xem trước...</span>
+            </div>
+          ) : isImage && imageSrc ? (
+            <div className="flex items-center justify-center w-full h-full p-2">
+              <img
+                src={imageSrc}
+                alt={fileName}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg select-none"
+              />
+            </div>
+          ) : (
+            <div className="w-full h-full text-left font-mono text-xs text-neutral-300 whitespace-pre-wrap select-text leading-relaxed p-2">
+              {content || "Không có nội dung văn bản nào được trích xuất từ tệp này."}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2 shrink-0">
+          <Button size="sm" onClick={onClose} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200">
+            Đóng
+          </Button>
+        </div>
       </div>
     </div>
   );

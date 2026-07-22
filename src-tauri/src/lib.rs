@@ -85,6 +85,23 @@ fn runtime_connector_request(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, Submenu, PredefinedMenuItem};
+                let edit_menu = Submenu::new(app, "Edit", true)?;
+                edit_menu.append_items(&[
+                    &PredefinedMenuItem::undo(app, Some("Undo"))?,
+                    &PredefinedMenuItem::redo(app, Some("Redo"))?,
+                    &PredefinedMenuItem::cut(app, Some("Cut"))?,
+                    &PredefinedMenuItem::copy(app, Some("Copy"))?,
+                    &PredefinedMenuItem::paste(app, Some("Paste"))?,
+                    &PredefinedMenuItem::select_all(app, Some("Select All"))?,
+                ])?;
+                let menu = Menu::new(app)?;
+                menu.append(&edit_menu)?;
+                app.set_menu(menu)?;
+            }
+
             let dir = app.path().app_data_dir()?.join("runtime");
             
             // Only development resolves the project from the current checkout.

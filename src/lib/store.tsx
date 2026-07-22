@@ -24,6 +24,8 @@ import {
   loadAntigravityProject,
   type OAuthReturn,
 } from "@/runtime/oauth";
+
+export const fileObjectURLs = new Map<string, string>();
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
@@ -1023,13 +1025,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // role even if the user switches roles while a file is still indexing.
       const agentId = stateRef.current.activeAgentId;
       const bucket = knowledgeBucket(agentId);
-      const entries: KnowledgeFile[] = files.map((f, i) => ({
-        id: `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-        name: f.name,
-        size: f.size,
-        addedAt: now,
-        status: "processing",
-      }));
+      const entries: KnowledgeFile[] = files.map((f, i) => {
+        const id = `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+        const ext = f.name.toLowerCase().split(".").pop() ?? "";
+        const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+        if (imgExtensions.includes(ext)) {
+          try {
+            const url = URL.createObjectURL(f);
+            fileObjectURLs.set(id, url);
+          } catch (e) {
+            console.error("Failed to create ObjectURL:", e);
+          }
+        }
+        return {
+          id,
+          name: f.name,
+          size: f.size,
+          addedAt: now,
+          status: "processing",
+        };
+      });
       setState((s) => ({
         ...s,
         knowledgeByAgent: {

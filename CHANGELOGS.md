@@ -3,6 +3,21 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+### Fixed & Improved
+*   Sửa dứt điểm lỗi đính kèm file còn sót lại trên thanh chat composer sau khi gửi (tự động xóa sạch đính kèm sau khi bấm Send/Enter, không bị gửi lặp lại khi reload).
+*   Lưu Data URL (Base64) của tệp hình ảnh vào IndexedDB, cho phép mở Modal Preview ảnh gốc sắc nét 100% giống Codex/Gemini/Claude (dù reload trang hay chuyển tab).
+*   Gắn thẻ tệp đính kèm (Attachment Chips) ngay trên bong bóng tin nhắn chat, hỗ trợ nhấp trực tiếp vào để mở Modal xem trước tài liệu/hình ảnh.
+
+## [1.0.27] - 2026-07-21
+### Added
+*   Nâng cấp giao diện bong bóng chat (Chat bubbles) theo phong cách Telegram/Whatsapp cao cấp với bo góc bất đối xứng, bổ sung avatar Agent ở cạnh và hiển thị thời gian kèm check đôi ✓✓.
+*   Khắc phục lỗi không thể Copy/Paste (Cmd+C / Cmd+V) trên macOS bằng cách kích hoạt menu feature của Tauri và tích hợp Edit Menu Submenu vào mã Rust Core.
+
+## [1.0.26] - 2026-07-21
+### Added
+*   Hỗ trợ gửi tin nhắn chat trực tiếp chỉ với file đính kèm (cho phép nhấn Enter hoặc Send khi ô nhập text trống).
+*   Tự động ẩn file đính kèm khỏi thanh input chat sau khi tin nhắn đã được gửi đi thành công.
+*   Tích hợp tính năng xem trước (Preview) hình ảnh gốc của các tệp ảnh vừa upload, và xem trước nội dung văn bản trích xuất của tất cả các tài liệu (PDF, Word, Excel, Markdown...) trong cả tab Chat và tab Knowledge.
 
 ## [1.0.25] - 2026-07-21
 ### Added

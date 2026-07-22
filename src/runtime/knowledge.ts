@@ -288,11 +288,21 @@ export function chunkText(text: string, size = 1200, overlap = 150): string[] {
 // unavailable: tests, private-mode webviews)
 // ---------------------------------------------------------------------------
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 interface FileChunks {
   fileId: string;
   bucket: string;
   name: string;
   chunks: string[];
+  dataUrl?: string;
 }
 
 const bucketOf = (agentId: string | null | undefined): string => agentId ?? "general";
@@ -336,7 +346,19 @@ export async function indexKnowledgeFile(
   const chunks = chunkText(text);
   if (!chunks.length)
     throw new Error("No readable text in this file (is it a scanned image?)");
-  const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks };
+
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+  let dataUrl: string | undefined = undefined;
+  if (imgExtensions.includes(ext) || file.type.startsWith("image/")) {
+    try {
+      dataUrl = await fileToDataUrl(file);
+    } catch (e) {
+      console.warn("Failed to read image as data URL:", e);
+    }
+  }
+
+  const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
   if (hasIdb) await withStore("readwrite", (s) => s.put(rec));
   else memory.set(fileId, rec);
   return chunks.length;
@@ -345,6 +367,22 @@ export async function indexKnowledgeFile(
 export async function deleteKnowledgeFile(fileId: string): Promise<void> {
   if (hasIdb) await withStore("readwrite", (s) => s.delete(fileId));
   else memory.delete(fileId);
+}
+
+export async function getFileContent(fileId: string): Promise<string | null> {
+  const rec = hasIdb
+    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
+    : memory.get(fileId);
+  return rec ? rec.chunks.join("\n\n") : null;
+}
+
+export async function getKnowledgeFileRecord(
+  fileId: string,
+): Promise<{ name: string; chunks: string[]; dataUrl?: string } | null> {
+  const rec = hasIdb
+    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
+    : memory.get(fileId);
+  return rec ? { name: rec.name, chunks: rec.chunks, dataUrl: rec.dataUrl } : null;
 }
 
 export async function clearKnowledge(): Promise<void> {
