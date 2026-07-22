@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.31] - 2026-07-22
+### Added & Improved
+*   Xây dựng giao diện **Media Gallery** nghệ thuật (phong cách Midjourney/Pinterest) với hàng Featured Templates carousel và lưới Masonry Gallery tự điều chỉnh tỷ lệ khung hình cho tất cả media assets trong ứng dụng.
+*   Bổ sung thanh Floating Imagine / Filter Bar phía dưới với các chip tương tác Image, Video, Agent, Speed, Aspect Ratio.
+
 ## [1.0.30] - 2026-07-22
 ### Fixed & Improved
 *   Kích hoạt tính năng Clickable và Direct Link mở trực tiếp trình duyệt mặc định (Chrome/Safari) trên cả khung tin nhắn chat lẫn tab Link của Side Panel "Shared Media & Files" thông qua Rust native `open_external` command.

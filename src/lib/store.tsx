@@ -63,6 +63,7 @@ export type View =
   | "agents"
   | "skills"
   | "knowledge"
+  | "media"
   | "vault"
   | "scheduled"
   | "integrations"

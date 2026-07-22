@@ -390,6 +390,24 @@ export async function clearKnowledge(): Promise<void> {
   else memory.clear();
 }
 
+export async function getAllImageRecords(): Promise<Array<{ id: string; name: string; dataUrl?: string }>> {
+  const files: FileChunks[] = hasIdb
+    ? await withStore<FileChunks[]>("readonly", (s) => s.getAll())
+    : [...memory.values()];
+
+  const imageFiles = files.filter((f) => {
+    const ext = f.name.toLowerCase().split(".").pop() ?? "";
+    const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"].includes(ext);
+    return isImg || Boolean(f.dataUrl) || f.chunks?.[0]?.startsWith("data:image/");
+  });
+
+  return imageFiles.map((f) => ({
+    id: f.fileId,
+    name: f.name,
+    dataUrl: f.dataUrl || (f.chunks?.[0]?.startsWith("data:image/") ? f.chunks[0] : undefined),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Retrieval
 // ---------------------------------------------------------------------------
