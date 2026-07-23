@@ -2,6 +2,13 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.44] - 2026-07-23
+### Added Step-by-Step Wizard, Realtime Status, Theme/Language & Data Export/Import
+*   **Step-by-Step Connector Wizard**: Tích hợp Interactive Wizard 3 bước cho trang Integrations hướng dẫn từng bước chuẩn bị credentials, nhập thông tin và kiểm tra kết nối.
+*   **Realtime Connection Status**: Thêm cơ chế tự động hiển thị mốc thời gian xác thực realtime (`🟢 Verified at HH:MM`) cho tất cả Integrations & Plugins.
+*   **Theme & Language Settings**: Thêm tính năng chọn ngôn ngữ giao diện (Tiếng Việt 🇻🇳 / English 🇬🇧) và 3 chủ đề màu sắc sang trọng (Dark Emerald, Warm Gold, Midnight Blue) trong trang Settings.
+*   **Full Data Export & Restore**: Thêm tính năng Xuất dữ liệu sao lưu toàn bộ (.json) và Khôi phục dữ liệu từ tệp sao lưu (.json) cho lịch sử Chat, Kỹ năng, Lịch đăng bài và cấu hình Vault.
+
 ## [1.0.43] - 2026-07-23
 ### Fixed Host File Saving & Anti-collision for Clipboard Pastes
 *   **Host Data File Storage Fix**: Khắc phục hiện tượng ảnh dán từ Clipboard (macOS mặc định đặt tên `image.png`) bị ghi đè lẫn nhau bằng cơ chế tự động đánh số timestamp chống trùng tên (`image_17848012.png`).

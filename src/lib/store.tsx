@@ -209,6 +209,10 @@ interface PersistedState {
   customAgents: ImportedAgent[];
   /** Thư mục lưu trữ dữ liệu tùy chỉnh trên máy host. */
   customDataPath?: string;
+  /** Ngôn ngữ giao diện hệ thống: "vi" | "en" */
+  language?: "vi" | "en";
+  /** Chủ đề giao diện: "dark" | "gold" | "midnight" */
+  theme?: "dark" | "gold" | "midnight";
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -235,6 +239,8 @@ const initialState: PersistedState = {
   selfImprove: true,
   customAgents: [],
   customDataPath: "",
+  language: "vi",
+  theme: "dark",
 };
 
 /** Knowledge bucket for a role: an agent id, or "general" for no agent. */
@@ -336,6 +342,12 @@ interface AppStore extends PersistedState {
   addAgentMemory: (agentId: string, notes: string[]) => void;
   setSelfImprove: (on: boolean) => void;
   setCustomDataPath: (path: string) => void;
+  language: "vi" | "en";
+  setLanguage: (lang: "vi" | "en") => void;
+  theme: "dark" | "gold" | "midnight";
+  setTheme: (theme: "dark" | "gold" | "midnight") => void;
+  exportFullBackupData: () => string;
+  importFullBackupData: (jsonStr: string) => boolean;
   setActiveAgent: (agentId: string | null) => void;
   /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
   agents: AgentTemplate[];
@@ -1067,6 +1079,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, customDataPath: path }));
   }, []);
 
+  const setLanguage = useCallback((lang: "vi" | "en") => {
+    setState((s) => ({ ...s, language: lang }));
+  }, []);
+
+  const setTheme = useCallback((theme: "dark" | "gold" | "midnight") => {
+    setState((s) => ({ ...s, theme }));
+  }, []);
+
+  const exportFullBackupData = useCallback((): string => {
+    const backupObj = {
+      version: "1.0.43",
+      exportedAt: new Date().toISOString(),
+      state: stateRef.current,
+    };
+    return JSON.stringify(backupObj, null, 2);
+  }, []);
+
+  const importFullBackupData = useCallback((jsonStr: string): boolean => {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const incomingState = parsed.state || parsed;
+      if (incomingState && typeof incomingState === "object") {
+        setState((s) => ({
+          ...s,
+          ...incomingState,
+        }));
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Failed to import backup data:", e);
+      return false;
+    }
+  }, []);
+
   const setActiveAgent = useCallback((agentId: string | null) => {
     setState((s) => ({
       ...s,
@@ -1426,6 +1473,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addAgentMemory,
       setSelfImprove,
       setCustomDataPath,
+      language: state.language || "vi",
+      setLanguage,
+      theme: state.theme || "dark",
+      setTheme,
+      exportFullBackupData,
+      importFullBackupData,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,

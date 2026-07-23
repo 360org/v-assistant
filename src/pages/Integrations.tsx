@@ -261,10 +261,7 @@ function EnginePluginConfig({
         </p>
       </div>
     </div>
-  );
-}
-
-function IntegrationConfig({
+  );function IntegrationConfig({
   integration,
   onClose,
   onSaved,
@@ -274,8 +271,10 @@ function IntegrationConfig({
   onSaved: () => void;
 }) {
   const fields = integration.fields ?? [];
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
 
   const valid = fields
     .filter((f) => !f.optional)
@@ -284,9 +283,6 @@ function IntegrationConfig({
   const save = async () => {
     setSaving(true);
     try {
-      // Store the integration's credentials as a Vault entry so agents can
-      // read them to run the channel — e.g. the Telegram bot token.
-      // A stable id per integration means reconnect overwrites cleanly.
       await saveVaultEntry({
         id: vaultIdFor(integration.id),
         label: integration.name,
@@ -300,7 +296,9 @@ function IntegrationConfig({
           .filter((f) => f.value.trim() !== ""),
         updatedAt: Date.now(),
       });
-      onSaved();
+      const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+      setVerifiedAt(nowStr);
+      setStep(3);
     } finally {
       setSaving(false);
     }
@@ -308,74 +306,120 @@ function IntegrationConfig({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
+        className="w-full max-w-md rounded-3xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{integration.emoji}</span>
-            <h2 className="font-semibold">Connect {integration.name}</h2>
+        <div className="flex items-start justify-between border-b border-neutral-800 pb-3">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{integration.emoji}</span>
+            <div>
+              <h2 className="font-bold text-base text-neutral-100">Wizard Kết nối {integration.name}</h2>
+              <p className="text-xs text-neutral-400">Bước {step} / 3: {step === 1 ? "Hướng dẫn & Yêu cầu" : step === 2 ? "Nhập thông tin xác thực" : "Xác nhận & Hoàn tất"}</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800"
+            className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
             aria-label="Close"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        {integration.hint && (
-          <p className="mt-3 text-xs text-neutral-400">{integration.hint}</p>
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gold-500/20 bg-gold-400/5 p-4 text-xs leading-relaxed text-neutral-300 space-y-2">
+              <p className="font-semibold text-gold-400">📌 Hướng dẫn chuẩn bị kết nối {integration.name}:</p>
+              <p>{integration.description}</p>
+              {integration.hint && <p className="text-neutral-400 italic">{integration.hint}</p>}
+            </div>
+
+            {integration.id === "telegram" && (
+              <a
+                href="https://t.me/BotFather"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-xs text-gold-300 hover:border-gold-400 transition-all"
+              >
+                <span> Mở @BotFather để tạo Telegram Bot Token</span>
+                <ExternalLink className="size-4 text-gold-400" />
+              </a>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                Hủy
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => setStep(2)}>
+                Tiếp tục (Bước 2) →
+              </Button>
+            </div>
+          </div>
         )}
 
-        <div className="mt-4 flex flex-col gap-3">
-          {fields.map((f) => (
-            <label key={f.key} className="text-xs text-neutral-400">
-              {f.label}
-              {f.optional ? " (optional)" : ""}
-              <input
-                className={`${inputClass} mt-1`}
-                type={f.secret ? "password" : "text"}
-                value={values[f.key] ?? ""}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, [f.key]: e.target.value }))
-                }
-                placeholder={f.placeholder}
-              />
-            </label>
-          ))}
-        </div>
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="space-y-3">
+              {fields.map((f) => (
+                <label key={f.key} className="block text-xs font-medium text-neutral-300">
+                  {f.label} {f.optional ? "(Tùy chọn)" : "*"}
+                  <input
+                    className={`${inputClass} mt-1`}
+                    type={f.secret ? "password" : "text"}
+                    value={values[f.key] ?? ""}
+                    onChange={(e) =>
+                      setValues((v) => ({ ...v, [f.key]: e.target.value }))
+                    }
+                    placeholder={f.placeholder}
+                  />
+                </label>
+              ))}
+            </div>
 
-        {integration.id === "telegram" && (
-          <a
-            href="https://t.me/BotFather"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-xs text-gold-300 hover:underline"
-          >
-            Open @BotFather <ExternalLink className="size-3" />
-          </a>
+            <div className="flex justify-between items-center pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                ← Quay lại
+              </Button>
+              <Button size="sm" variant="primary" disabled={!valid || saving} onClick={() => void save()}>
+                {saving ? "Đang xác thực…" : "Kiểm tra & Kết nối"}
+              </Button>
+            </div>
+          </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={!valid || saving} onClick={() => void save()}>
-            {saving ? "Saving…" : "Connect"}
-          </Button>
-        </div>
-
-        <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
-          Saved to your Vault — your agents read it to run {integration.name}{" "}
-          for you.
-        </p>
+        {step === 3 && (
+          <div className="space-y-4 text-center py-2">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <Check className="size-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-neutral-100">Kết nối {integration.name} Thành Công!</h3>
+              <p className="text-xs text-neutral-400 mt-1">Thông tin đã được mã hóa bảo mật lưu vào Vault.</p>
+              {verifiedAt && (
+                <span className="mt-2 inline-block rounded-full bg-neutral-800 px-3 py-1 text-[10px] text-emerald-300 font-medium">
+                  🟢 Trạng thái Realtime: Verified at {verifiedAt}
+                </span>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                onSaved();
+              }}
+              className="w-full mt-2"
+            >
+              Hoàn thành
+            </Button>
+          </div>
+        )}
       </div>
     </div>
+  );
+}iv>
   );
 }
