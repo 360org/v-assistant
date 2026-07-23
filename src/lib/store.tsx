@@ -26,6 +26,7 @@ import {
 } from "@/runtime/oauth";
 
 export const fileObjectURLs = new Map<string, string>();
+import { parseSkillMd } from "@/lib/skills";
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
@@ -839,13 +840,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const addCustomSkill = useCallback((skill: CustomSkill) => {
-    setState((s) => ({
-      ...s,
-      customSkills: [
+    let skillId = "";
+    try {
+      const parsed = parseSkillMd(skill.raw);
+      skillId = parsed.name;
+    } catch {
+      /* fallback */
+    }
+
+    setState((s) => {
+      const nextCustom = [
         ...s.customSkills.filter((c) => c.source !== skill.source),
         skill,
-      ],
-    }));
+      ];
+      if (!skillId) return { ...s, customSkills: nextCustom };
+
+      const nextEngineSkills = Array.from(new Set([...s.installedEngineSkills, skillId]));
+      const activeId = s.activeAgentId;
+      let nextAgentCfgs = s.agentConfigs;
+
+      if (activeId && s.agentConfigs[activeId]) {
+        const cfg = s.agentConfigs[activeId];
+        if (cfg.skills && !cfg.skills.includes(skillId)) {
+          nextAgentCfgs = {
+            ...s.agentConfigs,
+            [activeId]: {
+              ...cfg,
+              skills: [...cfg.skills, skillId],
+            },
+          };
+        }
+      }
+
+      return {
+        ...s,
+        customSkills: nextCustom,
+        installedEngineSkills: nextEngineSkills,
+        agentConfigs: nextAgentCfgs,
+      };
+    });
   }, []);
 
   const removeCustomSkill = useCallback((source: string) => {
