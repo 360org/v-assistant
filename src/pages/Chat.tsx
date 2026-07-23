@@ -1260,7 +1260,7 @@ export function Chat() {
       {/* Composer */}
       <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
         {/* Active Running Task Widget (Gemini 3.6 / Antigravity Style) */}
-        {streaming && (
+        {streaming && !!activeSkill && (
           <div className="mx-auto mb-3 max-w-2xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/90 shadow-xl backdrop-blur-md transition-all animate-fadeIn">
             <div
               onClick={() => setTaskExpanded((prev) => !prev)}
