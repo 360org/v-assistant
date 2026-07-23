@@ -3,6 +3,7 @@ import {
   Bot,
   CalendarClock,
   Home,
+  Image as ImageIcon,
   KeyRound,
   Library,
   MessageSquare,
@@ -14,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/store";
 import { Logo } from "@/components/Logo";
+import { SidebarAdBanner } from "@/components/SidebarAdBanner";
 
 const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "home", label: "Home", icon: Home },
@@ -22,6 +24,7 @@ const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "agents", label: "Agents", icon: Bot },
   { view: "skills", label: "Skills", icon: Wand2 },
   { view: "knowledge", label: "Knowledge", icon: Library },
+  { view: "media", label: "Media Gallery", icon: ImageIcon },
   { view: "vault", label: "Vault", icon: KeyRound },
   { view: "scheduled", label: "Scheduled", icon: CalendarClock },
   { view: "integrations", label: "Integrations", icon: Blocks },
@@ -74,8 +77,13 @@ export function Sidebar({
         ))}
       </nav>
 
+      {/* Dynamic VuaAI.net Promotional Ad Banner */}
+      <div className="mt-auto pt-2 px-1">
+        <SidebarAdBanner />
+      </div>
+
       {/* User cluster: Settings lives here, grouped with the profile. */}
-      <div className="mt-auto flex flex-col gap-1 px-2 pb-1">
+      <div className="flex flex-col gap-1 px-2 pb-1">
         <button
           onClick={() => go("settings")}
           className={cn(

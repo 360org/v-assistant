@@ -10,6 +10,8 @@ import {
   Settings2,
   Trash2,
   X,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { type AgentTemplate } from "@/lib/catalog";
 import { useApp, type AgentConfig } from "@/lib/store";
@@ -258,8 +260,42 @@ function AgentConfigDialog({
   const [soul, setSoul] = useState(initial.soul ?? "");
   const [memory, setMemory] = useState<string[]>(initial.memory ?? []);
   const [newMemory, setNewMemory] = useState("");
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const { customSkills } = useApp();
+
+  const handleExport = () => {
+    const skillsList = enabledSkills.map((s) => `- ${s}`).join("\n");
+    const memoriesList = memory.map((m) => `- ${m}`).join("\n");
+    const md = `---
+name: ${agent.name}
+emoji: ${agent.emoji}
+category: ${agent.category}
+description: ${agent.description}
+---
+
+# Instructions
+${instructions || "No instructions provided."}
+
+# Soul
+${soul || "No soul provided."}
+
+# Memory
+${memoriesList || "No memory entries."}
+
+# Skills
+${skillsList || "No skills enabled."}
+`;
+
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${agent.id}-config.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const allSkills = useMemo(() => {
     const builtIn = SKILLS.map((s) => ({
@@ -310,134 +346,164 @@ function AgentConfigDialog({
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
+        className={
+          isMaximized
+            ? "fixed inset-4 z-50 flex flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl overflow-hidden"
+            : "max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
+        }
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-2xl">{agent.emoji}</span>
-            <h2 className="font-semibold">Configure {agent.name}</h2>
+            <h2 className="font-semibold text-lg text-neutral-250">Configure {agent.name}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+              title={isMaximized ? "Thu nhỏ" : "Phóng to"}
+              type="button"
+            >
+              {isMaximized ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </button>
+            <button
+              onClick={onClose}
+              className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
+              aria-label="Close"
+              type="button"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-col gap-4">
-          <label className="text-xs text-neutral-400">
-            Instructions — how it works
-            <textarea
-              className={`${inputClass} mt-1 min-h-28 resize-y`}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder={
-                "Describe the process/steps this agent should follow, e.g.\n" +
-                "1. Ask for the goal\n2. Draft an outline\n3. Write, then review."
-              }
-            />
-          </label>
-          <label className="text-xs text-neutral-400">
-            Soul — personality & voice
-            <textarea
-              className={`${inputClass} mt-1 min-h-20 resize-y`}
-              value={soul}
-              onChange={(e) => setSoul(e.target.value)}
-              placeholder="Warm, concise, a little witty. Speaks like a trusted colleague."
-            />
-          </label>
+        <div className={isMaximized ? "mt-5 grid grid-cols-2 gap-6 flex-1 overflow-hidden min-h-0" : "mt-4 flex flex-col gap-4"}>
+          {/* Cột 1: Instructions & Soul */}
+          <div className={isMaximized ? "flex flex-col gap-4 h-full overflow-y-auto pr-1" : "flex flex-col gap-4"}>
+            <label className="text-xs text-neutral-400 flex flex-col flex-1">
+              Instructions — how it works
+              <textarea
+                className={`${inputClass} mt-1 resize-none flex-1 min-h-28 ${isMaximized ? "h-full" : "h-36"}`}
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder={
+                  "Describe the process/steps this agent should follow, e.g.\n" +
+                  "1. Ask for the goal\n2. Draft an outline\n3. Write, then review."
+                }
+              />
+            </label>
+            <label className="text-xs text-neutral-400 flex flex-col shrink-0">
+              Soul — personality & voice
+              <textarea
+                className={`${inputClass} mt-1 resize-y ${isMaximized ? "h-32 min-h-24" : "min-h-20"}`}
+                value={soul}
+                onChange={(e) => setSoul(e.target.value)}
+                placeholder="Warm, concise, a little witty. Speaks like a trusted colleague."
+              />
+            </label>
+          </div>
 
-          <div className="text-xs text-neutral-400">
-            Memory — what it remembers
-            <div className="mt-1 flex flex-col gap-1.5">
-              {memory.map((m, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-sm text-neutral-200"
-                >
-                  <span className="min-w-0 flex-1 truncate">{m}</span>
-                  <button
-                    onClick={() =>
-                      setMemory((mem) => mem.filter((_, idx) => idx !== i))
-                    }
-                    className="cursor-pointer rounded p-0.5 text-neutral-500 hover:text-red-400"
-                    title="Forget"
+          {/* Cột 2: Memory & Skills */}
+          <div className={isMaximized ? "flex flex-col gap-5 h-full overflow-y-auto pr-1" : "flex flex-col gap-4"}>
+            <div className="text-xs text-neutral-400 flex flex-col shrink-0">
+              Memory — what it remembers
+              <div className="mt-1 flex flex-col gap-1.5">
+                {memory.map((m, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-sm text-neutral-200"
                   >
-                    <X className="size-3.5" />
-                  </button>
+                    <span className="min-w-0 flex-1 truncate">{m}</span>
+                    <button
+                      onClick={() =>
+                        setMemory((mem) => mem.filter((_, idx) => idx !== i))
+                      }
+                      className="cursor-pointer rounded p-0.5 text-neutral-500 hover:text-red-400"
+                      title="Forget"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <input
+                    className={`${inputClass} flex-1`}
+                    value={newMemory}
+                    onChange={(e) => setNewMemory(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addMemory();
+                      }
+                    }}
+                    placeholder="e.g. Always sign emails as “The V Team”."
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={addMemory}
+                    disabled={!newMemory.trim()}
+                  >
+                    <Plus className="size-3.5" /> Add
+                  </Button>
                 </div>
-              ))}
-              <div className="flex gap-2">
-                <input
-                  className={`${inputClass} flex-1`}
-                  value={newMemory}
-                  onChange={(e) => setNewMemory(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addMemory();
-                    }
-                  }}
-                  placeholder="e.g. Always sign emails as “The V Team”."
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={addMemory}
-                  disabled={!newMemory.trim()}
-                >
-                  <Plus className="size-3.5" /> Add
-                </Button>
+              </div>
+            </div>
+
+            <div className="text-xs text-neutral-400 flex flex-col flex-1 min-h-0">
+              Skills — enabled capabilities
+              <div className={`mt-2 grid grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-3 ${isMaximized ? "max-h-[350px] flex-1" : "max-h-48"}`}>
+                {allSkills.map((s) => {
+                  const checked = enabledSkills.includes(s.id);
+                  return (
+                    <label
+                      key={s.id}
+                      className="flex cursor-pointer items-start gap-2.5 rounded-lg p-1.5 hover:bg-neutral-900"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEnabledSkills((prev) => [...prev, s.id]);
+                          } else {
+                            setEnabledSkills((prev) => prev.filter((id) => id !== s.id));
+                          }
+                        }}
+                        className="mt-0.5 rounded border-neutral-700 bg-neutral-900 text-gold-500 focus:ring-0 focus:ring-offset-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-200">
+                          <span>{s.emoji}</span>
+                          <span>{s.name}</span>
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-neutral-500 leading-normal line-clamp-1">
+                          {s.description}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+                {allSkills.length === 0 && (
+                  <div className="text-center text-xs text-neutral-600 py-2">
+                    No skills installed.
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          <div className="text-xs text-neutral-400">
-            Skills — enabled capabilities
-            <div className="mt-2 grid grid-cols-1 gap-2 max-h-48 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-3">
-              {allSkills.map((s) => {
-                const checked = enabledSkills.includes(s.id);
-                return (
-                  <label
-                    key={s.id}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-lg p-1.5 hover:bg-neutral-900"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setEnabledSkills((prev) => [...prev, s.id]);
-                        } else {
-                          setEnabledSkills((prev) => prev.filter((id) => id !== s.id));
-                        }
-                      }}
-                      className="mt-0.5 rounded border-neutral-700 bg-neutral-900 text-gold-500 focus:ring-0 focus:ring-offset-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-200">
-                        <span>{s.emoji}</span>
-                        <span>{s.name}</span>
-                      </div>
-                      <p className="mt-0.5 text-[10px] text-neutral-500 leading-normal line-clamp-1">
-                        {s.description}
-                      </p>
-                    </div>
-                  </label>
-                );
-              })}
-              {allSkills.length === 0 && (
-                <div className="text-center text-xs text-neutral-600 py-2">
-                  No skills installed.
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2 shrink-0 border-t border-neutral-800/60 pt-4">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExport}
+            title="Export configuration as Markdown file"
+          >
+            <Download className="size-3.5" /> Export MD
+          </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
@@ -456,7 +522,7 @@ function AgentConfigDialog({
           </Button>
         </div>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
+        <p className="mt-3 text-[11px] leading-relaxed text-neutral-600 shrink-0">
           These steer the agent in every chat — its instructions and soul are
           sent to the model as guidance.
         </p>

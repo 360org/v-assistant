@@ -11,6 +11,7 @@ import { Sessions } from "@/pages/Sessions";
 import { Agents } from "@/pages/Agents";
 import { Skills } from "@/pages/Skills";
 import { Knowledge } from "@/pages/Knowledge";
+import { MediaGallery } from "@/pages/MediaGallery";
 import { Vault } from "@/pages/Vault";
 import { Scheduled } from "@/pages/Scheduled";
 import { Integrations } from "@/pages/Integrations";
@@ -23,6 +24,7 @@ const pages: Record<View, () => JSX.Element> = {
   agents: Agents,
   skills: Skills,
   knowledge: Knowledge,
+  media: MediaGallery,
   vault: Vault,
   scheduled: Scheduled,
   integrations: Integrations,
@@ -30,10 +32,10 @@ const pages: Record<View, () => JSX.Element> = {
 };
 
 export default function App() {
-  const { onboarded, view } = useApp();
+  const { onboarded, user, view } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  if (!onboarded) {
+  if (!onboarded || !user) {
     return <Onboarding />;
   }
 

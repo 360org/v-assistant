@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarClock, Pause, Play, Plus, Trash2, X } from "lucide-react";
+import { CalendarClock, Pause, Play, Plus, Trash2, X, History, ChevronDown, ChevronUp, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useApp, type ScheduledTask } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ export function Scheduled() {
     removeScheduledTask,
   } = useApp();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
@@ -96,6 +97,13 @@ export function Scheduled() {
                 )}
               </button>
               <button
+                onClick={() => setSelectedTaskId(task.id)}
+                className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-gold-300"
+                title="Lịch sử chạy (Logs)"
+              >
+                <History className="size-4" />
+              </button>
+              <button
                 onClick={() => removeScheduledTask(task.id)}
                 className="cursor-pointer rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
                 title="Delete"
@@ -116,6 +124,132 @@ export function Scheduled() {
           }}
         />
       )}
+
+      {selectedTaskId && (
+        <TaskHistoryModal
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TaskHistoryModal({
+  taskId,
+  onClose,
+}: {
+  taskId: string;
+  onClose: () => void;
+}) {
+  const { taskRunLogs, clearTaskRunLogs, scheduledTasks } = useApp();
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  const task = scheduledTasks.find((t) => t.id === taskId);
+  const logs = taskRunLogs.filter((l) => l.taskId === taskId);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-2xl border border-neutral-800 bg-neutral-900 p-5 flex flex-col max-h-[80vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-lg text-neutral-250">Lịch sử chạy tác vụ</h2>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              Task: {task?.name || "Unknown"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="cursor-pointer rounded-lg p-1 text-neutral-500 hover:bg-neutral-800"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 flex-1 overflow-y-auto min-h-[300px] flex flex-col gap-2.5 pr-1">
+          {logs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-neutral-500 flex-1">
+              <History className="size-8 text-neutral-600 mb-2" />
+              <div className="text-sm font-medium">Chưa có lịch sử chạy</div>
+              <p className="text-xs text-neutral-600 max-w-xs mt-1">
+                Nhật ký sẽ tự động xuất hiện khi tác vụ chạy lần đầu tiên theo lịch trình.
+              </p>
+            </div>
+          ) : (
+            logs.map((log) => {
+              const isExpanded = expandedLogId === log.id;
+              const formattedDate = new Date(log.runAt).toLocaleString("vi-VN");
+              return (
+                <div
+                  key={log.id}
+                  className="rounded-xl border border-neutral-800 bg-neutral-950/60 overflow-hidden transition-all duration-200"
+                >
+                  <div
+                    onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-neutral-900/40"
+                  >
+                    {log.status === "success" ? (
+                      <CheckCircle2 className="size-4 text-green-400 shrink-0" />
+                    ) : log.status === "error" ? (
+                      <AlertCircle className="size-4 text-red-400 shrink-0" />
+                    ) : (
+                      <span className="size-4 rounded-full border border-gold-400 border-t-transparent animate-spin shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-neutral-200 flex items-center gap-2">
+                        {log.status === "success" ? "Thành công" : log.status === "error" ? "Thất bại" : "Đang chạy..."}
+                        <span className="text-[10px] text-neutral-500 font-normal">
+                          (Chạy hết {log.duration}ms)
+                        </span>
+                      </div>
+                      <div className="text-xs text-neutral-500 mt-0.5">
+                        {formattedDate}
+                      </div>
+                    </div>
+                    {isExpanded ? (
+                      <ChevronUp className="size-4 text-neutral-500" />
+                    ) : (
+                      <ChevronDown className="size-4 text-neutral-500" />
+                    )}
+                  </div>
+                  {isExpanded && (
+                    <div className="border-t border-neutral-850 bg-black/40 p-4 font-mono text-xs text-neutral-350 whitespace-pre-wrap max-h-[250px] overflow-y-auto select-text break-words">
+                      {log.output || "Không có dữ liệu log đầu ra."}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {logs.length > 0 && (
+          <div className="mt-5 flex justify-between gap-2 border-t border-neutral-800 pt-4 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử chạy của tác vụ này?")) {
+                  clearTaskRunLogs(taskId);
+                }
+              }}
+              className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+            >
+              Xóa lịch sử
+            </Button>
+            <Button size="sm" onClick={onClose}>
+              Đóng
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

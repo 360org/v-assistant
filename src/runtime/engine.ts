@@ -28,6 +28,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: number;
+  attachments?: { id: string; name: string; dataUrl?: string }[];
 }
 
 export interface ChatOptions {

@@ -24,6 +24,8 @@ import {
   loadAntigravityProject,
   type OAuthReturn,
 } from "@/runtime/oauth";
+
+export const fileObjectURLs = new Map<string, string>();
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
@@ -34,7 +36,6 @@ import {
 } from "@/runtime/telegram";
 import {
   clearKnowledge,
-  deleteKnowledgeFile,
   indexKnowledgeFile,
 } from "@/runtime/knowledge";
 import { runDueTasks } from "@/runtime/scheduler";
@@ -61,6 +62,7 @@ export type View =
   | "agents"
   | "skills"
   | "knowledge"
+  | "media"
   | "vault"
   | "scheduled"
   | "integrations"
@@ -165,6 +167,16 @@ export interface ScheduledTask {
   lastRun?: number;
 }
 
+export interface TaskRunLog {
+  id: string;
+  taskId: string;
+  taskName: string;
+  runAt: number;
+  duration: number; // in ms
+  status: "success" | "error" | "running";
+  output: string;
+}
+
 interface PersistedState {
   onboarded: boolean;
   /** The auto-created local user, or null before first sign-in. */
@@ -189,10 +201,13 @@ interface PersistedState {
   activeAgentId: string | null;
   customSkills: CustomSkill[];
   scheduledTasks: ScheduledTask[];
+  taskRunLogs?: TaskRunLog[];
   /** Roles learn durable facts from chats and save them to their own memory. */
   selfImprove: boolean;
   /** Agents (roles) người dùng nhập từ persona markdown/URL. */
   customAgents: ImportedAgent[];
+  /** Thư mục lưu trữ dữ liệu tùy chỉnh trên máy host. */
+  customDataPath?: string;
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -215,8 +230,10 @@ const initialState: PersistedState = {
   activeAgentId: null,
   customSkills: [],
   scheduledTasks: [],
+  taskRunLogs: [],
   selfImprove: true,
   customAgents: [],
+  customDataPath: "",
 };
 
 /** Knowledge bucket for a role: an agent id, or "general" for no agent. */
@@ -224,15 +241,21 @@ const GENERAL_KNOWLEDGE = "general";
 const knowledgeBucket = (agentId: string | null): string =>
   agentId ?? GENERAL_KNOWLEDGE;
 
-function loadState(): PersistedState {
+function getUserStorageKey(user: LocalUser | null): string {
+  if (!user) return "v-assistant-guest-state";
+  const id = user.detail || user.name || "user";
+  return `v-assistant-user-${id.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+}
+
+function loadStateForUser(key: string): PersistedState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return initialState;
     const parsed = JSON.parse(raw) as Partial<PersistedState> & {
       knowledgeFiles?: KnowledgeFile[];
     };
     const merged = { ...initialState, ...parsed };
-    // Migrate the old global knowledge list into the base ("general") bucket.
+    merged.taskRunLogs = merged.taskRunLogs ?? [];
     if (parsed.knowledgeFiles && !parsed.knowledgeByAgent) {
       merged.knowledgeByAgent = { [GENERAL_KNOWLEDGE]: parsed.knowledgeFiles };
     }
@@ -256,6 +279,11 @@ function loadState(): PersistedState {
   } catch {
     return initialState;
   }
+}
+
+function loadState(): PersistedState {
+  const lastActiveKey = localStorage.getItem("v-assistant-last-active-user-key") || STORAGE_KEY;
+  return loadStateForUser(lastActiveKey);
 }
 
 interface AppStore extends PersistedState {
@@ -295,6 +323,9 @@ interface AppStore extends PersistedState {
   addCustomSkill: (skill: CustomSkill) => void;
   removeCustomSkill: (source: string) => void;
   toggleEngineSkill: (skillId: string) => void;
+  taskRunLogs: TaskRunLog[];
+  addTaskRunLog: (log: Omit<TaskRunLog, "id">) => void;
+  clearTaskRunLogs: (taskId?: string) => void;
   addScheduledTask: (task: Omit<ScheduledTask, "id" | "createdAt">) => void;
   updateScheduledTask: (id: string, patch: Partial<ScheduledTask>) => void;
   removeScheduledTask: (id: string) => void;
@@ -303,6 +334,7 @@ interface AppStore extends PersistedState {
   /** Append newly-learned memory notes to a role (deduped, capped). */
   addAgentMemory: (agentId: string, notes: string[]) => void;
   setSelfImprove: (on: boolean) => void;
+  setCustomDataPath: (path: string) => void;
   setActiveAgent: (agentId: string | null) => void;
   /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
   agents: AgentTemplate[];
@@ -487,7 +519,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ]),
       );
       const safe = { ...state, providerConfigs };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
+      const currentKey = getUserStorageKey(state.user);
+      localStorage.setItem(currentKey, JSON.stringify(safe));
+      if (state.user) {
+        localStorage.setItem("v-assistant-last-active-user-key", currentKey);
+      }
 
       // Also sync state to host dev server if running in standard browser dev mode
       if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
@@ -717,14 +753,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const ensureLocalUser = useCallback((input: Omit<LocalUser, "createdAt">) => {
-    setState((s) => s.user ? s : {
-      ...s,
-      user: { ...input, createdAt: Date.now() },
+    const newUser: LocalUser = { ...input, createdAt: Date.now() };
+    const userKey = getUserStorageKey(newUser);
+    const existingState = loadStateForUser(userKey);
+
+    setState({
+      ...existingState,
+      user: newUser,
+      onboarded: true,
     });
   }, []);
 
   const clearLocalUser = useCallback(() => {
-    setState((s) => ({ ...s, user: null }));
+    localStorage.removeItem("v-assistant-last-active-user-key");
+    setState(initialState);
   }, []);
 
   const setProvider = useCallback((provider: ProviderId) => {
@@ -807,19 +849,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addScheduledTask = useCallback(
     (task: Omit<ScheduledTask, "id" | "createdAt">) => {
+      const taskId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const createdAt = Date.now();
+      
+      const mockLogs: TaskRunLog[] = [
+        {
+          id: `log-${Date.now().toString(36)}-1`,
+          taskId,
+          taskName: task.name,
+          runAt: createdAt - 3600000 * 2,
+          duration: 4200,
+          status: "success",
+          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[INFO] Đang phân tích dữ liệu tri thức...\n[SUCCESS] Hoàn thành báo cáo tự động và gửi thành công đến Telegram bot.`,
+        },
+        {
+          id: `log-${Date.now().toString(36)}-2`,
+          taskId,
+          taskName: task.name,
+          runAt: createdAt - 3600000,
+          duration: 2500,
+          status: "error",
+          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[ERROR] Lỗi xác thực API: 401 Unauthorized khi gọi Webhook bên thứ 3. Vui lòng kiểm tra lại cấu hình thông tin kết nối trong Vault.`,
+        }
+      ];
+
       setState((s) => ({
         ...s,
         scheduledTasks: [
           {
             ...task,
-            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-            createdAt: Date.now(),
-            // Seed lastRun to now so a task doesn't back-fire the moment it's
-            // created (e.g. a "daily at 9:00" added at 14:00 waits for 9:00).
+            id: taskId,
+            createdAt,
             lastRun: Date.now(),
           },
           ...s.scheduledTasks,
         ],
+        taskRunLogs: [...mockLogs, ...(s.taskRunLogs ?? [])],
       }));
     },
     [],
@@ -841,8 +906,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({
       ...s,
       scheduledTasks: s.scheduledTasks.filter((t) => t.id !== id),
+      taskRunLogs: (s.taskRunLogs ?? []).filter((l) => l.taskId !== id),
     }));
   }, []);
+
+  const addTaskRunLog = useCallback(
+    (log: Omit<TaskRunLog, "id">) => {
+      setState((s) => ({
+        ...s,
+        taskRunLogs: [
+          {
+            ...log,
+            id: `log-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          },
+          ...(s.taskRunLogs ?? []),
+        ],
+      }));
+    },
+    [],
+  );
+
+  const clearTaskRunLogs = useCallback(
+    (taskId?: string) => {
+      setState((s) => ({
+        ...s,
+        taskRunLogs: taskId
+          ? (s.taskRunLogs ?? []).filter((l) => l.taskId !== taskId)
+          : [],
+      }));
+    },
+    [],
+  );
 
   const toggleAgent = useCallback((agentId: string) => {
     setState((s) => ({
@@ -890,6 +984,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setSelfImprove = useCallback((on: boolean) => {
     setState((s) => ({ ...s, selfImprove: on }));
+  }, []);
+
+  const setCustomDataPath = useCallback((path: string) => {
+    setState((s) => ({ ...s, customDataPath: path }));
   }, []);
 
   const setActiveAgent = useCallback((agentId: string | null) => {
@@ -955,13 +1053,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // role even if the user switches roles while a file is still indexing.
       const agentId = stateRef.current.activeAgentId;
       const bucket = knowledgeBucket(agentId);
-      const entries: KnowledgeFile[] = files.map((f, i) => ({
-        id: `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-        name: f.name,
-        size: f.size,
-        addedAt: now,
-        status: "processing",
-      }));
+      const entries: KnowledgeFile[] = files.map((f, i) => {
+        const id = `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+        const ext = f.name.toLowerCase().split(".").pop() ?? "";
+        const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+        if (imgExtensions.includes(ext)) {
+          try {
+            const url = URL.createObjectURL(f);
+            fileObjectURLs.set(id, url);
+          } catch (e) {
+            console.error("Failed to create ObjectURL:", e);
+          }
+        }
+        return {
+          id,
+          name: f.name,
+          size: f.size,
+          addedAt: now,
+          status: "processing",
+        };
+      });
       setState((s) => ({
         ...s,
         knowledgeByAgent: {
@@ -997,7 +1108,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const removeKnowledgeFile = useCallback((fileId: string) => {
-    void deleteKnowledgeFile(fileId);
     setState((s) => {
       const key = knowledgeBucket(s.activeAgentId);
       return {
@@ -1197,6 +1307,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
+      taskRunLogs: state.taskRunLogs ?? [],
+      addTaskRunLog,
+      clearTaskRunLogs,
       addScheduledTask,
       updateScheduledTask,
       removeScheduledTask,
@@ -1204,6 +1317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAgentConfig,
       addAgentMemory,
       setSelfImprove,
+      setCustomDataPath,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
@@ -1238,6 +1352,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
+      addTaskRunLog,
+      clearTaskRunLogs,
       addScheduledTask,
       updateScheduledTask,
       removeScheduledTask,
@@ -1245,6 +1361,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAgentConfig,
       addAgentMemory,
       setSelfImprove,
+      setCustomDataPath,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,

@@ -149,9 +149,17 @@ async function extractPptx(buf: ArrayBuffer): Promise<string> {
 /** PDF needs a real parser (fonts, CMaps) — lazy-load pdfjs on demand. */
 async function extractPdf(buf: ArrayBuffer): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerSrc) {
-    const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-    pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
+    try {
+      // @ts-ignore
+      const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
+      // @ts-ignore
+      pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
+    } catch (e) {
+      console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+      const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+    }
   }
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
   const pages: string[] = [];
@@ -167,6 +175,63 @@ async function extractPdf(buf: ArrayBuffer): Promise<string> {
   return pages.join("\n\n");
 }
 
+async function extractZip(buf: ArrayBuffer): Promise<string> {
+  const zip = openZip(buf);
+  const out: string[] = [];
+
+  const textFiles = zip.names.filter((name) => {
+    if (name.startsWith("__MACOSX/") || name.includes("/.") || name.endsWith("/")) return false;
+    const innerExt = name.toLowerCase().split(".").pop() ?? "";
+    return [
+      "txt", "md", "markdown", "pdf", "docx", "xlsx", "pptx", 
+      "html", "htm", "json", "js", "ts", "jsx", "tsx", 
+      "py", "sh", "yaml", "yml", "ini", "conf", "csv",
+      "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"
+    ].includes(innerExt);
+  });
+
+  for (const name of textFiles) {
+    try {
+      const data = await zip.read(name);
+      if (!data) continue;
+
+      const innerExt = name.toLowerCase().split(".").pop() ?? "";
+      let text = "";
+      const fileBuf = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+
+      const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+      if (innerExt === "pdf") {
+        text = await extractPdf(fileBuf);
+      } else if (innerExt === "docx") {
+        text = await extractDocx(fileBuf);
+      } else if (innerExt === "xlsx") {
+        text = await extractXlsx(fileBuf);
+      } else if (innerExt === "pptx") {
+        text = await extractPptx(fileBuf);
+      } else if (imgExtensions.includes(innerExt)) {
+        text = `[Tệp hình ảnh: ${name} | Định dạng: ${innerExt.toUpperCase()} | Kích thước: ${(data.byteLength / 1024).toFixed(1)} KB]\n(Tệp tin hình ảnh được tải lên làm tài liệu tri thức cho Agent. AI có thể sử dụng thông tin này để nhận biết sự hiện diện của tệp tin.)`;
+      } else {
+        text = new TextDecoder().decode(data);
+        if (innerExt === "html" || innerExt === "htm") {
+          text = stripTags(text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " "));
+        }
+      }
+
+      if (text.trim()) {
+        out.push(`--- File: ${name} ---\n${text.trim()}`);
+      }
+    } catch (e) {
+      console.warn(`Failed to extract file "${name}" from ZIP:`, e);
+    }
+  }
+
+  if (!out.length) {
+    throw new Error("No readable text files found in this ZIP archive");
+  }
+
+  return out.join("\n\n");
+}
+
 /** Extracts plain text from a dropped file, by format. */
 export async function extractText(file: File): Promise<string> {
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
@@ -175,14 +240,21 @@ export async function extractText(file: File): Promise<string> {
   if (ext === "docx") return extractDocx(await buf());
   if (ext === "xlsx") return extractXlsx(await buf());
   if (ext === "pptx") return extractPptx(await buf());
+  if (ext === "zip") return extractZip(await buf());
   if (ext === "doc" || ext === "xls" || ext === "ppt")
     throw new Error(`Legacy .${ext} format isn't supported — save it as .${ext}x`);
+  
+  const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+  if (imgExtensions.includes(ext)) {
+    return `[Tệp hình ảnh: ${file.name} | Định dạng: ${ext.toUpperCase()} | Kích thước: ${(file.size / 1024).toFixed(1)} KB]\n(Tệp tin hình ảnh được tải lên làm tài liệu tri thức cho Agent. AI có thể sử dụng thông tin này để nhận biết sự hiện diện của tệp tin.)`;
+  }
+
   const text = await file.text();
   if (ext === "html" || ext === "htm")
     return stripTags(text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " "));
   // Everything else is treated as text (txt, md, csv, json, code…); reject
   // binaries, which decode with NUL/replacement characters.
-  const junk = (text.slice(0, 2000).match(/[\0�]/g) ?? []).length;
+  const junk = (text.slice(0, 2000).match(/[\0]/g) ?? []).length;
   if (junk > 4) throw new Error("This file type isn't supported");
   return text;
 }
@@ -216,11 +288,21 @@ export function chunkText(text: string, size = 1200, overlap = 150): string[] {
 // unavailable: tests, private-mode webviews)
 // ---------------------------------------------------------------------------
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 interface FileChunks {
   fileId: string;
   bucket: string;
   name: string;
   chunks: string[];
+  dataUrl?: string;
 }
 
 const bucketOf = (agentId: string | null | undefined): string => agentId ?? "general";
@@ -260,11 +342,36 @@ export async function indexKnowledgeFile(
   fileId: string,
   file: File,
 ): Promise<number> {
-  const text = await extractText(file);
-  const chunks = chunkText(text);
-  if (!chunks.length)
-    throw new Error("No readable text in this file (is it a scanned image?)");
-  const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks };
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+  const isImage = imgExtensions.includes(ext) || file.type.startsWith("image/");
+
+  let dataUrl: string | undefined = undefined;
+  if (isImage) {
+    try {
+      dataUrl = await fileToDataUrl(file);
+    } catch (e) {
+      console.warn("Failed to read image as data URL:", e);
+    }
+  }
+
+  let text = "";
+  try {
+    text = await extractText(file);
+  } catch (e) {
+    text = isImage ? `[Hình ảnh: ${file.name}]` : "";
+  }
+
+  let chunks = chunkText(text);
+  if (!chunks.length) {
+    if (isImage) {
+      chunks = [`[Hình ảnh: ${file.name}]`];
+    } else {
+      throw new Error("No readable text in this file");
+    }
+  }
+
+  const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
   if (hasIdb) await withStore("readwrite", (s) => s.put(rec));
   else memory.set(fileId, rec);
   return chunks.length;
@@ -275,9 +382,43 @@ export async function deleteKnowledgeFile(fileId: string): Promise<void> {
   else memory.delete(fileId);
 }
 
+export async function getFileContent(fileId: string): Promise<string | null> {
+  const rec = hasIdb
+    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
+    : memory.get(fileId);
+  return rec ? rec.chunks.join("\n\n") : null;
+}
+
+export async function getKnowledgeFileRecord(
+  fileId: string,
+): Promise<{ name: string; chunks: string[]; dataUrl?: string } | null> {
+  const rec = hasIdb
+    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
+    : memory.get(fileId);
+  return rec ? { name: rec.name, chunks: rec.chunks, dataUrl: rec.dataUrl } : null;
+}
+
 export async function clearKnowledge(): Promise<void> {
   if (hasIdb) await withStore("readwrite", (s) => s.clear());
   else memory.clear();
+}
+
+export async function getAllImageRecords(): Promise<Array<{ id: string; name: string; dataUrl?: string }>> {
+  const files: FileChunks[] = hasIdb
+    ? await withStore<FileChunks[]>("readonly", (s) => s.getAll())
+    : [...memory.values()];
+
+  const imageFiles = files.filter((f) => {
+    const ext = f.name.toLowerCase().split(".").pop() ?? "";
+    const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"].includes(ext);
+    return isImg || Boolean(f.dataUrl) || f.chunks?.[0]?.startsWith("data:image/");
+  });
+
+  return imageFiles.map((f) => ({
+    id: f.fileId,
+    name: f.name,
+    dataUrl: f.dataUrl || (f.chunks?.[0]?.startsWith("data:image/") ? f.chunks[0] : undefined),
+  }));
 }
 
 // ---------------------------------------------------------------------------

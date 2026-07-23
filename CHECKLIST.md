@@ -64,7 +64,7 @@
       `src/runtime/agentImport.ts` · test `scripts/agent-import-check.mjs`
 - [x] Người dùng nhập nhiều file markdown để định nghĩa Agent (dán URL trong
       Agent Store → "Nhập từ URL"). Tương thích bộ msitarzewski/agency-agents (230+ agent)
-- [ ] Export cấu hình Agent ra file markdown
+- [x] Export cấu hình Agent ra file markdown
 
 ### 2.4 Trang Skills
 - [x] Hiển thị danh sách built-in skills (10 skills)
@@ -692,7 +692,7 @@
 | Phân loại | ✅ Xong | 🔄 Update | ⬜ Chưa làm |
 |-----------|:---:|:---:|:---:|
 | Tài liệu | 9 | 0 | 2 |
-| Giao diện UI | 26 | 2 | 7 |
+| Giao diện UI | 27 | 2 | 6 |
 | Authentication | 4 | 0 | 3 |
 | AI Providers & 9router | 6 | 0 | 5 |
 | **Agent Runner (Core)** | **49** | **2** | **5** |
@@ -705,9 +705,9 @@
 | Scheduled | 4 | 0 | 4 |
 | Bảo mật | 3 | 0 | 10 |
 | Testing & CI/CD | 9 | 0 | 12 |
-| **TỔNG** | **76** | **7** | **125** |
+| **TỔNG** | **77** | **7** | **124** |
 
-> **76 tính năng đã hoàn thành**, **7 cần cập nhật**, **125 chưa triển khai**.
+> **77 tính năng đã hoàn thành**, **7 cần cập nhật**, **124 chưa triển khai**.
 >
 > **Trọng tâm #1: Agent Runner (7 items)** — hoàn tất MCP built-in/core delivery, sau đó interactive, scheduling, self-improving memory và agent management. Hai mục MCP đầu đang chờ native desktop acceptance test trước khi đánh dấu hoàn thành. Docker chỉ là profile triển khai server, không là runtime desktop.
 > **Trọng tâm #2: Bảo mật (10 items)** — kế thừa NanoClaw circuit-breaker, command-gate, egress-lockdown.
