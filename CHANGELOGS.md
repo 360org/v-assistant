@@ -2,6 +2,12 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.38] - 2026-07-23
+### Added & Dynamic Banner
+*   Thêm **Banner quảng cáo dịch vụ Vua AI Agentic (vuaai.net)** tại khoảng trống góc dưới Sidebar:
+    - Thiết kế giao diện Card hiện đại với viền phát sáng Emerald, huy hiệu `⚡ Vua AI — 360 CORP`, thông tin giải pháp "Thuê Nhân Sự AI 24/7 - Xóa 6 rào cản tăng trưởng" và nút bấm chuyển đổi.
+    - Hỗ trợ cơ chế **Auto-Sync Dynamic Banner**: Tự động kết nối và tải thông tin banner mới nhất từ backend `vuaai.net` theo thời gian thực mỗi khi quản trị viên cập nhật banner mới trên website!
+
 ## [1.0.37] - 2026-07-22
 ### Fixed & Confined Error Scope
 *   Sửa triệt để phạm vi hiển thị lỗi khi **Test connection**: Thông báo lỗi và nút **`🌐 Xác thực lại tại trình duyệt`** hiện tại chỉ nằm gọn gàng 100% bên trong thẻ Block Card của đúng tài khoản đó, tuyệt đối không đè hay làm ẩn danh sách các kết nối AI khác.

@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/store";
 import { Logo } from "@/components/Logo";
+import { SidebarAdBanner } from "@/components/SidebarAdBanner";
 
 const items: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "home", label: "Home", icon: Home },
@@ -76,8 +77,13 @@ export function Sidebar({
         ))}
       </nav>
 
+      {/* Dynamic VuaAI.net Promotional Ad Banner */}
+      <div className="mt-auto pt-2 px-1">
+        <SidebarAdBanner />
+      </div>
+
       {/* User cluster: Settings lives here, grouped with the profile. */}
-      <div className="mt-auto flex flex-col gap-1 px-2 pb-1">
+      <div className="flex flex-col gap-1 px-2 pb-1">
         <button
           onClick={() => go("settings")}
           className={cn(
