@@ -1141,9 +1141,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.error("Failed to create ObjectURL:", e);
           }
-        }
-        // Automatically save physical uploaded file into customDataPath/uploads/ if custom path is set
-        if (stateRef.current.customDataPath && typeof window !== "undefined") {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = reader.result as string;
+            if (b64) fileObjectURLs.set(id, b64);
+            if (stateRef.current.customDataPath && typeof window !== "undefined") {
+              void import("@tauri-apps/api/core").then(({ invoke }) => {
+                void invoke("save_custom_data_file", {
+                  customDir: stateRef.current.customDataPath,
+                  subfolder: "uploads",
+                  filename: f.name,
+                  contentB64: b64,
+                }).catch((err) => console.error("Failed to save physical file to customDataPath:", err));
+              }).catch(() => {});
+            }
+          };
+          reader.readAsDataURL(f);
+        } else if (stateRef.current.customDataPath && typeof window !== "undefined") {
           const reader = new FileReader();
           reader.onload = () => {
             const b64 = reader.result as string;
