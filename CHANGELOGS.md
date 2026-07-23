@@ -2,6 +2,13 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.39] - 2026-07-23
+### Added & Configurable Host Data Storage Location
+*   Bổ sung tính năng **Cấu hình Nơi lưu trữ dữ liệu trên máy Host (Data Storage Location)** trong trang **Settings**:
+    - Hiển thị công khai đường dẫn lưu trữ dữ liệu hiện tại trên hệ thống (ví dụ: `~/.v-assistant/data` hoặc thư mục tùy chỉnh).
+    - Cung cấp nút **`📂 Chọn thư mục`** (kích hoạt trình chọn thư mục hệ thống), nút **`✏️ Nhập đường dẫn thủ công`**, nút **`💾 Lưu vị trí`** và nút **`🔄 Đặt lại mặc định`**.
+    - Cho phép người dùng linh hoạt đổi nơi lưu toàn bộ cơ sở dữ liệu chat, file kiến thức, IndexedDB sang các vị trí mong muốn như ổ cứng SSD rời, USB hoặc các thư mục đám mây (iCloud Drive, Google Drive, OneDrive) để tự động backup dữ liệu an toàn.
+
 ## [1.0.38] - 2026-07-23
 ### Added & Dynamic Banner
 *   Thêm **Banner quảng cáo dịch vụ Vua AI Agentic (vuaai.net)** tại khoảng trống góc dưới Sidebar:

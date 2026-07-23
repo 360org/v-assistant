@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, FlaskConical, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, X } from "lucide-react";
+import { Check, Copy, ExternalLink, FlaskConical, FolderOpen, HardDrive, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, Save, X } from "lucide-react";
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { useApp } from "@/lib/store";
 import { getProvider, type ProviderId } from "@/lib/catalog";
@@ -43,6 +43,8 @@ export function Settings() {
     resetApp,
     selfImprove,
     setSelfImprove,
+    customDataPath,
+    setCustomDataPath,
     updateLocalUser,
     ensureLocalUser,
     clearLocalUser,
@@ -66,7 +68,66 @@ export function Settings() {
   const [localUserName, setLocalUserName] = useState("");
   const [confirmingLocalLogout, setConfirmingLocalLogout] = useState(false);
   const [loggingOutLocalUser, setLoggingOutLocalUser] = useState(false);
+  const [dataPathInput, setDataPathInput] = useState(customDataPath || "~/.v-assistant/data");
+  const [savedPathMsg, setSavedPathMsg] = useState<string | null>(null);
+  const [copiedPath, setCopiedPath] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const signInAttemptRef = useRef(0);
+
+  useEffect(() => {
+    setDataPathInput(customDataPath || "~/.v-assistant/data");
+  }, [customDataPath]);
+
+  const handleSelectFolder = async () => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const selected = await invoke<string | null>("plugin:dialog|open", {
+        directory: true,
+        multiple: false,
+        title: "Chọn thư mục lưu trữ dữ liệu V Assistant",
+      });
+      if (selected && typeof selected === "string") {
+        setDataPathInput(selected);
+        return;
+      }
+    } catch {
+      /* fallback to file picker or text edit */
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const firstFile = files[0];
+      const relPath = firstFile.webkitRelativePath || firstFile.name;
+      const folderName = relPath.split("/")[0] || relPath.split("\\")[0];
+      if (folderName) {
+        setDataPathInput(`~/.v-assistant/${folderName}`);
+      }
+    }
+  };
+
+  const handleSaveDataPath = () => {
+    const cleanPath = dataPathInput.trim();
+    setCustomDataPath(cleanPath);
+    setSavedPathMsg("✅ Đã lưu đường dẫn lưu trữ mới thành công!");
+    setTimeout(() => setSavedPathMsg(null), 4000);
+  };
+
+  const handleResetDefaultDataPath = () => {
+    setCustomDataPath("");
+    setDataPathInput("~/.v-assistant/data");
+    setSavedPathMsg("🔄 Đã khôi phục đường dẫn mặc định.");
+    setTimeout(() => setSavedPathMsg(null), 4000);
+  };
+
+  const handleCopyDataPath = () => {
+    const activePath = customDataPath || "~/.v-assistant/data";
+    void navigator.clipboard.writeText(activePath);
+    setCopiedPath(true);
+    setTimeout(() => setCopiedPath(false), 2000);
+  };
 
   const refreshConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -959,6 +1020,118 @@ export function Settings() {
               )}
             />
           </button>
+        </Card>
+      </section>
+
+      {/* Data Storage Location Section */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-neutral-300">
+            Nơi lưu trữ dữ liệu (Data Storage Location)
+          </h2>
+          <Badge tone={customDataPath ? "gold" : "neutral"}>
+            {customDataPath ? "Đã tùy chỉnh" : "Mặc định hệ thống"}
+          </Badge>
+        </div>
+
+        <Card className="mt-3 flex flex-col gap-4 p-5">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-neutral-100">
+              <HardDrive className="size-4 text-gold-400" />
+              Đường dẫn lưu dữ liệu hiện tại trên máy host
+            </div>
+            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/80 px-3 py-2">
+              <code className="flex-1 truncate font-mono text-xs text-gold-300">
+                {customDataPath || "~/.v-assistant/data"}
+              </code>
+              <button
+                onClick={handleCopyDataPath}
+                title="Chép đường dẫn"
+                className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
+              >
+                {copiedPath ? (
+                  <>
+                    <Check className="size-3.5 text-emerald-400" />
+                    <span className="text-emerald-400 font-medium">Đã chép</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-neutral-400">
+              Thay đổi đường dẫn lưu trữ thủ công hoặc chọn thư mục:
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={dataPathInput}
+                onChange={(e) => setDataPathInput(e.target.value)}
+                placeholder="Ví dụ: /Volumes/DATA/v-assistant-storage hoặc D:\V-Assistant-Data"
+                className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-200 focus:border-gold-500/50 focus:outline-hidden"
+              />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileInputChange}
+                // @ts-expect-error webkitdirectory is standard prop supported by browsers
+                webkitdirectory=""
+                directory=""
+                className="hidden"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSelectFolder}
+                  className="gap-1.5 whitespace-nowrap cursor-pointer"
+                >
+                  <FolderOpen className="size-3.5 text-gold-400" />
+                  Chọn thư mục
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSaveDataPath}
+                  className="gap-1.5 whitespace-nowrap cursor-pointer"
+                >
+                  <Save className="size-3.5" />
+                  Lưu vị trí
+                </Button>
+              </div>
+            </div>
+
+            {savedPathMsg && (
+              <div className="mt-1 text-xs font-medium text-emerald-400 transition-all">
+                {savedPathMsg}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-neutral-800/80 pt-3">
+            <span className="text-xs text-neutral-500">
+              Khôi phục lại đường dẫn lưu trữ thư mục mặc định của ứng dụng
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetDefaultDataPath}
+              className="gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer"
+            >
+              <RotateCcw className="size-3.5" />
+              Đặt lại mặc định
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-gold-500/20 bg-gold-500/5 p-3 text-xs leading-relaxed text-neutral-300">
+            <span className="font-bold text-gold-400">💡 Gợi ý sao lưu tự động:</span> Bạn có thể trỏ thư mục lưu trữ sang các thư mục đám mây như <code className="rounded bg-neutral-900 px-1 py-0.5 font-mono text-gold-300">iCloud Drive</code>, <code className="rounded bg-neutral-900 px-1 py-0.5 font-mono text-gold-300">Google Drive</code> hoặc ổ cứng gắn ngoài SSD để dữ liệu hội thoại và kiến thức luôn được tự động backup an toàn!
+          </div>
         </Card>
       </section>
 

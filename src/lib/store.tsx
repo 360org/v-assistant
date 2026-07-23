@@ -206,6 +206,8 @@ interface PersistedState {
   selfImprove: boolean;
   /** Agents (roles) người dùng nhập từ persona markdown/URL. */
   customAgents: ImportedAgent[];
+  /** Thư mục lưu trữ dữ liệu tùy chỉnh trên máy host. */
+  customDataPath?: string;
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -231,6 +233,7 @@ const initialState: PersistedState = {
   taskRunLogs: [],
   selfImprove: true,
   customAgents: [],
+  customDataPath: "",
 };
 
 /** Knowledge bucket for a role: an agent id, or "general" for no agent. */
@@ -331,6 +334,7 @@ interface AppStore extends PersistedState {
   /** Append newly-learned memory notes to a role (deduped, capped). */
   addAgentMemory: (agentId: string, notes: string[]) => void;
   setSelfImprove: (on: boolean) => void;
+  setCustomDataPath: (path: string) => void;
   setActiveAgent: (agentId: string | null) => void;
   /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
   agents: AgentTemplate[];
@@ -982,6 +986,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, selfImprove: on }));
   }, []);
 
+  const setCustomDataPath = useCallback((path: string) => {
+    setState((s) => ({ ...s, customDataPath: path }));
+  }, []);
+
   const setActiveAgent = useCallback((agentId: string | null) => {
     setState((s) => ({
       ...s,
@@ -1309,6 +1317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAgentConfig,
       addAgentMemory,
       setSelfImprove,
+      setCustomDataPath,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
@@ -1352,6 +1361,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAgentConfig,
       addAgentMemory,
       setSelfImprove,
+      setCustomDataPath,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
