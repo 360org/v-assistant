@@ -1144,7 +1144,7 @@ export function Settings() {
         <h2 className="text-sm font-semibold text-neutral-300">About</h2>
         <Card className="mt-3 text-sm text-neutral-400">
           <div className="font-semibold text-neutral-100">
-            V Assistant Desktop
+            Vua AI Assistant Desktop
           </div>
           <div className="mt-1">Version {__V_ASSISTANT_VERSION__}</div>
           <div className="mt-1">
@@ -1155,12 +1155,12 @@ export function Settings() {
               Made by <span className="text-neutral-200">360org</span>
             </span>
             <a
-              href="https://vuaai.net"
+              href="https://www.vuaai.net"
               target="_blank"
               rel="noreferrer"
               className="text-gold-300 hover:underline"
             >
-              vuaai.net
+              https://www.vuaai.net
             </a>
             <a
               href="mailto:support@vuaai.net"
