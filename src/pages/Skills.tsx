@@ -14,6 +14,8 @@ export function Skills() {
     customSkills,
     addCustomSkill,
     removeCustomSkill,
+    installedEngineSkills,
+    toggleEngineSkill,
     activeAgentId,
     agentConfigs,
     agents,
@@ -87,8 +89,7 @@ export function Skills() {
         <div>
           <h1 className="text-2xl font-bold">Skills</h1>
           <p className="mt-1 text-neutral-400">
-            Everyday tasks, one click away. Pick a skill and just fill in the
-            blanks — no prompt writing needed.
+            Kỹ năng làm việc tự động cho AI Agent. Bật/Tắt từng Skill bên dưới để cho phép sử dụng trong Chat.
           </p>
         </div>
         <Button
@@ -145,66 +146,119 @@ export function Skills() {
       <h2 className="mt-8 text-lg font-semibold">Task skills</h2>
       {(filteredCustom.length > 0 || filteredSkills.length > 0) ? (
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {filteredCustom.map(({ template, source }) => (
-            <Card key={source} className="flex flex-col">
-              <div className="flex items-start justify-between">
-                <span className="text-3xl">{template.emoji}</span>
-                <Badge tone="gold">Custom</Badge>
-              </div>
-              <h3 className="mt-3 font-semibold">{template.name}</h3>
-              <p className="mt-1 flex-1 text-sm text-neutral-400">
-                {template.description}
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    useSkill(template.prompt || template.description, {
-                      name: template.name,
-                      instructions: template.instructions,
-                    })
-                  }
-                >
-                  <Wand2 className="size-3.5" /> Use
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => removeCustomSkill(source)}
-                  title="Remove"
-                >
-                  <Trash2 className="size-3.5 text-red-400" />
-                </Button>
-              </div>
-            </Card>
-          ))}
-          {filteredSkills.map((skill) => (
-            <Card key={skill.id} className="flex flex-col">
-              <div className="flex items-start justify-between">
-                <span className="text-3xl">{skill.emoji}</span>
-                <Badge>{skill.category}</Badge>
-              </div>
-              <h3 className="mt-3 font-semibold">{skill.name}</h3>
-              <p className="mt-1 flex-1 text-sm text-neutral-400">
-                {skill.description}
-              </p>
-              <div className="mt-4">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    useSkill(skill.prompt, {
-                      name: skill.name,
-                      instructions: skill.instructions,
-                    })
-                  }
-                >
-                  <Wand2 className="size-3.5" /> Use
-                </Button>
-              </div>
-            </Card>
-          ))}
+          {filteredCustom.map(({ template, source }) => {
+            const isInstalled = installedEngineSkills.includes(template.id);
+            return (
+              <Card key={source} className="flex flex-col border-neutral-800 bg-neutral-900/60 p-4">
+                <div className="flex items-start justify-between">
+                  <span className="text-3xl">{template.emoji}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Badge tone={isInstalled ? "gold" : "neutral"}>
+                      {isInstalled ? "✅ Đã bật" : "⚪ Chưa bật"}
+                    </Badge>
+                    <Badge tone="gold">Custom</Badge>
+                  </div>
+                </div>
+                <h3 className="mt-3 font-semibold text-neutral-100">{template.name}</h3>
+                <p className="mt-1 flex-1 text-sm text-neutral-400">
+                  {template.description}
+                </p>
+                <div className="mt-4 flex items-center justify-between gap-2 border-t border-neutral-800/80 pt-3">
+                  <Button
+                    size="sm"
+                    variant={isInstalled ? "outline" : "primary"}
+                    onClick={() => toggleEngineSkill(template.id)}
+                    className={
+                      isInstalled
+                        ? "text-xs text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/40 cursor-pointer"
+                        : "bg-gold-500 text-neutral-950 font-semibold hover:bg-gold-400 cursor-pointer"
+                    }
+                  >
+                    {isInstalled ? "Tắt Skill" : "⚡ Bật Skill"}
+                  </Button>
+
+                  <div className="flex items-center gap-1.5">
+                    {isInstalled && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          useSkill(template.prompt || template.description, {
+                            name: template.name,
+                            instructions: template.instructions,
+                          });
+                          setView("chat");
+                        }}
+                        className="bg-gold-400/15 text-gold-300 hover:bg-gold-400/25 border border-gold-400/30 cursor-pointer"
+                      >
+                        <Wand2 className="size-3.5 mr-1" /> Dùng ngay
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeCustomSkill(source)}
+                      title="Xóa skill này"
+                      className="cursor-pointer"
+                    >
+                      <Trash2 className="size-3.5 text-neutral-500 hover:text-red-400" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+          {filteredSkills.map((skill) => {
+            const isInstalled = installedEngineSkills.includes(skill.id);
+            return (
+              <Card key={skill.id} className="flex flex-col border-neutral-800 bg-neutral-900/60 p-4">
+                <div className="flex items-start justify-between">
+                  <span className="text-3xl">{skill.emoji}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Badge tone={isInstalled ? "gold" : "neutral"}>
+                      {isInstalled ? "✅ Đã bật" : "⚪ Chưa bật"}
+                    </Badge>
+                    <Badge>{skill.category}</Badge>
+                  </div>
+                </div>
+                <h3 className="mt-3 font-semibold text-neutral-100">{skill.name}</h3>
+                <p className="mt-1 flex-1 text-sm text-neutral-400">
+                  {skill.description}
+                </p>
+                <div className="mt-4 flex items-center justify-between gap-2 border-t border-neutral-800/80 pt-3">
+                  <Button
+                    size="sm"
+                    variant={isInstalled ? "outline" : "primary"}
+                    onClick={() => toggleEngineSkill(skill.id)}
+                    className={
+                      isInstalled
+                        ? "text-xs text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/40 cursor-pointer"
+                        : "bg-gold-500 text-neutral-950 font-semibold hover:bg-gold-400 cursor-pointer"
+                    }
+                  >
+                    {isInstalled ? "Tắt Skill" : "⚡ Bật Skill"}
+                  </Button>
+
+                  {isInstalled && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        useSkill(skill.prompt, {
+                          name: skill.name,
+                          instructions: skill.instructions,
+                        });
+                        setView("chat");
+                      }}
+                      className="bg-gold-400/15 text-gold-300 hover:bg-gold-400/25 border border-gold-400/30 cursor-pointer"
+                    >
+                      <Wand2 className="size-3.5 mr-1" /> Dùng ngay
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <div className="mt-4 rounded-xl border border-dashed border-neutral-800 p-8 text-center text-sm text-neutral-500">

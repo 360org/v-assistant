@@ -222,7 +222,7 @@ const initialState: PersistedState = {
   providerConfigs: {},
   installedAgents: [],
   agentConfigs: {},
-  installedEngineSkills: [],
+  installedEngineSkills: ["skill-creator", "write-email", "summarize-document", "odoo-post-publisher"],
   connectedIntegrations: [],
   knowledgeByAgent: {},
   messages: [],

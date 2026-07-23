@@ -123,6 +123,7 @@ export function Chat() {
     clearActiveSkill,
     useSkill,
     customSkills,
+    installedEngineSkills,
     agentConfigs,
     knowledgeFiles,
     addKnowledgeFiles,
@@ -151,11 +152,14 @@ export function Chat() {
 
     const all = [...SKILLS, ...custom];
 
-    if (!activeAgentId) return all;
+    // Rule: ONLY skills that are explicitly installed/enabled by the user
+    const enabledOnly = all.filter((s) => installedEngineSkills.includes(s.id));
+
+    if (!activeAgentId) return enabledOnly;
     const config = agentConfigs[activeAgentId];
-    if (!config || !config.skills) return all;
-    return all.filter((s) => config.skills!.includes(s.id));
-  }, [customSkills, activeAgentId, agentConfigs]);
+    if (!config || !config.skills) return enabledOnly;
+    return enabledOnly.filter((s) => config.skills!.includes(s.id));
+  }, [customSkills, installedEngineSkills, activeAgentId, agentConfigs]);
 
   const filteredSlashSkills = useMemo(() => {
     if (!slashQuery) return availableSkillTemplates;
