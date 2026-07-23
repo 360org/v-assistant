@@ -525,6 +525,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("v-assistant-last-active-user-key", currentKey);
       }
 
+      // Sync state and sessions to customDataPath if configured by user
+      if (state.customDataPath && typeof window !== "undefined") {
+        void import("@tauri-apps/api/core").then(({ invoke }) => {
+          void invoke("save_custom_data_text", {
+            customDir: state.customDataPath,
+            relativePath: "v_assistant_backup.json",
+            content: JSON.stringify(safe, null, 2),
+          }).catch(() => {});
+
+          void invoke("save_custom_data_text", {
+            customDir: state.customDataPath,
+            relativePath: "chats/sessions.json",
+            content: JSON.stringify(safe.chatSessions, null, 2),
+          }).catch(() => {});
+        }).catch(() => {});
+      }
+
       // Also sync state to host dev server if running in standard browser dev mode
       if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
         void fetch("/api/state", {
@@ -1064,6 +1081,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.error("Failed to create ObjectURL:", e);
           }
+        }
+        // Automatically save physical uploaded file into customDataPath/uploads/ if custom path is set
+        if (stateRef.current.customDataPath && typeof window !== "undefined") {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = reader.result as string;
+            void import("@tauri-apps/api/core").then(({ invoke }) => {
+              void invoke("save_custom_data_file", {
+                customDir: stateRef.current.customDataPath,
+                subfolder: "uploads",
+                filename: f.name,
+                contentB64: b64,
+              }).catch((err) => console.error("Failed to save physical file to customDataPath:", err));
+            }).catch(() => {});
+          };
+          reader.readAsDataURL(f);
         }
         return {
           id,

@@ -89,6 +89,64 @@ fn pick_directory() -> Option<String> {
         .map(|path| path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+fn save_custom_data_file(custom_dir: String, subfolder: String, filename: String, content_b64: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+    use base64::Engine;
+
+    let mut path = PathBuf::from(&custom_dir);
+    if custom_dir.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            path = PathBuf::from(home).join(custom_dir.trim_start_matches("~/"));
+        }
+    }
+
+    let target_dir = path.join(&subfolder);
+    fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+
+    let file_path = target_dir.join(&filename);
+    
+    // Strip data URL header if present (e.g. data:image/png;base64,...)
+    let clean_b64 = if let Some(pos) = content_b64.find(";base64,") {
+        &content_b64[pos + 8..]
+    } else {
+        &content_b64
+    };
+
+    let bytes = if let Ok(data) = base64::engine::general_purpose::STANDARD.decode(clean_b64.as_bytes()) {
+        data
+    } else {
+        content_b64.into_bytes()
+    };
+
+    fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn save_custom_data_text(custom_dir: String, relative_path: String, content: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut path = PathBuf::from(&custom_dir);
+    if custom_dir.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            path = PathBuf::from(home).join(custom_dir.trim_start_matches("~/"));
+        }
+    }
+
+    let target_file = path.join(&relative_path);
+    if let Some(parent) = target_file.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    fs::write(&target_file, content).map_err(|e| e.to_string())?;
+
+    Ok(target_file.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -155,7 +213,9 @@ pub fn run() {
             vault::vault_set,
             vault::vault_get,
             vault::vault_delete,
-            pick_directory
+            pick_directory,
+            save_custom_data_file,
+            save_custom_data_text
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")

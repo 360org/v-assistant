@@ -116,7 +116,16 @@ export function Settings() {
   const handleSaveDataPath = () => {
     const cleanPath = dataPathInput.trim();
     setCustomDataPath(cleanPath);
-    setSavedPathMsg("✅ Đã lưu đường dẫn lưu trữ mới thành công!");
+    if (cleanPath) {
+      void import("@tauri-apps/api/core").then(({ invoke }) => {
+        void invoke("save_custom_data_text", {
+          customDir: cleanPath,
+          relativePath: "README.txt",
+          content: "Thư mục lưu trữ dữ liệu Vua AI Assistant.\nCác tệp tải lên (uploads/), nhật ký trò chuyện (chats/) và bản sao lưu tự động (v_assistant_backup.json) được lưu trữ tại đây.",
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+    setSavedPathMsg("✅ Đã lưu vị trí & tự động đồng bộ dữ liệu vào thư mục host!");
     setTimeout(() => setSavedPathMsg(null), 4000);
   };
 
