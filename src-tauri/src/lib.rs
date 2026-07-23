@@ -147,6 +147,63 @@ fn save_custom_data_text(custom_dir: String, relative_path: String, content: Str
     Ok(target_file.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+fn read_host_file(path: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut file_path = PathBuf::from(&path);
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            file_path = PathBuf::from(home).join(path.trim_start_matches("~/"));
+        }
+    }
+
+    fs::read_to_string(&file_path).map_err(|e| format!("Lỗi đọc file: {}", e))
+}
+
+#[tauri::command]
+fn write_host_file(path: String, content: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut file_path = PathBuf::from(&path);
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            file_path = PathBuf::from(home).join(path.trim_start_matches("~/"));
+        }
+    }
+
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Lỗi tạo thư mục: {}", e))?;
+    }
+
+    fs::write(&file_path, content).map_err(|e| format!("Lỗi ghi file: {}", e))?;
+    Ok(format!("Ghi file thành công vào: {}", file_path.to_string_lossy()))
+}
+
+#[tauri::command]
+fn list_host_dir(path: String) -> Result<Vec<String>, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut dir_path = PathBuf::from(&path);
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            dir_path = PathBuf::from(home).join(path.trim_start_matches("~/"));
+        }
+    }
+
+    let entries = fs::read_dir(&dir_path).map_err(|e| format!("Lỗi đọc thư mục: {}", e))?;
+    let mut files = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        files.push(if is_dir { format!("{}/", name) } else { name });
+    }
+    Ok(files)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -215,7 +272,10 @@ pub fn run() {
             vault::vault_delete,
             pick_directory,
             save_custom_data_file,
-            save_custom_data_text
+            save_custom_data_text,
+            read_host_file,
+            write_host_file,
+            list_host_dir
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")

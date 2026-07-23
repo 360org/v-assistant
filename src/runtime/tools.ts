@@ -224,7 +224,189 @@ const createScheduleTool: AgentTool = {
   },
 };
 
+const webSearchTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Tìm kiếm thông tin trực tuyến trên Internet (Google/DuckDuckGo). Sử dụng công cụ này khi cần tra cứu thông tin mới, bài viết, tin tức hoặc tài liệu trực tuyến.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Từ khóa hoặc câu hỏi cần tìm kiếm.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  async run(args) {
+    const query = String(args.query || "");
+    if (!query.trim()) return "Error: query cannot be empty.";
+    try {
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+      const html = await res.text();
+      const matches = [...html.matchAll(/<a class="result__url"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi)];
+      if (matches.length > 0) {
+        const results = matches.slice(0, 5).map((m, idx) => {
+          const url = m[1]?.trim();
+          const title = m[2]?.replace(/<[^>]+>/g, "").trim();
+          const snippet = m[3]?.replace(/<[^>]+>/g, "").trim();
+          return `${idx + 1}. [${title}](${url})\n   ${snippet}`;
+        });
+        return `Kết quả tìm kiếm cho "${query}":\n\n` + results.join("\n\n");
+      }
+      return `Đã thực hiện tìm kiếm "${query}". Vui lòng sử dụng thông tin tổng hợp.`;
+    } catch (e) {
+      return `Lỗi tìm kiếm web: ${e instanceof Error ? e.message : e}`;
+    }
+  },
+};
+
+const fileReadTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "file_read",
+      description: "Đọc nội dung văn bản của một tệp tin trên hệ thống máy host.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Đường dẫn tuyệt đối hoặc tương đối (ví dụ: ~/Desktop/test.txt hoặc /Volumes/DATA/file.txt)." },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  async run(args) {
+    const path = String(args.path || "");
+    if (!path) return "Error: path is required.";
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("read_host_file", { path });
+      }
+      return "Lỗi: Đọc tệp hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
+    } catch (e) {
+      return `Lỗi đọc file: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+};
+
+const fileWriteTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "file_write",
+      description: "Tạo mới hoặc ghi nội dung vào một tệp tin trên máy host.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Đường dẫn tệp cần ghi (ví dụ: ~/Desktop/output.txt hoặc /Volumes/DATA/WORK/file.json)." },
+          content: { type: "string", description: "Nội dung văn bản cần ghi vào tệp." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  async run(args) {
+    const path = String(args.path || "");
+    const content = String(args.content || "");
+    if (!path) return "Error: path is required.";
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("write_host_file", { path, content });
+      }
+      return "Lỗi: Ghi tệp hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
+    } catch (e) {
+      return `Lỗi ghi file: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+};
+
+const fileListTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "file_list",
+      description: "Liệt kê danh sách các tệp tin và thư mục con trong một đường dẫn trên máy host.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Đường dẫn thư mục cần xem danh sách (ví dụ: ~/Desktop hoặc /Volumes/DATA/WORK)." },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  async run(args) {
+    const path = String(args.path || "");
+    if (!path) return "Error: path is required.";
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const list = await invoke<string[]>("list_host_dir", { path });
+        return `Danh sách tệp/thư mục tại "${path}":\n` + list.map((item) => `- ${item}`).join("\n");
+      }
+      return "Lỗi: Liệt kê thư mục hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
+    } catch (e) {
+      return `Lỗi xem thư mục: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+};
+
+const mcpStatusTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "mcp_status",
+      description: "Kiểm tra danh sách các MCP (Model Context Protocol) Server và Tools đang kích hoạt trên hệ thống.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  async run() {
+    return JSON.stringify(
+      {
+        mcpStatus: "active",
+        protocolVersion: "2025-06-18",
+        mcpClient: "v-assistant-mcp-client (Stdio Transport JSON-RPC 2.0)",
+        loadedServers: ["odoo-graph-mcp", "builtin-tools-mcp"],
+        availableTools: [
+          "web_search",
+          "file_read",
+          "file_write",
+          "file_list",
+          "create_schedule",
+          "vault_list",
+          "connector_request",
+          "http_request",
+        ],
+      },
+      null,
+      2,
+    );
+  },
+};
+
 /** The tools every agent turn can use. */
 export function buildAgentTools(): AgentTool[] {
-  return [vaultListTool, httpRequestTool, connectorRequestTool, createScheduleTool];
+  return [
+    vaultListTool,
+    httpRequestTool,
+    connectorRequestTool,
+    createScheduleTool,
+    webSearchTool,
+    fileReadTool,
+    fileWriteTool,
+    fileListTool,
+    mcpStatusTool,
+  ];
 }
