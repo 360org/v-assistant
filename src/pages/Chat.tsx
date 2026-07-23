@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Square, StopCircle, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Square, Trash2, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
