@@ -1,12 +1,10 @@
 import { useMemo, useState } from "react";
 import { Download, Trash2, Wand2 } from "lucide-react";
-import { SKILLS, parseSkillMd, smartParseSkill, normalizeGithubSkillUrls, toTemplate } from "@/lib/skills";
+import { SKILLS, smartParseSkill, normalizeGithubSkillUrls, toTemplate } from "@/lib/skills";
 import { useApp } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-
-const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 export function Skills() {
   const {
