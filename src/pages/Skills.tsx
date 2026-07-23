@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Download, Trash2, Wand2 } from "lucide-react";
-import { SKILLS, parseSkillMd, toTemplate } from "@/lib/skills";
+import { SKILLS, parseSkillMd, smartParseSkill, normalizeGithubSkillUrls, toTemplate } from "@/lib/skills";
 import { useApp } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,7 @@ export function Skills() {
     () =>
       customSkills.flatMap((c) => {
         try {
-          return [{ template: toTemplate(parseSkillMd(c.raw)), source: c.source }];
+          return [{ template: toTemplate(smartParseSkill(c.raw)), source: c.source }];
         } catch {
           return [];
         }
@@ -62,19 +62,76 @@ export function Skills() {
     setInstalling(true);
     setError(null);
     try {
-      const response = await fetch(target);
-      if (!response.ok) {
-        throw new Error(`could not fetch the skill (HTTP ${response.status})`);
+      // 1. Check if the URL points to a GitHub folder/directory tree
+      const ghDirMatch = target.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/(.+)$/);
+      if (ghDirMatch) {
+        const [, owner, repo, branch, folderPath] = ghDirMatch;
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${folderPath.replace(/\/$/, "")}?ref=${branch}`;
+        try {
+          const apiRes = await fetch(apiUrl);
+          if (apiRes.ok) {
+            const items = await apiRes.json();
+            if (Array.isArray(items)) {
+              let installedCount = 0;
+              for (const item of items) {
+                if (item.type === "dir" || item.type === "file") {
+                  const subPath = item.path;
+                  const candidateRawUrls = [
+                    `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${subPath}/SKILL.md`,
+                    `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${subPath}/skill.md`,
+                    `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${subPath}`,
+                  ];
+                  for (const rawUrl of candidateRawUrls) {
+                    try {
+                      const res = await fetch(rawUrl);
+                      if (res.ok) {
+                        const text = await res.text();
+                        smartParseSkill(text, item.name);
+                        addCustomSkill({ raw: text, source: rawUrl });
+                        installedCount++;
+                        break;
+                      }
+                    } catch {
+                      // try next
+                    }
+                  }
+                }
+              }
+              if (installedCount > 0) {
+                setUrl("");
+                return;
+              }
+            }
+          }
+        } catch {
+          // fallback to single URL candidate fetching
+        }
       }
-      const raw = await response.text();
-      const skill = parseSkillMd(raw); // validates name + description exist
-      if (!NAME_RE.test(skill.name) || skill.name.length > 64) {
-        throw new Error(`"${skill.name}" is not a valid skill name`);
+
+      // 2. Fetch single skill from candidate URLs
+      const candidates = normalizeGithubSkillUrls(target);
+      let fetchedText: string | null = null;
+      let usedSource = target;
+
+      for (const candidate of candidates) {
+        try {
+          const response = await fetch(candidate);
+          if (response.ok) {
+            fetchedText = await response.text();
+            usedSource = candidate;
+            break;
+          }
+        } catch {
+          // try next candidate
+        }
       }
-      if (SKILLS.some((s) => s.id === skill.name)) {
-        throw new Error(`"${skill.name}" is already built in`);
+
+      if (!fetchedText) {
+        throw new Error("Không thể nạp nội dung Skill từ URL này (vui lòng kiểm tra lại kết nối mạng hoặc đường dẫn GitHub).");
       }
-      addCustomSkill({ raw, source: target });
+
+      smartParseSkill(fetchedText, "imported-skill");
+      addCustomSkill({ raw: fetchedText, source: usedSource });
       setUrl("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

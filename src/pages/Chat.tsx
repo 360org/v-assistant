@@ -1053,10 +1053,12 @@ export function Chat() {
                         />
                       ) : (
                         streaming && (
-                          <div className="flex items-center gap-1 py-1">
-                            <span className="size-1.5 rounded-full bg-gold-400/80 animate-bounce [animation-delay:-0.3s]" />
-                            <span className="size-1.5 rounded-full bg-gold-400/80 animate-bounce [animation-delay:-0.15s]" />
-                            <span className="size-1.5 rounded-full bg-gold-400/80 animate-bounce" />
+                          <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium">
+                            <span className="relative flex size-2.5">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
+                              <span className="relative inline-flex size-2.5 rounded-full bg-gold-400"></span>
+                            </span>
+                            <span className="animate-pulse">⚡ Vua AI Agent đang xử lý ngầm (Đang đọc dữ liệu & thực thi tool...)...</span>
                           </div>
                         )
                       )}
@@ -1234,6 +1236,22 @@ export function Chat() {
 
       {/* Composer */}
       <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
+        {/* Background Process Active Notification Bar */}
+        {streaming && (
+          <div className="mx-auto mb-2.5 flex max-w-2xl items-center justify-between rounded-xl border border-gold-400/40 bg-gold-400/10 px-3.5 py-2 text-xs text-gold-300 shadow-md animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <span className="relative flex size-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
+                <span className="relative inline-flex size-2.5 rounded-full bg-gold-400"></span>
+              </span>
+              <span className="font-semibold">⚡ Tiến trình đang thực thi ngầm:</span>
+              <span className="text-neutral-300">Vua AI Agent đang xử lý dữ liệu và thực hiện lệnh...</span>
+            </div>
+            <span className="rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-mono font-bold text-gold-400 border border-gold-400/40">
+              ● ACTIVE
+            </span>
+          </div>
+        )}
         {/* Attachment files list */}
         {knowledgeFiles.filter((f) => !sentFileIds.has(f.id)).length > 0 && (
           <div className="mx-auto mb-2 flex max-w-2xl flex-wrap gap-2 px-1">

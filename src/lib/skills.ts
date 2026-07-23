@@ -65,6 +65,77 @@ export function parseSkillMd(raw: string): AgentSkill {
   return { name: top.name, description: top.description, metadata, instructions: body };
 }
 
+/**
+ * Flexible Skill parser that handles standard AgentSkill YAML frontmatter
+ * as well as plain markdown fallback files (like GitHub README.md or custom skills).
+ */
+export function smartParseSkill(raw: string, fallbackName = "custom-skill"): AgentSkill {
+  try {
+    return parseSkillMd(raw);
+  } catch {
+    const titleMatch = raw.match(/^#\s+(.+)$/m);
+    const rawName = titleMatch
+      ? titleMatch[1].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      : fallbackName;
+    const name = rawName || fallbackName;
+
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#") && !l.startsWith("<!"));
+    const description = lines[0] || `Custom skill: ${name}`;
+
+    return {
+      name,
+      description,
+      metadata: {
+        "vua-title": titleMatch ? titleMatch[1].trim() : name,
+        "vua-emoji": "⚡",
+        "vua-category": "Custom",
+      },
+      instructions: raw,
+    };
+  }
+}
+
+/**
+ * Normalizes GitHub folder/file web URLs into candidate raw content download URLs.
+ */
+export function normalizeGithubSkillUrls(inputUrl: string): string[] {
+  const target = inputUrl.trim();
+
+  if (target.includes("raw.githubusercontent.com")) {
+    return [target];
+  }
+
+  const ghMatch = target.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(tree|blob)\/([^/]+)\/(.+)$/);
+  if (ghMatch) {
+    const [, owner, repo, , branch, filePath] = ghMatch;
+    const cleanPath = filePath.replace(/\/$/, "");
+
+    if (cleanPath.endsWith(".md")) {
+      return [`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`];
+    }
+
+    return [
+      `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}/SKILL.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}/skill.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}/README.md`,
+    ];
+  }
+
+  const rootMatch = target.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/?$/);
+  if (rootMatch) {
+    const [, owner, repo] = rootMatch;
+    return [
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/SKILL.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/skill.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/master/SKILL.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/master/README.md`,
+    ];
+  }
+
+  return [target];
+}
+
 function unquote(value: string): string {
   if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
     try {
