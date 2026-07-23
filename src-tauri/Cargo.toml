@@ -1,6 +1,6 @@
 [package]
 name = "v-assistant"
-version = "1.0.39"
+version = "1.0.43"
 description = "V Assistant — AI for everyone"
 authors = ["360org <support@vuaai.net>"]
 homepage = "https://vuaai.net"
@@ -27,6 +27,8 @@ hmac = "0.12"
 sha2 = "0.10"
 sha1 = "0.10"
 rand = "0.8"
+rfd = "0.15"
+base64 = "0.22"
 # Optional WASM sandbox for running agent code safely, off by default so the
 # shipped app stays lightweight and starts instantly. Enable with
 # `--features sandbox` for builds that run untrusted agent code.

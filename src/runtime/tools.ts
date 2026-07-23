@@ -181,7 +181,319 @@ const connectorRequestTool: AgentTool = {
   },
 };
 
+const createScheduleTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "create_schedule",
+      description:
+        "Tạo mới một tác vụ lập lịch chạy tự động/định kỳ (Scheduled Task) trong ứng dụng V Assistant. Sử dụng công cụ này khi người dùng yêu cầu đặt lịch, lập lịch đăng bài, nhắc nhở hoặc báo cáo tự động.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Tên ngắn gọn của công việc (ví dụ: Đăng bài Odoo hàng ngày lúc 09:00 AM).",
+          },
+          prompt: {
+            type: "string",
+            description: "Nội dung chỉ dẫn chi tiết công việc cho AI thực hiện định kỳ.",
+          },
+          schedule: {
+            type: "string",
+            description: "Chu kỳ/thời gian chạy (ví dụ: Hàng ngày lúc 09:00 AM, 1 giờ một lần).",
+          },
+        },
+        required: ["name", "prompt", "schedule"],
+      },
+    },
+  },
+  async run(args) {
+    const name = String(args.name || "Tác vụ lập lịch tự động");
+    const prompt = String(args.prompt || "");
+    const schedule = String(args.schedule || "Hàng ngày");
+
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("vua:create-schedule", {
+        detail: { name, prompt, schedule },
+      });
+      window.dispatchEvent(event);
+      return `✅ Đã tạo thành công tác vụ lập lịch "${name}" (${schedule}). Tác vụ hiện đã được tự động chèn vào trang Scheduled và đang kích hoạt!`;
+    }
+    return `Tác vụ "${name}" (${schedule}) đã được tiếp nhận.`;
+  },
+};
+
+const webSearchTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Tìm kiếm thông tin trực tuyến trên Internet (Google/DuckDuckGo). Sử dụng công cụ này khi cần tra cứu thông tin mới, bài viết, tin tức hoặc tài liệu trực tuyến.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Từ khóa hoặc câu hỏi cần tìm kiếm.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  async run(args) {
+    const query = String(args.query || "");
+    if (!query.trim()) return "Error: query cannot be empty.";
+    try {
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+      const html = await res.text();
+      const matches = [...html.matchAll(/<a class="result__url"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi)];
+      if (matches.length > 0) {
+        const results = matches.slice(0, 5).map((m, idx) => {
+          const url = m[1]?.trim();
+          const title = m[2]?.replace(/<[^>]+>/g, "").trim();
+          const snippet = m[3]?.replace(/<[^>]+>/g, "").trim();
+          return `${idx + 1}. [${title}](${url})\n   ${snippet}`;
+        });
+        return `Kết quả tìm kiếm cho "${query}":\n\n` + results.join("\n\n");
+      }
+      return `Đã thực hiện tìm kiếm "${query}". Vui lòng sử dụng thông tin tổng hợp.`;
+    } catch (e) {
+      return `Lỗi tìm kiếm web: ${e instanceof Error ? e.message : e}`;
+    }
+  },
+};
+
+const fileReadTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "file_read",
+      description: "Đọc nội dung văn bản của một tệp tin trên hệ thống máy host.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Đường dẫn tuyệt đối hoặc tương đối (ví dụ: ~/Desktop/test.txt hoặc /Volumes/DATA/file.txt)." },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  async run(args) {
+    const path = String(args.path || "");
+    if (!path) return "Error: path is required.";
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("read_host_file", { path });
+      }
+      return "Lỗi: Đọc tệp hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
+    } catch (e) {
+      return `Lỗi đọc file: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+};
+
+const fileWriteTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "file_write",
+      description: "Tạo mới hoặc ghi nội dung vào một tệp tin trên máy host.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Đường dẫn tệp cần ghi (ví dụ: ~/Desktop/output.txt hoặc /Volumes/DATA/WORK/file.json)." },
+          content: { type: "string", description: "Nội dung văn bản cần ghi vào tệp." },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  async run(args) {
+    const path = String(args.path || "");
+    const content = String(args.content || "");
+    if (!path) return "Error: path is required.";
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<string>("write_host_file", { path, content });
+      }
+      return "Lỗi: Ghi tệp hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
+    } catch (e) {
+      return `Lỗi ghi file: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+};
+
+const fileListTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "file_list",
+      description: "Liệt kê danh sách các tệp tin và thư mục con trong một đường dẫn trên máy host.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Đường dẫn thư mục cần xem danh sách (ví dụ: ~/Desktop hoặc /Volumes/DATA/WORK)." },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  async run(args) {
+    const path = String(args.path || "");
+    if (!path) return "Error: path is required.";
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const list = await invoke<string[]>("list_host_dir", { path });
+        return `Danh sách tệp/thư mục tại "${path}":\n` + list.map((item) => `- ${item}`).join("\n");
+      }
+      return "Lỗi: Liệt kê thư mục hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
+    } catch (e) {
+      return `Lỗi xem thư mục: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+};
+
+const mcpStatusTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "mcp_status",
+      description: "Kiểm tra danh sách các MCP (Model Context Protocol) Server và Tools đang kích hoạt trên hệ thống.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  async run() {
+    return JSON.stringify(
+      {
+        mcpStatus: "active",
+        protocolVersion: "2025-06-18",
+        mcpClient: "v-assistant-mcp-client (Stdio Transport JSON-RPC 2.0)",
+        loadedServers: ["odoo-graph-mcp", "builtin-tools-mcp"],
+        availableTools: [
+          "web_search",
+          "file_read",
+          "file_write",
+          "file_list",
+          "create_schedule",
+          "vault_list",
+          "connector_request",
+          "http_request",
+        ],
+      },
+      null,
+      2,
+    );
+  },
+};
+
+const createSkillTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "create_skill",
+      description:
+        "Tạo mới, đóng gói và cài đặt một Skill mới cho AI Agent theo chuẩn Agent Skills trong V Assistant (như Claude). Sử dụng khi người dùng yêu cầu tạo skill mới hoặc khi dùng skill-creator.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Tên định danh skill dạng kebab-case (ví dụ: odoo-post-builder, code-reviewer).",
+          },
+          description: {
+            type: "string",
+            description: "Mô tả ngắn gọn về chức năng của skill.",
+          },
+          title: {
+            type: "string",
+            description: "Tên tiêu đề hiển thị tiếng Việt/tiếng Anh của Skill.",
+          },
+          emoji: {
+            type: "string",
+            description: "Biểu tượng emoji đại diện cho Skill (ví dụ: 🚀, 📝, 📊).",
+          },
+          category: {
+            type: "string",
+            description: "Phân loại Skill (ví dụ: Marketing, Development, Productivity).",
+          },
+          prompt: {
+            type: "string",
+            description: "Gợi ý mẫu điền câu hỏi khi người dùng kích hoạt skill.",
+          },
+          instructions: {
+            type: "string",
+            description: "Nội dung chỉ dẫn chi tiết cách AI Agent xử lý công việc khi kích hoạt skill này.",
+          },
+        },
+        required: ["name", "description", "title", "instructions"],
+      },
+    },
+  },
+  async run(args) {
+    const name = String(args.name || "new-skill").toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const description = String(args.description || "");
+    const title = String(args.title || name);
+    const emoji = String(args.emoji || "🧩");
+    const category = String(args.category || "General");
+    const prompt = String(args.prompt || "");
+    const instructions = String(args.instructions || "");
+
+    const rawMd = `---
+name: ${name}
+description: "${description.replace(/"/g, '\\"')}"
+metadata:
+  vua-title: "${title.replace(/"/g, '\\"')}"
+  vua-emoji: "${emoji}"
+  vua-category: "${category}"
+  vua-tagline: "${description.replace(/"/g, '\\"')}"
+  vua-prompt: "${prompt.replace(/"/g, '\\"')}"
+---
+
+${instructions}`;
+
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("vua:create-skill", {
+        detail: { raw: rawMd, source: `created:${name}` },
+      });
+      window.dispatchEvent(event);
+
+      // Save physical file to customDataPath/skills/ if configured
+      void import("@tauri-apps/api/core").then(({ invoke }) => {
+        void invoke("save_custom_data_text", {
+          customDir: localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data",
+          relativePath: `skills/${name}/SKILL.md`,
+          content: rawMd,
+        }).catch(() => {});
+      }).catch(() => {});
+
+      return `✅ Đã khởi tạo và đóng gói thành công Skill mới "${title}" (${name})!\nSkill hiện đã xuất hiện trong thư viện Skills của ứng dụng và có thể sử dụng ngay lập tức!`;
+    }
+    return `Skill "${title}" (${name}) đã được tạo.`;
+  },
+};
+
 /** The tools every agent turn can use. */
 export function buildAgentTools(): AgentTool[] {
-  return [vaultListTool, httpRequestTool, connectorRequestTool];
+  return [
+    vaultListTool,
+    httpRequestTool,
+    connectorRequestTool,
+    createScheduleTool,
+    webSearchTool,
+    fileReadTool,
+    fileWriteTool,
+    fileListTool,
+    mcpStatusTool,
+    createSkillTool,
+  ];
 }

@@ -78,8 +78,8 @@ export function Sidebar({
       </nav>
 
       {/* Dynamic VuaAI.net Promotional Ad Banner */}
-      <div className="mt-auto pt-2 px-1">
-        <SidebarAdBanner />
+      <div className="my-2 flex-1 px-1 flex flex-col justify-end min-h-0">
+        <SidebarAdBanner className="flex-1 min-h-[220px]" />
       </div>
 
       {/* User cluster: Settings lives here, grouped with the profile. */}

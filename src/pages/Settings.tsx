@@ -81,17 +81,13 @@ export function Settings() {
   const handleSelectFolder = async () => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const selected = await invoke<string | null>("plugin:dialog|open", {
-        directory: true,
-        multiple: false,
-        title: "Chọn thư mục lưu trữ dữ liệu V Assistant",
-      });
+      const selected = await invoke<string | null>("pick_directory");
       if (selected && typeof selected === "string") {
         setDataPathInput(selected);
         return;
       }
-    } catch {
-      /* fallback to file picker or text edit */
+    } catch (err) {
+      console.warn("Desktop pick_directory command failed, falling back to web file input:", err);
     }
     fileInputRef.current?.click();
   };
@@ -100,6 +96,15 @@ export function Settings() {
     const files = e.target.files;
     if (files && files.length > 0) {
       const firstFile = files[0];
+      // @ts-expect-error path is present in Desktop webview File objects
+      const fullPath: string | undefined = firstFile.path;
+      if (fullPath) {
+        const lastSlash = Math.max(fullPath.lastIndexOf("/"), fullPath.lastIndexOf("\\"));
+        if (lastSlash > 0) {
+          setDataPathInput(fullPath.substring(0, lastSlash));
+          return;
+        }
+      }
       const relPath = firstFile.webkitRelativePath || firstFile.name;
       const folderName = relPath.split("/")[0] || relPath.split("\\")[0];
       if (folderName) {
@@ -111,7 +116,16 @@ export function Settings() {
   const handleSaveDataPath = () => {
     const cleanPath = dataPathInput.trim();
     setCustomDataPath(cleanPath);
-    setSavedPathMsg("✅ Đã lưu đường dẫn lưu trữ mới thành công!");
+    if (cleanPath) {
+      void import("@tauri-apps/api/core").then(({ invoke }) => {
+        void invoke("save_custom_data_text", {
+          customDir: cleanPath,
+          relativePath: "README.txt",
+          content: "Thư mục lưu trữ dữ liệu Vua AI Assistant.\nCác tệp tải lên (uploads/), nhật ký trò chuyện (chats/) và bản sao lưu tự động (v_assistant_backup.json) được lưu trữ tại đây.",
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+    setSavedPathMsg("✅ Đã lưu vị trí & tự động đồng bộ dữ liệu vào thư mục host!");
     setTimeout(() => setSavedPathMsg(null), 4000);
   };
 
@@ -1139,7 +1153,7 @@ export function Settings() {
         <h2 className="text-sm font-semibold text-neutral-300">About</h2>
         <Card className="mt-3 text-sm text-neutral-400">
           <div className="font-semibold text-neutral-100">
-            V Assistant Desktop
+            Vua AI Assistant Desktop
           </div>
           <div className="mt-1">Version {__V_ASSISTANT_VERSION__}</div>
           <div className="mt-1">
@@ -1150,12 +1164,12 @@ export function Settings() {
               Made by <span className="text-neutral-200">360org</span>
             </span>
             <a
-              href="https://vuaai.net"
+              href="https://www.vuaai.net"
               target="_blank"
               rel="noreferrer"
               className="text-gold-300 hover:underline"
             >
-              vuaai.net
+              https://www.vuaai.net
             </a>
             <a
               href="mailto:support@vuaai.net"

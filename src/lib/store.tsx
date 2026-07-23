@@ -26,6 +26,7 @@ import {
 } from "@/runtime/oauth";
 
 export const fileObjectURLs = new Map<string, string>();
+import { parseSkillMd } from "@/lib/skills";
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
@@ -221,7 +222,7 @@ const initialState: PersistedState = {
   providerConfigs: {},
   installedAgents: [],
   agentConfigs: {},
-  installedEngineSkills: [],
+  installedEngineSkills: ["skill-creator", "write-email", "summarize-document", "odoo-post-publisher"],
   connectedIntegrations: [],
   knowledgeByAgent: {},
   messages: [],
@@ -525,6 +526,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("v-assistant-last-active-user-key", currentKey);
       }
 
+      // Sync state and sessions to customDataPath if configured by user
+      if (state.customDataPath && typeof window !== "undefined") {
+        void import("@tauri-apps/api/core").then(({ invoke }) => {
+          void invoke("save_custom_data_text", {
+            customDir: state.customDataPath,
+            relativePath: "v_assistant_backup.json",
+            content: JSON.stringify(safe, null, 2),
+          }).catch(() => {});
+
+          void invoke("save_custom_data_text", {
+            customDir: state.customDataPath,
+            relativePath: "chats/sessions.json",
+            content: JSON.stringify(safe.chatSessions, null, 2),
+          }).catch(() => {});
+        }).catch(() => {});
+      }
+
       // Also sync state to host dev server if running in standard browser dev mode
       if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
         void fetch("/api/state", {
@@ -822,13 +840,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const addCustomSkill = useCallback((skill: CustomSkill) => {
-    setState((s) => ({
-      ...s,
-      customSkills: [
+    let skillId = "";
+    try {
+      const parsed = parseSkillMd(skill.raw);
+      skillId = parsed.name;
+    } catch {
+      /* fallback */
+    }
+
+    setState((s) => {
+      const nextCustom = [
         ...s.customSkills.filter((c) => c.source !== skill.source),
         skill,
-      ],
-    }));
+      ];
+      if (!skillId) return { ...s, customSkills: nextCustom };
+
+      const nextEngineSkills = Array.from(new Set([...s.installedEngineSkills, skillId]));
+      const activeId = s.activeAgentId;
+      let nextAgentCfgs = s.agentConfigs;
+
+      if (activeId && s.agentConfigs[activeId]) {
+        const cfg = s.agentConfigs[activeId];
+        if (cfg.skills && !cfg.skills.includes(skillId)) {
+          nextAgentCfgs = {
+            ...s.agentConfigs,
+            [activeId]: {
+              ...cfg,
+              skills: [...cfg.skills, skillId],
+            },
+          };
+        }
+      }
+
+      return {
+        ...s,
+        customSkills: nextCustom,
+        installedEngineSkills: nextEngineSkills,
+        agentConfigs: nextAgentCfgs,
+      };
+    });
   }, []);
 
   const removeCustomSkill = useCallback((source: string) => {
@@ -889,6 +939,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  useEffect(() => {
+    const handleCreateSchedule = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { name: string; prompt: string; schedule: string };
+      if (detail && detail.name && detail.prompt) {
+        addScheduledTask({
+          name: detail.name,
+          prompt: detail.prompt,
+          schedule: detail.schedule || "Hàng ngày",
+          enabled: true,
+        });
+      }
+    };
+    window.addEventListener("vua:create-schedule", handleCreateSchedule);
+    return () => window.removeEventListener("vua:create-schedule", handleCreateSchedule);
+  }, [addScheduledTask]);
+
+  useEffect(() => {
+    const handleCreateSkill = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { raw: string; source: string };
+      if (detail && detail.raw) {
+        addCustomSkill({ raw: detail.raw, source: detail.source || `created:${Date.now()}` });
+      }
+    };
+    window.addEventListener("vua:create-skill", handleCreateSkill);
+    return () => window.removeEventListener("vua:create-skill", handleCreateSkill);
+  }, [addCustomSkill]);
 
   const updateScheduledTask = useCallback(
     (id: string, patch: Partial<ScheduledTask>) => {
@@ -1057,6 +1134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const id = `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
         const ext = f.name.toLowerCase().split(".").pop() ?? "";
         const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+        const customDir = stateRef.current.customDataPath || localStorage.getItem("vua:custom-data-path") || "";
         if (imgExtensions.includes(ext)) {
           try {
             const url = URL.createObjectURL(f);
@@ -1064,6 +1142,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.error("Failed to create ObjectURL:", e);
           }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = reader.result as string;
+            if (b64) fileObjectURLs.set(id, b64);
+            if (customDir && typeof window !== "undefined") {
+              void import("@tauri-apps/api/core").then(({ invoke }) => {
+                void invoke("save_custom_data_file", {
+                  customDir,
+                  subfolder: "uploads",
+                  filename: f.name,
+                  contentB64: b64,
+                }).catch((err) => console.error("Failed to save physical file to customDataPath:", err));
+              }).catch(() => {});
+            }
+          };
+          reader.readAsDataURL(f);
+        } else if (customDir && typeof window !== "undefined") {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = reader.result as string;
+            void import("@tauri-apps/api/core").then(({ invoke }) => {
+              void invoke("save_custom_data_file", {
+                customDir,
+                subfolder: "uploads",
+                filename: f.name,
+                contentB64: b64,
+              }).catch((err) => console.error("Failed to save physical file to customDataPath:", err));
+            }).catch(() => {});
+          };
+          reader.readAsDataURL(f);
         }
         return {
           id,

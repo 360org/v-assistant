@@ -2,6 +2,22 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.43] - 2026-07-23
+### Fixed Host File Saving & Anti-collision for Clipboard Pastes
+*   **Host Data File Storage Fix**: Khắc phục hiện tượng ảnh dán từ Clipboard (macOS mặc định đặt tên `image.png`) bị ghi đè lẫn nhau bằng cơ chế tự động đánh số timestamp chống trùng tên (`image_17848012.png`).
+*   **Data Path Fallback**: Đảm bảo toàn bộ hình ảnh tải lên hoặc dán trong Chat và Media Gallery đều nạp đúng `customDataPath` từ state và `localStorage` để tự động sao lưu vào thư mục `uploads/` trên đĩa cứng.
+
+## [1.0.42] - 2026-07-23
+### Fixed Media Gallery Image Preview
+*   **Media Gallery Persistent Image Fix**: Nâng cấp toàn bộ trang Media Gallery (bao gồm danh sách ảnh Discover Media Vault và Lightbox Preview Modal) hỗ trợ nạp fallback qua Tauri Asset Protocol (`convertFileSrc`) từ thư mục host `customDataPath/uploads/` và hiển thị thẻ placeholder sắc nét khi dữ liệu hình ảnh cũ bị xóa, ngăn chặn triệt để biểu tượng lỗi `[?]`.
+
+## [1.0.41] - 2026-07-23
+### Added Skill Creator & Host Execution Tools & Skill Enable Enforcement
+*   **Skill Creator Spec-Driven Integration**: Tích hợp công cụ Skill Creator tự động thiết kế và tạo kỹ năng Agent chuẩn Agent Skills spec (Claude standard). Bổ sung tool `create_skill` tự động ghi file `SKILL.md` và đăng ký skill vào hệ thống.
+*   **Host System Execution Tools**: Tích hợp bộ công cụ thực thi trực tiếp trên máy host (`web_search`, `file_read`, `file_write`, `file_list`, `mcp_status`).
+*   **Skill Enablement Rule Enforcement**: Bổ sung quy tắc quản lý Kỹ năng: Chỉ các Kỹ năng được **Bật/Cài đặt (Enable/Install)** trong trang Skills mới được phép hiển thị và gọi ra sử dụng trong Chat (qua gõ lệnh `/`, Menu chọn skill Header và Nút Wand composer).
+*   **Persistent Image Attachment & Fallback**: Khắc phục dứt điểm sự cố hình ảnh đính kèm bị lỗi `[?]` khi cài đè hoặc tải lại app bằng cách lưu dữ liệu Base64 `dataUrl` lâu dài và nạp fallback qua Tauri Asset Protocol (`convertFileSrc`) từ thư mục `customDataPath/uploads/`.
+
 ## [1.0.39] - 2026-07-23
 ### Added & Configurable Host Data Storage Location
 *   Bổ sung tính năng **Cấu hình Nơi lưu trữ dữ liệu trên máy Host (Data Storage Location)** trong trang **Settings**:

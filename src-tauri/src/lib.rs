@@ -81,6 +81,144 @@ fn runtime_connector_request(
     state.connector_request(&payload)
 }
 
+#[tauri::command]
+fn pick_directory() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("Chọn thư mục lưu trữ dữ liệu V Assistant")
+        .pick_folder()
+        .map(|path| path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn save_custom_data_file(custom_dir: String, subfolder: String, filename: String, content_b64: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+    use base64::Engine;
+
+    let mut path = PathBuf::from(&custom_dir);
+    if custom_dir.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            path = PathBuf::from(home).join(custom_dir.trim_start_matches("~/"));
+        }
+    }
+
+    let target_dir = path.join(&subfolder);
+    fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+
+    // Anti-collision: macOS clipboard pastes default to "image.png"
+    let mut file_path = target_dir.join(&filename);
+    if file_path.exists() {
+        let stem = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let new_filename = if ext.is_empty() {
+            format!("{}_{}", stem, now_ms)
+        } else {
+            format!("{}_{}.{}", stem, now_ms, ext)
+        };
+        file_path = target_dir.join(new_filename);
+    }
+
+    // Strip data URL header if present (e.g. data:image/png;base64,...)
+    let clean_b64 = if let Some(pos) = content_b64.find(";base64,") {
+        &content_b64[pos + 8..]
+    } else {
+        &content_b64
+    };
+
+    let bytes = if let Ok(data) = base64::engine::general_purpose::STANDARD.decode(clean_b64.as_bytes()) {
+        data
+    } else {
+        content_b64.into_bytes()
+    };
+
+    fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn save_custom_data_text(custom_dir: String, relative_path: String, content: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut path = PathBuf::from(&custom_dir);
+    if custom_dir.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            path = PathBuf::from(home).join(custom_dir.trim_start_matches("~/"));
+        }
+    }
+
+    let target_file = path.join(&relative_path);
+    if let Some(parent) = target_file.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    fs::write(&target_file, content).map_err(|e| e.to_string())?;
+
+    Ok(target_file.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn read_host_file(path: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut file_path = PathBuf::from(&path);
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            file_path = PathBuf::from(home).join(path.trim_start_matches("~/"));
+        }
+    }
+
+    fs::read_to_string(&file_path).map_err(|e| format!("Lỗi đọc file: {}", e))
+}
+
+#[tauri::command]
+fn write_host_file(path: String, content: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut file_path = PathBuf::from(&path);
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            file_path = PathBuf::from(home).join(path.trim_start_matches("~/"));
+        }
+    }
+
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Lỗi tạo thư mục: {}", e))?;
+    }
+
+    fs::write(&file_path, content).map_err(|e| format!("Lỗi ghi file: {}", e))?;
+    Ok(format!("Ghi file thành công vào: {}", file_path.to_string_lossy()))
+}
+
+#[tauri::command]
+fn list_host_dir(path: String) -> Result<Vec<String>, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let mut dir_path = PathBuf::from(&path);
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            dir_path = PathBuf::from(home).join(path.trim_start_matches("~/"));
+        }
+    }
+
+    let entries = fs::read_dir(&dir_path).map_err(|e| format!("Lỗi đọc thư mục: {}", e))?;
+    let mut files = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        files.push(if is_dir { format!("{}/", name) } else { name });
+    }
+    Ok(files)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -146,7 +284,13 @@ pub fn run() {
             auth::capture_grok_sso_cookie,
             vault::vault_set,
             vault::vault_get,
-            vault::vault_delete
+            vault::vault_delete,
+            pick_directory,
+            save_custom_data_file,
+            save_custom_data_text,
+            read_host_file,
+            write_host_file,
+            list_host_dir
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")

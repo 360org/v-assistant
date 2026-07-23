@@ -64,29 +64,62 @@ function GalleryCardImage({
 }: {
   item: { id: string; title: string; url: string };
 }) {
+  const { customDataPath } = useApp();
   const [src, setSrc] = useState<string>(item.url || fileObjectURLs.get(item.id) || "");
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
-    if (src) return;
     let cancelled = false;
-    void getKnowledgeFileRecord(item.id).then((rec) => {
+
+    async function loadSrc() {
+      // If src is valid dataUrl Base64 or http URL and not expired blob
+      if (src && !src.startsWith("blob:")) return;
+
+      const rec = await getKnowledgeFileRecord(item.id).catch(() => null);
       if (cancelled) return;
-      if (rec?.dataUrl) {
+
+      if (rec?.dataUrl && !rec.dataUrl.startsWith("blob:")) {
         setSrc(rec.dataUrl);
+        return;
       } else if (rec?.chunks?.[0]?.startsWith("data:image/")) {
         setSrc(rec.chunks[0]);
+        return;
       }
-    });
+
+      const hostDir = customDataPath || localStorage.getItem("vua:custom-data-path");
+      if (hostDir && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        try {
+          const { convertFileSrc } = await import("@tauri-apps/api/core");
+          setSrc(convertFileSrc(`${hostDir}/uploads/${item.title}`));
+          return;
+        } catch {
+          /* fallback */
+        }
+      }
+    }
+
+    void loadSrc();
+
     return () => {
       cancelled = true;
     };
-  }, [item.id, src]);
+  }, [item.id, item.title, src, customDataPath]);
 
-  if (src) {
+  if (src && !imgError) {
     return (
       <img
         src={src}
         alt={item.title}
+        onError={() => {
+          const hostDir = customDataPath || localStorage.getItem("vua:custom-data-path");
+          if (hostDir && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && !src.includes("asset")) {
+            import("@tauri-apps/api/core").then(({ convertFileSrc }) => {
+              setSrc(convertFileSrc(`${hostDir}/uploads/${item.title}`));
+            }).catch(() => setImgError(true));
+          } else {
+            setImgError(true);
+          }
+        }}
         className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
         loading="lazy"
       />
@@ -94,15 +127,15 @@ function GalleryCardImage({
   }
 
   return (
-    <div className="flex h-48 w-full flex-col items-center justify-center bg-neutral-900 text-gold-300 p-4">
-      <ImageIcon className="size-8 animate-pulse text-gold-400 mb-2" />
+    <div className="flex h-48 w-full flex-col items-center justify-center bg-neutral-900/90 text-gold-300 p-4 rounded-xl border border-neutral-800/80">
+      <ImageIcon className="size-8 text-gold-400 mb-2" />
       <span className="text-xs text-center truncate max-w-full font-medium">{item.title}</span>
     </div>
   );
 }
 
 export function MediaGallery() {
-  const { setView, messages, chatSessions, activeSessionId, switchChatSession } = useApp();
+  const { setView, messages, chatSessions, activeSessionId, switchChatSession, customDataPath } = useApp();
   const [idbImages, setIdbImages] = useState<Array<{ id: string; name: string; dataUrl?: string }>>([]);
   const [selectedImage, setSelectedImage] = useState<{
     id: string;
@@ -130,9 +163,25 @@ export function MediaGallery() {
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const customDir = customDataPath || localStorage.getItem("vua:custom-data-path") || "";
     for (const file of Array.from(files)) {
       const fileId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
       await indexKnowledgeFile(null, fileId, file);
+      if (customDir && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const b64 = reader.result as string;
+          void import("@tauri-apps/api/core").then(({ invoke }) => {
+            void invoke("save_custom_data_file", {
+              customDir,
+              subfolder: "uploads",
+              filename: file.name,
+              contentB64: b64,
+            }).catch(() => {});
+          }).catch(() => {});
+        };
+        reader.readAsDataURL(file);
+      }
     }
     await loadMedia();
   };
@@ -417,6 +466,15 @@ export function MediaGallery() {
               <img
                 src={selectedImage.url}
                 alt={selectedImage.name}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  const hostDir = customDataPath || localStorage.getItem("vua:custom-data-path");
+                  if (hostDir && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && !target.src.includes("asset")) {
+                    import("@tauri-apps/api/core").then(({ convertFileSrc }) => {
+                      target.src = convertFileSrc(`${hostDir}/uploads/${selectedImage.name}`);
+                    }).catch(() => {});
+                  }
+                }}
                 className="max-h-[70vh] w-auto object-contain"
               />
             </div>
