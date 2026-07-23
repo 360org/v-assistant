@@ -81,6 +81,14 @@ fn runtime_connector_request(
     state.connector_request(&payload)
 }
 
+#[tauri::command]
+fn pick_directory() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("Chọn thư mục lưu trữ dữ liệu V Assistant")
+        .pick_folder()
+        .map(|path| path.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -146,7 +154,8 @@ pub fn run() {
             auth::capture_grok_sso_cookie,
             vault::vault_set,
             vault::vault_get,
-            vault::vault_delete
+            vault::vault_delete,
+            pick_directory
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")
