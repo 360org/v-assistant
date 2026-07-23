@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
+import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
 import { getKnowledgeFileRecord } from "@/runtime/knowledge";
 import {
@@ -120,6 +121,8 @@ export function Chat() {
     consumeChatDraft,
     activeSkill,
     clearActiveSkill,
+    useSkill,
+    customSkills,
     agentConfigs,
     knowledgeFiles,
     addKnowledgeFiles,
@@ -132,6 +135,49 @@ export function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [streaming, setStreaming] = useState(false);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  const skillPickerRef = useRef<HTMLDivElement>(null);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashQuery, setSlashQuery] = useState("");
+
+  const availableSkillTemplates = useMemo<SkillTemplate[]>(() => {
+    const custom = customSkills.flatMap((c) => {
+      try {
+        return [toTemplate(parseSkillMd(c.raw))];
+      } catch {
+        return [];
+      }
+    });
+
+    const all = [...SKILLS, ...custom];
+
+    if (!activeAgentId) return all;
+    const config = agentConfigs[activeAgentId];
+    if (!config || !config.skills) return all;
+    return all.filter((s) => config.skills!.includes(s.id));
+  }, [customSkills, activeAgentId, agentConfigs]);
+
+  const filteredSlashSkills = useMemo(() => {
+    if (!slashQuery) return availableSkillTemplates;
+    const q = slashQuery.toLowerCase();
+    return availableSkillTemplates.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.id.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q)
+    );
+  }, [availableSkillTemplates, slashQuery]);
+
+  const activateSkillTemplate = (sk: SkillTemplate) => {
+    useSkill(sk.prompt || `Hãy sử dụng kỹ năng "${sk.name}" để hỗ trợ tôi: `, {
+      name: sk.name,
+      instructions: sk.instructions,
+    });
+    if (sk.prompt) setInput(sk.prompt);
+    else setInput("");
+    setShowSlashMenu(false);
+    setSkillPickerOpen(false);
+  };
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [routerModels, setRouterModels] = useState<AiRouterModel[]>([]);
   const [modelLoadError, setModelLoadError] = useState<string | null>(null);
@@ -274,6 +320,17 @@ export function Chat() {
     window.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
   }, [agentPickerOpen]);
+
+  useEffect(() => {
+    if (!skillPickerOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!skillPickerRef.current?.contains(event.target as Node)) {
+        setSkillPickerOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [skillPickerOpen]);
 
   // A skill was used: pre-fill the composer and put the cursor at the end.
   useEffect(() => {
@@ -548,19 +605,71 @@ export function Chat() {
               )}
             </div>
           )}
-          {activeSkill && (
-            <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold-400/15 px-2.5 py-0.5 text-xs font-medium text-gold-300">
-              <Wand2 className="size-3" />
-              {activeSkill.name}
-              <button
-                onClick={clearActiveSkill}
-                className="cursor-pointer rounded-full hover:text-gold-100"
-                title="Stop using this skill"
+          
+          {/* Skill Picker dropdown in Header */}
+          <div ref={skillPickerRef} className="relative shrink-0">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={skillPickerOpen}
+              onClick={() => setSkillPickerOpen((open) => !open)}
+              className={cn(
+                "flex h-8 max-w-44 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70",
+                activeSkill
+                  ? "border-gold-400/50 bg-gold-400/15 text-gold-300 font-medium hover:border-gold-400"
+                  : "border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-neutral-700 hover:bg-neutral-800"
+              )}
+              title="Chọn hoặc kích hoạt Kỹ năng (Skill)"
+            >
+              <Wand2 className="size-3.5 text-gold-400 shrink-0" />
+              <span className="truncate">{activeSkill ? activeSkill.name : "Kỹ năng..."}</span>
+              <ChevronDown className={cn("size-3.5 shrink-0 text-neutral-400 transition-transform", skillPickerOpen && "rotate-180")} />
+            </button>
+            {skillPickerOpen && (
+              <div
+                role="menu"
+                className="absolute left-0 top-10 z-50 w-72 max-h-80 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-1 shadow-2xl shadow-black/50"
               >
-                <X className="size-3" />
-              </button>
-            </span>
-          )}
+                <div className="px-2.5 py-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                  Kỹ năng khả dụng ({availableSkillTemplates.length})
+                </div>
+                {activeSkill && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearActiveSkill();
+                      setSkillPickerOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-rose-400 hover:bg-rose-500/10 mb-1 cursor-pointer"
+                  >
+                    <X className="size-3.5" />
+                    <span>Tắt kỹ năng hiện tại</span>
+                  </button>
+                )}
+                {availableSkillTemplates.map((sk) => {
+                  const isSelected = activeSkill?.name === sk.name;
+                  return (
+                    <button
+                      key={sk.id}
+                      type="button"
+                      onClick={() => activateSkillTemplate(sk)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-neutral-900 cursor-pointer",
+                        isSelected && "bg-gold-400/10 text-gold-300 font-medium"
+                      )}
+                    >
+                      <span className="text-base shrink-0">{sk.emoji}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium truncate text-neutral-200">{sk.name}</span>
+                        <span className="block truncate text-[11px] text-neutral-500">{sk.description}</span>
+                      </span>
+                      {isSelected && <Check className="size-3.5 text-gold-400 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -1134,6 +1243,35 @@ export function Chat() {
           </div>
         )}
 
+        {/* Slash Command / Skill Autocomplete Popup */}
+        {showSlashMenu && filteredSlashSkills.length > 0 && (
+          <div className="mx-auto mb-2 max-w-2xl overflow-hidden rounded-xl border border-neutral-700 bg-neutral-950 p-1 shadow-2xl shadow-black/80">
+            <div className="px-2.5 py-1 text-[11px] font-semibold text-gold-400 uppercase tracking-wider flex items-center justify-between">
+              <span>🪄 Chọn Kỹ năng (gõ / để tìm kiếm)</span>
+              <span className="text-[10px] text-neutral-500">{filteredSlashSkills.length} kết quả</span>
+            </div>
+            <div className="max-h-56 overflow-y-auto">
+              {filteredSlashSkills.map((sk) => (
+                <button
+                  key={sk.id}
+                  type="button"
+                  onClick={() => activateSkillTemplate(sk)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-neutral-200 transition-colors hover:bg-neutral-850 hover:text-gold-300 cursor-pointer"
+                >
+                  <span className="text-base shrink-0">{sk.emoji}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-neutral-100">{sk.name}</span>
+                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">{sk.category}</span>
+                    </div>
+                    <p className="truncate text-[11px] text-neutral-400 mt-0.5">{sk.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-2xl border border-neutral-700 bg-neutral-900 p-2 focus-within:border-gold-400/60">
           <input
             type="file"
@@ -1153,20 +1291,44 @@ export function Chat() {
           >
             <Paperclip className="size-4" />
           </button>
+          <button
+            onClick={() => setSkillPickerOpen((o) => !o)}
+            title="Chọn Kỹ năng (Skill) kích hoạt hoặc gõ /"
+            className={cn(
+              "cursor-pointer rounded-xl p-2 transition-colors",
+              activeSkill
+                ? "bg-gold-400/20 text-gold-300 border border-gold-400/40 hover:bg-gold-400/30"
+                : "text-neutral-500 hover:bg-neutral-800 hover:text-gold-300"
+            )}
+          >
+            <Wand2 className="size-4" />
+          </button>
 
           <textarea
             ref={composerRef}
             rows={1}
             value={input}
             placeholder={
-              activeAgent
-                ? `Ask your ${activeAgent.name}…`
-                : "Message V Assistant…"
+              activeSkill
+                ? `Đang dùng Skill: ${activeSkill.name}…`
+                : activeAgent
+                ? `Ask your ${activeAgent.name} (gõ / chọn Skill)…`
+                : "Message V Assistant (gõ / chọn Skill)…"
             }
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setInput(val);
+              if (val.startsWith("/")) {
+                setShowSlashMenu(true);
+                setSlashQuery(val.slice(1));
+              } else {
+                setShowSlashMenu(false);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
+                setShowSlashMenu(false);
                 void send();
               }
             }}
