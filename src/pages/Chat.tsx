@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Square, StopCircle, Trash2, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
@@ -255,6 +255,28 @@ export function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const agentPickerRef = useRef<HTMLDivElement>(null);
+  const [taskExpanded, setTaskExpanded] = useState(true);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
+
+  const stopRunningTask = useCallback(() => {
+    if (chatAbortControllerRef.current) {
+      chatAbortControllerRef.current.abort();
+      chatAbortControllerRef.current = null;
+    }
+    setStreaming(false);
+    setMessages((prev) =>
+      prev.map((m, idx) =>
+        idx === prev.length - 1 && m.role === "assistant"
+          ? {
+              ...m,
+              content:
+                (m.content ? m.content + "\n\n" : "") +
+                "🛑 *[Người dùng đã ấn dừng tiến trình chạy ngầm]*",
+            }
+          : m
+      )
+    );
+  }, [setMessages]);
 
   const activeAgent = useMemo(
     () => agents.find((a) => a.id === activeAgentId) ?? null,
@@ -499,11 +521,11 @@ export function Chat() {
     ]);
 
     setStreaming(true);
+    const controller = new AbortController();
+    chatAbortControllerRef.current = controller;
     let rawReplyText = "";
     try {
       for await (const chunk of engine.chat(history, {
-        // `openrouter` is only the legacy OpenAI-compatible message shape.
-        // Router config prevents the runtime from calling OpenRouter directly.
         provider: "openrouter",
         config: routerConfig,
         agentName: activeAgent?.name,
@@ -517,7 +539,6 @@ export function Chat() {
         agentMemory: activeAgent
           ? agentConfigs[activeAgent.id]?.memory
           : undefined,
-        // Only this role's ready documents — knowledge never crosses roles.
         agentKnowledge: knowledgeFiles
           .filter((f) => f.status === "ready")
           .map((f) => f.name),
@@ -526,6 +547,7 @@ export function Chat() {
         skillName: activeSkill?.name,
         skillInstructions: activeSkill?.instructions,
       })) {
+        if (controller.signal.aborted) break;
         rawReplyText += chunk;
         setMessages((prev) =>
           prev.map((m) =>
@@ -535,10 +557,8 @@ export function Chat() {
           ),
         );
       }
-      // Self-improve: the active role reflects on the exchange and saves any
-      // durable facts to its OWN memory (isolated per role). Fire-and-forget.
       const replyText = visibleAssistantText(rawReplyText);
-      if (selfImprove && activeAgent && replyText) {
+      if (selfImprove && activeAgent && replyText && !controller.signal.aborted) {
         void reflectAndLearn(
           { user: content, assistant: replyText },
           "openrouter",
@@ -547,15 +567,18 @@ export function Chat() {
         ).then((notes) => addAgentMemory(activeAgent.id, notes));
       }
     } catch (error) {
-      const note = `⚠️ ${error instanceof Error ? error.message : String(error)}`;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: m.content ? `${m.content}\n\n${note}` : note }
-            : m,
-        ),
-      );
+      if (!controller.signal.aborted) {
+        const note = `⚠️ ${error instanceof Error ? error.message : String(error)}`;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: m.content ? `${m.content}\n\n${note}` : note }
+              : m,
+          ),
+        );
+      }
     } finally {
+      chatAbortControllerRef.current = null;
       setStreaming(false);
     }
   };
@@ -1236,20 +1259,56 @@ export function Chat() {
 
       {/* Composer */}
       <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
-        {/* Background Process Active Notification Bar */}
+        {/* Active Running Task Widget (Gemini 3.6 / Antigravity Style) */}
         {streaming && (
-          <div className="mx-auto mb-2.5 flex max-w-2xl items-center justify-between rounded-xl border border-gold-400/40 bg-gold-400/10 px-3.5 py-2 text-xs text-gold-300 shadow-md animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <span className="relative flex size-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
-                <span className="relative inline-flex size-2.5 rounded-full bg-gold-400"></span>
-              </span>
-              <span className="font-semibold">⚡ Tiến trình đang thực thi ngầm:</span>
-              <span className="text-neutral-300">Vua AI Agent đang xử lý dữ liệu và thực hiện lệnh...</span>
+          <div className="mx-auto mb-3 max-w-2xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/90 shadow-xl backdrop-blur-md transition-all animate-fadeIn">
+            <div
+              onClick={() => setTaskExpanded((prev) => !prev)}
+              className="flex cursor-pointer items-center justify-between px-4 py-2.5 hover:bg-neutral-850/50 transition-colors select-none"
+            >
+              <div className="flex items-center gap-2.5 text-xs font-semibold text-neutral-200">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
+                  <span className="relative inline-flex size-2 rounded-full bg-gold-400"></span>
+                </span>
+                <span>1 task running</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopRunningTask();
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-all cursor-pointer"
+                  title="Dừng tiến trình chạy ngầm này"
+                >
+                  <Square className="size-3 fill-red-400 text-red-400" />
+                  Dừng task
+                </button>
+                <button
+                  className="text-neutral-400 hover:text-neutral-200 p-0.5 rounded cursor-pointer"
+                  aria-label="Toggle task details"
+                >
+                  {taskExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                </button>
+              </div>
             </div>
-            <span className="rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-mono font-bold text-gold-400 border border-gold-400/40">
-              ● ACTIVE
-            </span>
+
+            {taskExpanded && (
+              <div className="border-t border-neutral-800/80 px-4 py-3 bg-neutral-950/40 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Loader2 className="size-3.5 animate-spin text-gold-400 shrink-0" />
+                    <span className="font-mono text-neutral-200 truncate">
+                      {activeSkill ? `${activeSkill.name}` : activeAgent ? `${activeAgent.name} execution` : "AI Agent background runner"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-gold-400/90 bg-gold-400/10 border border-gold-400/20 px-2 py-0.5 rounded font-mono font-medium">
+                    Running…
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {/* Attachment files list */}
