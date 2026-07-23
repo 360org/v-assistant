@@ -261,7 +261,10 @@ function EnginePluginConfig({
         </p>
       </div>
     </div>
-  );function IntegrationConfig({
+  );
+}
+
+function IntegrationConfig({
   integration,
   onClose,
   onSaved,
