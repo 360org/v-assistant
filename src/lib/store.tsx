@@ -923,6 +923,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("vua:create-schedule", handleCreateSchedule);
   }, [addScheduledTask]);
 
+  useEffect(() => {
+    const handleCreateSkill = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { raw: string; source: string };
+      if (detail && detail.raw) {
+        addCustomSkill({ raw: detail.raw, source: detail.source || `created:${Date.now()}` });
+      }
+    };
+    window.addEventListener("vua:create-skill", handleCreateSkill);
+    return () => window.removeEventListener("vua:create-skill", handleCreateSkill);
+  }, [addCustomSkill]);
+
   const updateScheduledTask = useCallback(
     (id: string, patch: Partial<ScheduledTask>) => {
       setState((s) => ({

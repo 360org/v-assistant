@@ -396,6 +396,92 @@ const mcpStatusTool: AgentTool = {
   },
 };
 
+const createSkillTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "create_skill",
+      description:
+        "Tạo mới, đóng gói và cài đặt một Skill mới cho AI Agent theo chuẩn Agent Skills trong V Assistant (như Claude). Sử dụng khi người dùng yêu cầu tạo skill mới hoặc khi dùng skill-creator.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Tên định danh skill dạng kebab-case (ví dụ: odoo-post-builder, code-reviewer).",
+          },
+          description: {
+            type: "string",
+            description: "Mô tả ngắn gọn về chức năng của skill.",
+          },
+          title: {
+            type: "string",
+            description: "Tên tiêu đề hiển thị tiếng Việt/tiếng Anh của Skill.",
+          },
+          emoji: {
+            type: "string",
+            description: "Biểu tượng emoji đại diện cho Skill (ví dụ: 🚀, 📝, 📊).",
+          },
+          category: {
+            type: "string",
+            description: "Phân loại Skill (ví dụ: Marketing, Development, Productivity).",
+          },
+          prompt: {
+            type: "string",
+            description: "Gợi ý mẫu điền câu hỏi khi người dùng kích hoạt skill.",
+          },
+          instructions: {
+            type: "string",
+            description: "Nội dung chỉ dẫn chi tiết cách AI Agent xử lý công việc khi kích hoạt skill này.",
+          },
+        },
+        required: ["name", "description", "title", "instructions"],
+      },
+    },
+  },
+  async run(args) {
+    const name = String(args.name || "new-skill").toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const description = String(args.description || "");
+    const title = String(args.title || name);
+    const emoji = String(args.emoji || "🧩");
+    const category = String(args.category || "General");
+    const prompt = String(args.prompt || "");
+    const instructions = String(args.instructions || "");
+
+    const rawMd = `---
+name: ${name}
+description: "${description.replace(/"/g, '\\"')}"
+metadata:
+  vua-title: "${title.replace(/"/g, '\\"')}"
+  vua-emoji: "${emoji}"
+  vua-category: "${category}"
+  vua-tagline: "${description.replace(/"/g, '\\"')}"
+  vua-prompt: "${prompt.replace(/"/g, '\\"')}"
+---
+
+${instructions}`;
+
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("vua:create-skill", {
+        detail: { raw: rawMd, source: `created:${name}` },
+      });
+      window.dispatchEvent(event);
+
+      // Save physical file to customDataPath/skills/ if configured
+      void import("@tauri-apps/api/core").then(({ invoke }) => {
+        void invoke("save_custom_data_text", {
+          customDir: localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data",
+          relativePath: `skills/${name}/SKILL.md`,
+          content: rawMd,
+        }).catch(() => {});
+      }).catch(() => {});
+
+      return `✅ Đã khởi tạo và đóng gói thành công Skill mới "${title}" (${name})!\nSkill hiện đã xuất hiện trong thư viện Skills của ứng dụng và có thể sử dụng ngay lập tức!`;
+    }
+    return `Skill "${title}" (${name}) đã được tạo.`;
+  },
+};
+
 /** The tools every agent turn can use. */
 export function buildAgentTools(): AgentTool[] {
   return [
@@ -408,5 +494,6 @@ export function buildAgentTools(): AgentTool[] {
     fileWriteTool,
     fileListTool,
     mcpStatusTool,
+    createSkillTool,
   ];
 }

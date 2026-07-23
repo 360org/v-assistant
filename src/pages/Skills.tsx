@@ -83,11 +83,27 @@ export function Skills() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
-      <h1 className="text-2xl font-bold">Skills</h1>
-      <p className="mt-1 text-neutral-400">
-        Everyday tasks, one click away. Pick a skill and just fill in the
-        blanks — no prompt writing needed.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Skills</h1>
+          <p className="mt-1 text-neutral-400">
+            Everyday tasks, one click away. Pick a skill and just fill in the
+            blanks — no prompt writing needed.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            useSkill("Hãy giúp tôi thiết kế và đóng gói một Skill mới cho AI Agent để: ", {
+              name: "Skill Creator (Tự tạo Skill mới)",
+              instructions: "Hãy phân tích yêu cầu của người dùng, soạn thảo quy chuẩn SKILL.md và tự động gọi công cụ `create_skill` để đóng gói và lưu Skill mới vào ứng dụng.",
+            });
+            setView("chat");
+          }}
+          className="shrink-0 font-bold bg-gradient-to-r from-gold-500 to-gold-600 text-neutral-950 hover:from-gold-400 hover:to-gold-500"
+        >
+          <Wand2 className="size-4 mr-1.5" /> ✨ Tạo Skill mới bằng AI
+        </Button>
+      </div>
 
       {activeAgent && (
         <div className="mt-4 flex items-center justify-between rounded-xl bg-gold-400/10 border border-gold-400/20 px-4 py-2.5 text-xs text-gold-300">
