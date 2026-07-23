@@ -673,7 +673,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // the served app URL as the source of truth: localhost/127.0.0.1 is the
       // Docker demo and must sync NanoClaw's read-only session store.
       const browserDev = typeof window !== "undefined" &&
-        ["localhost", "127.0.0.1"].includes(window.location.hostname);
+        ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
+        !("__TAURI_INTERNALS__" in window);
       if (browserDev) {
         // NanoClaw owns Telegram updates in the Docker demo. Read its store
         // instead of starting a competing getUpdates poller in each tab.

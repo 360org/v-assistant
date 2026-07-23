@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { History, MessageSquarePlus, Search, Send, Trash2 } from "lucide-react";
+import { History, MessageSquarePlus, Search, Send, Trash2, Pencil, Check, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -11,11 +11,15 @@ export function Sessions() {
     activeSessionId,
     createChatSession,
     switchChatSession,
+    renameChatSession,
     deleteChatSession,
     setView,
   } = useApp();
   const [query, setQuery] = useState("");
   const [channel, setChannel] = useState<ChannelFilter>("all");
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
 
   const sessions = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -101,23 +105,81 @@ export function Sessions() {
               )}>
                 {session.channel === "telegram" ? <Send className="size-4" /> : <History className="size-4" />}
               </span>
-              <button type="button" onClick={() => openSession(session.id)} className="min-w-0 flex-1 cursor-pointer text-left">
-                <span className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-neutral-200">{session.title}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  {editingSessionId === session.id ? (
+                    <input
+                      type="text"
+                      autoFocus
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          renameChatSession(session.id, editingTitle);
+                          setEditingSessionId(null);
+                        } else if (e.key === "Escape") {
+                          setEditingSessionId(null);
+                        }
+                      }}
+                      className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-0.5 text-sm font-medium text-neutral-200 outline-none focus:border-gold-400"
+                    />
+                  ) : (
+                    <button type="button" onClick={() => openSession(session.id)} className="cursor-pointer truncate text-left text-sm font-medium text-neutral-200 hover:text-gold-300">
+                      {session.title}
+                    </button>
+                  )}
                   {session.id === activeSessionId && <span className="text-[10px] text-gold-300">Active</span>}
-                </span>
+                </div>
                 <span className="mt-0.5 block text-xs text-neutral-500">
                   {session.channel === "telegram" ? "Telegram" : "Desktop"} · {session.messages.length} messages · {new Date(session.updatedAt).toLocaleString()}
                 </span>
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete ${session.title}`}
-                onClick={() => deleteChatSession(session.id)}
-                className="cursor-pointer rounded-lg p-2 text-neutral-600 opacity-0 hover:bg-red-950 hover:text-red-300 group-hover:opacity-100 focus:opacity-100"
-              >
-                <Trash2 className="size-4" />
-              </button>
+              </div>
+              
+              <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                {editingSessionId === session.id ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        renameChatSession(session.id, editingTitle);
+                        setEditingSessionId(null);
+                      }}
+                      className="cursor-pointer rounded-lg p-2 text-green-500 hover:bg-green-950/30 hover:text-green-400"
+                    >
+                      <Check className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingSessionId(null)}
+                      className="cursor-pointer rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${session.title}`}
+                      onClick={() => {
+                        setEditingTitle(session.title);
+                        setEditingSessionId(session.id);
+                      }}
+                      className="cursor-pointer rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${session.title}`}
+                      onClick={() => deleteChatSession(session.id)}
+                      className="cursor-pointer rounded-lg p-2 text-neutral-500 hover:bg-red-950/30 hover:text-red-400"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </>
+                )}
+              </div>
             </article>
           ))}
         </div>
