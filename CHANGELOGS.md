@@ -2,7 +2,7 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
-## [1.0.40] - 2026-07-23
+## [1.0.41] - 2026-07-23
 ### Added Skill Creator & Host Execution Tools & Skill Enable Enforcement
 *   **Skill Creator Spec-Driven Integration**: Tích hợp công cụ Skill Creator tự động thiết kế và tạo kỹ năng Agent chuẩn Agent Skills spec (Claude standard). Bổ sung tool `create_skill` tự động ghi file `SKILL.md` và đăng ký skill vào hệ thống.
 *   **Host System Execution Tools**: Tích hợp bộ công cụ thực thi trực tiếp trên máy host (`web_search`, `file_read`, `file_write`, `file_list`, `mcp_status`).
