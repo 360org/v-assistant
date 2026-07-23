@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.43] - 2026-07-23
+### Fixed Host File Saving & Anti-collision for Clipboard Pastes
+*   **Host Data File Storage Fix**: Khắc phục hiện tượng ảnh dán từ Clipboard (macOS mặc định đặt tên `image.png`) bị ghi đè lẫn nhau bằng cơ chế tự động đánh số timestamp chống trùng tên (`image_17848012.png`).
+*   **Data Path Fallback**: Đảm bảo toàn bộ hình ảnh tải lên hoặc dán trong Chat và Media Gallery đều nạp đúng `customDataPath` từ state và `localStorage` để tự động sao lưu vào thư mục `uploads/` trên đĩa cứng.
+
 ## [1.0.42] - 2026-07-23
 ### Fixed Media Gallery Image Preview
 *   **Media Gallery Persistent Image Fix**: Nâng cấp toàn bộ trang Media Gallery (bao gồm danh sách ảnh Discover Media Vault và Lightbox Preview Modal) hỗ trợ nạp fallback qua Tauri Asset Protocol (`convertFileSrc`) từ thư mục host `customDataPath/uploads/` và hiển thị thẻ placeholder sắc nét khi dữ liệu hình ảnh cũ bị xóa, ngăn chặn triệt để biểu tượng lỗi `[?]`.

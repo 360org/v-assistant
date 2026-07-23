@@ -163,9 +163,25 @@ export function MediaGallery() {
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const customDir = customDataPath || localStorage.getItem("vua:custom-data-path") || "";
     for (const file of Array.from(files)) {
       const fileId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
       await indexKnowledgeFile(null, fileId, file);
+      if (customDir && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const b64 = reader.result as string;
+          void import("@tauri-apps/api/core").then(({ invoke }) => {
+            void invoke("save_custom_data_file", {
+              customDir,
+              subfolder: "uploads",
+              filename: file.name,
+              contentB64: b64,
+            }).catch(() => {});
+          }).catch(() => {});
+        };
+        reader.readAsDataURL(file);
+      }
     }
     await loadMedia();
   };

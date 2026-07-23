@@ -105,8 +105,23 @@ fn save_custom_data_file(custom_dir: String, subfolder: String, filename: String
     let target_dir = path.join(&subfolder);
     fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
 
-    let file_path = target_dir.join(&filename);
-    
+    // Anti-collision: macOS clipboard pastes default to "image.png"
+    let mut file_path = target_dir.join(&filename);
+    if file_path.exists() {
+        let stem = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let new_filename = if ext.is_empty() {
+            format!("{}_{}", stem, now_ms)
+        } else {
+            format!("{}_{}.{}", stem, now_ms, ext)
+        };
+        file_path = target_dir.join(new_filename);
+    }
+
     // Strip data URL header if present (e.g. data:image/png;base64,...)
     let clean_b64 = if let Some(pos) = content_b64.find(";base64,") {
         &content_b64[pos + 8..]

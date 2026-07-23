@@ -1134,6 +1134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const id = `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
         const ext = f.name.toLowerCase().split(".").pop() ?? "";
         const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+        const customDir = stateRef.current.customDataPath || localStorage.getItem("vua:custom-data-path") || "";
         if (imgExtensions.includes(ext)) {
           try {
             const url = URL.createObjectURL(f);
@@ -1145,10 +1146,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           reader.onload = () => {
             const b64 = reader.result as string;
             if (b64) fileObjectURLs.set(id, b64);
-            if (stateRef.current.customDataPath && typeof window !== "undefined") {
+            if (customDir && typeof window !== "undefined") {
               void import("@tauri-apps/api/core").then(({ invoke }) => {
                 void invoke("save_custom_data_file", {
-                  customDir: stateRef.current.customDataPath,
+                  customDir,
                   subfolder: "uploads",
                   filename: f.name,
                   contentB64: b64,
@@ -1157,13 +1158,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           };
           reader.readAsDataURL(f);
-        } else if (stateRef.current.customDataPath && typeof window !== "undefined") {
+        } else if (customDir && typeof window !== "undefined") {
           const reader = new FileReader();
           reader.onload = () => {
             const b64 = reader.result as string;
             void import("@tauri-apps/api/core").then(({ invoke }) => {
               void invoke("save_custom_data_file", {
-                customDir: stateRef.current.customDataPath,
+                customDir,
                 subfolder: "uploads",
                 filename: f.name,
                 contentB64: b64,
