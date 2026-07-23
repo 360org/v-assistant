@@ -181,7 +181,50 @@ const connectorRequestTool: AgentTool = {
   },
 };
 
+const createScheduleTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "create_schedule",
+      description:
+        "Tạo mới một tác vụ lập lịch chạy tự động/định kỳ (Scheduled Task) trong ứng dụng V Assistant. Sử dụng công cụ này khi người dùng yêu cầu đặt lịch, lập lịch đăng bài, nhắc nhở hoặc báo cáo tự động.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Tên ngắn gọn của công việc (ví dụ: Đăng bài Odoo hàng ngày lúc 09:00 AM).",
+          },
+          prompt: {
+            type: "string",
+            description: "Nội dung chỉ dẫn chi tiết công việc cho AI thực hiện định kỳ.",
+          },
+          schedule: {
+            type: "string",
+            description: "Chu kỳ/thời gian chạy (ví dụ: Hàng ngày lúc 09:00 AM, 1 giờ một lần).",
+          },
+        },
+        required: ["name", "prompt", "schedule"],
+      },
+    },
+  },
+  async run(args) {
+    const name = String(args.name || "Tác vụ lập lịch tự động");
+    const prompt = String(args.prompt || "");
+    const schedule = String(args.schedule || "Hàng ngày");
+
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("vua:create-schedule", {
+        detail: { name, prompt, schedule },
+      });
+      window.dispatchEvent(event);
+      return `✅ Đã tạo thành công tác vụ lập lịch "${name}" (${schedule}). Tác vụ hiện đã được tự động chèn vào trang Scheduled và đang kích hoạt!`;
+    }
+    return `Tác vụ "${name}" (${schedule}) đã được tiếp nhận.`;
+  },
+};
+
 /** The tools every agent turn can use. */
 export function buildAgentTools(): AgentTool[] {
-  return [vaultListTool, httpRequestTool, connectorRequestTool];
+  return [vaultListTool, httpRequestTool, connectorRequestTool, createScheduleTool];
 }

@@ -907,6 +907,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  useEffect(() => {
+    const handleCreateSchedule = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { name: string; prompt: string; schedule: string };
+      if (detail && detail.name && detail.prompt) {
+        addScheduledTask({
+          name: detail.name,
+          prompt: detail.prompt,
+          schedule: detail.schedule || "Hàng ngày",
+          enabled: true,
+        });
+      }
+    };
+    window.addEventListener("vua:create-schedule", handleCreateSchedule);
+    return () => window.removeEventListener("vua:create-schedule", handleCreateSchedule);
+  }, [addScheduledTask]);
+
   const updateScheduledTask = useCallback(
     (id: string, patch: Partial<ScheduledTask>) => {
       setState((s) => ({

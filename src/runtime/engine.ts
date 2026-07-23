@@ -108,7 +108,8 @@ export function buildSystemPrompt(options: ChatOptions): string {
     "then use connector_request with its opaque ref and " +
     "{{credential:<field>}} variables. The trusted gateway resolves those " +
     "values outside your context. Do not ask " +
-    "the user for a password that is already in the Vault.";
+    "the user for a password that is already in the Vault.\n\n" +
+    "When the user asks to schedule a job, recurring task, reminder, or automated posting (e.g. \"đặt lịch đăng bài\", \"lập lịch\", \"tạo schedule\"), you MUST call the create_schedule tool with { name, prompt, schedule } to officially register and display the scheduled task on the Scheduled page.";
   if (options.agentName) {
     prompt +=
       `\n\nYou are currently acting as the user's ${options.agentName}. ` +

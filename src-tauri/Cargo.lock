@@ -4782,6 +4782,7 @@ name = "v-assistant"
 version = "1.0.39"
 dependencies = [
  "aes",
+ "base64 0.22.1",
  "cbc",
  "chrono",
  "hmac",
