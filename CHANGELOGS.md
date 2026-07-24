@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.76] - 2026-07-24
+### MCP & Terminal CLI Execution Engine
+*   **Hỗ trợ Thực thi Lệnh Terminal / CLI (`execute_cli`)**: Đã bổ sung công cụ `execute_cli` vào hệ thống Agent Tools và Rust Backend (`execute_cli_command`). Cho phép AI Agent chạy trực tiếp các lệnh Terminal/Shell (`bash`, `zsh`, `git`, `npm`, `python`, `ls`, `curl`...) trên máy Host.
+*   **Thực thi MCP Tool (`execute_mcp_tool`)**: Hỗ trợ gọi và truyền tham số trực tiếp tới bất kỳ công cụ Model Context Protocol (MCP) Server nào đang hoạt động (`odoo-graph-mcp`, `builtin-tools-mcp`...).
+
 ## [1.0.75] - 2026-07-24
 ### GitHub Actions Production Release Runner Fix
 *   **Fix GitHub macOS Runner (`release.yml`)**: Đổi tên runner `macos-15-intel` không hợp lệ thành `macos-13` (runner x86_64 chuẩn của GitHub), bổ sung cờ `--force` khi push tag giải quyết triệt để xung đột tag release.

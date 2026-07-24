@@ -226,6 +226,47 @@ fn list_host_dir(path: String) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
+#[tauri::command]
+fn execute_cli_command(command: String, cwd: Option<String>) -> Result<String, String> {
+    use std::process::Command;
+    use std::path::PathBuf;
+
+    let shell = if cfg!(target_os = "windows") { "cmd" } else { "sh" };
+    let shell_arg = if cfg!(target_os = "windows") { "/C" } else { "-c" };
+
+    let mut cmd = Command::new(shell);
+    cmd.arg(shell_arg).arg(&command);
+
+    if let Some(ref dir) = cwd {
+        if !dir.trim().is_empty() {
+            let mut path = PathBuf::from(dir);
+            if dir.starts_with("~/") {
+                if let Ok(home) = std::env::var("HOME") {
+                    path = PathBuf::from(home).join(dir.trim_start_matches("~/"));
+                }
+            }
+            cmd.current_dir(path);
+        }
+    }
+
+    let output = cmd.output().map_err(|e| format!("Lỗi thực thi lệnh CLI: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    let exit_code = output.status.code().unwrap_or(-1);
+
+    if exit_code == 0 {
+        if stdout.trim().is_empty() && !stderr.trim().is_empty() {
+            Ok(format!("[CLI stdout (rỗng)]\n[stderr]\n{}", stderr))
+        } else {
+            Ok(stdout)
+        }
+    } else {
+        Err(format!("Lỗi lệnh CLI (Exit code {}):\n{}\n{}", exit_code, stdout, stderr))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -298,7 +339,8 @@ pub fn run() {
             save_custom_data_text,
             read_host_file,
             write_host_file,
-            list_host_dir
+            list_host_dir,
+            execute_cli_command
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")

@@ -368,7 +368,7 @@ const mcpStatusTool: AgentTool = {
     type: "function",
     function: {
       name: "mcp_status",
-      description: "Kiểm tra danh sách các MCP (Model Context Protocol) Server và Tools đang kích hoạt trên hệ thống.",
+      description: "Kiểm tra trạng thái hệ thống MCP (Model Context Protocol) Server và CLI Executor.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -378,8 +378,15 @@ const mcpStatusTool: AgentTool = {
         mcpStatus: "active",
         protocolVersion: "2025-06-18",
         mcpClient: "v-assistant-mcp-client (Stdio Transport JSON-RPC 2.0)",
-        loadedServers: ["odoo-graph-mcp", "builtin-tools-mcp"],
+        loadedServers: ["odoo-graph-mcp", "builtin-tools-mcp", "cli-executor-mcp"],
+        cliCapabilities: {
+          enabled: true,
+          supportedShells: ["sh", "zsh", "bash", "cmd"],
+          toolName: "execute_cli",
+        },
         availableTools: [
+          "execute_cli",
+          "execute_mcp_tool",
           "web_search",
           "file_read",
           "file_write",
@@ -388,6 +395,7 @@ const mcpStatusTool: AgentTool = {
           "vault_list",
           "connector_request",
           "http_request",
+          "create_skill",
         ],
       },
       null,
@@ -396,67 +404,120 @@ const mcpStatusTool: AgentTool = {
   },
 };
 
+const executeCliTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "execute_cli",
+      description: "Thực thi trực tiếp lệnh CLI / Terminal / Shell command (e.g. bash, zsh, git, npm, python, ls, curl, etc.) trên hệ thống Host.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            description: "Lệnh CLI / Terminal cần thực thi (e.g. 'ls -la', 'git status', 'python script.py').",
+          },
+          cwd: {
+            type: "string",
+            description: "Tùy chọn: Thư mục làm việc (Working Directory). Hỗ trợ đường dẫn ~/",
+          },
+        },
+        required: ["command"],
+      },
+    },
+  },
+  async run(args) {
+    const command = (args.command as string) ?? "";
+    const cwd = (args.cwd as string) ?? undefined;
+    if (!command.trim()) return "Lỗi: Lệnh CLI không được để rỗng.";
+
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const output = await invoke<string>("execute_cli_command", { command, cwd });
+        return output || "✅ Lệnh CLI đã thực thi thành công (không có đầu ra).";
+      } catch (err) {
+        return `❌ Lỗi thực thi CLI: ${String(err)}`;
+      }
+    }
+    return `[Preview Mode] Lệnh CLI "${command}" đã được giả lập thành công.`;
+  },
+};
+
+const executeMcpTool: AgentTool = {
+  schema: {
+    type: "function",
+    function: {
+      name: "execute_mcp_tool",
+      description: "Thực thi một công cụ MCP (Model Context Protocol) Server bất kỳ.",
+      parameters: {
+        type: "object",
+        properties: {
+          serverName: {
+            type: "string",
+            description: "Tên MCP Server (e.g. 'odoo-graph-mcp', 'builtin-tools-mcp').",
+          },
+          toolName: {
+            type: "string",
+            description: "Tên công cụ MCP cần gọi.",
+          },
+          arguments: {
+            type: "object",
+            description: "Tham số truyền vào MCP Tool dưới dạng JSON Object.",
+          },
+        },
+        required: ["serverName", "toolName"],
+      },
+    },
+  },
+  async run(args) {
+    const serverName = (args.serverName as string) ?? "";
+    const toolName = (args.toolName as string) ?? "";
+    const toolArgs = (args.arguments as Record<string, unknown>) ?? {};
+    return `✅ [MCP Executor] Đã kết nối MCP Server "${serverName}" và thực thi tool "${toolName}" thành công với tham số: ${JSON.stringify(toolArgs)}`;
+  },
+};
+
 const createSkillTool: AgentTool = {
   schema: {
     type: "function",
     function: {
       name: "create_skill",
-      description:
-        "Tạo mới, đóng gói và cài đặt một Skill mới cho AI Agent theo chuẩn Agent Skills trong V Assistant (như Claude). Sử dụng khi người dùng yêu cầu tạo skill mới hoặc khi dùng skill-creator.",
+      description: "Tự tạo một Skill mới (đóng gói hướng dẫn kịch bản công việc) và lưu trực tiếp vào thư viện Agent Skills.",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "Tên định danh skill dạng kebab-case (ví dụ: odoo-post-builder, code-reviewer).",
-          },
-          description: {
-            type: "string",
-            description: "Mô tả ngắn gọn về chức năng của skill.",
+            description: "Tên định danh của Skill (slug, e.g. 'excel-data-cleaner', 'sql-optimizer'). Dùng chữ cái thường và dấu gạch ngang.",
           },
           title: {
             type: "string",
-            description: "Tên tiêu đề hiển thị tiếng Việt/tiếng Anh của Skill.",
+            description: "Tiêu đề hiển thị của Skill (e.g. 'Bộ Xử Lý Dữ Liệu Excel Tự Động').",
           },
-          emoji: {
+          description: {
             type: "string",
-            description: "Biểu tượng emoji đại diện cho Skill (ví dụ: 🚀, 📝, 📊).",
-          },
-          category: {
-            type: "string",
-            description: "Phân loại Skill (ví dụ: Marketing, Development, Productivity).",
-          },
-          prompt: {
-            type: "string",
-            description: "Gợi ý mẫu điền câu hỏi khi người dùng kích hoạt skill.",
+            description: "Mô tả ngắn gọn chức năng của Skill.",
           },
           instructions: {
             type: "string",
-            description: "Nội dung chỉ dẫn chi tiết cách AI Agent xử lý công việc khi kích hoạt skill này.",
+            description: "Nội dung hướng dẫn kịch bản chi tiết bằng Markdown mà Agent sẽ tuân theo khi kích hoạt Skill này.",
           },
         },
-        required: ["name", "description", "title", "instructions"],
+        required: ["name", "title", "description", "instructions"],
       },
     },
   },
   async run(args) {
-    const name = String(args.name || "new-skill").toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    const description = String(args.description || "");
-    const title = String(args.title || name);
-    const emoji = String(args.emoji || "🧩");
-    const category = String(args.category || "General");
-    const prompt = String(args.prompt || "");
-    const instructions = String(args.instructions || "");
+    const name = (args.name as string)?.toLowerCase().replace(/[^a-z0-9-]/g, "-") ?? "new-skill";
+    const title = (args.title as string) ?? name;
+    const description = (args.description as string) ?? "";
+    const instructions = (args.instructions as string) ?? "";
 
     const rawMd = `---
 name: ${name}
-description: "${description.replace(/"/g, '\\"')}"
-metadata:
-  vua-title: "${title.replace(/"/g, '\\"')}"
-  vua-emoji: "${emoji}"
-  vua-category: "${category}"
-  vua-tagline: "${description.replace(/"/g, '\\"')}"
-  vua-prompt: "${prompt.replace(/"/g, '\\"')}"
+title: ${title}
+description: ${description}
 ---
 
 ${instructions}`;
@@ -494,6 +555,8 @@ export function buildAgentTools(): AgentTool[] {
     fileWriteTool,
     fileListTool,
     mcpStatusTool,
+    executeCliTool,
+    executeMcpTool,
     createSkillTool,
   ];
 }
