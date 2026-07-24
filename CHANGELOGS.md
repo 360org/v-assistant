@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.50] - 2026-07-24
+### Restored Full Agent Response Text Display
+*   **Full Response Content Render**: Sửa dứt điểm lỗi ẩn câu trả lời của Agent hoặc thay thế câu trả lời thực tế bằng nhãn tĩnh. Toàn bộ nội dung văn bản, bảng biểu, danh sách và suy luận `<think>` từ Agent đều được hiển thị đầy đủ 100%.
+*   **Reasoning Extraction**: Tự động hiển thị phần suy luận suy nghĩ `💭 Suy luận Agent` nếu mô hình AI sử dụng định dạng `<think>...` thay vì nuốt mất chuỗi nội dung.
+
 ## [1.0.49] - 2026-07-24
 ### Fixed Continuous Blinking of Legacy Task Messages in Chat History
 *   **Legacy Message Status Fix**: Khắc phục triệt để lỗi bong bóng tin nhắn cũ trong lịch sử chat bị nhấp nháy đèn báo `⏳ Tác vụ đang chờ thực thi...` liên tục.

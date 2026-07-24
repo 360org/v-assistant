@@ -7,10 +7,17 @@ import { invoke } from "@tauri-apps/api/core";
  * briefly before its closing tag arrives.
  */
 export function visibleAssistantText(content: string): string {
-  return content
+  if (!content) return "";
+  const thinkMatch = content.match(/<think(?:ing)?\b[^>]*>([\s\S]*?)(?:<\/think(?:ing)?>|$)/i);
+  const reasoning = thinkMatch ? thinkMatch[1].trim() : "";
+  const cleaned = content
     .replace(/<think(?:ing)?\b[^>]*>[\s\S]*?(?:<\/think(?:ing)?>|$)/gi, "")
     .replace(/<\/?think(?:ing)?\b[^>]*>/gi, "")
     .trim();
+
+  if (cleaned) return cleaned;
+  if (reasoning) return `💭 Suy luận Agent:\n${reasoning}`;
+  return content.trim();
 }
 
 export async function openExternalUrl(url: string) {

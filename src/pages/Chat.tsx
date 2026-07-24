@@ -1148,9 +1148,9 @@ export function Chat() {
                         </div>
                       )}
 
-                      {m.content?.trim() ? (
+                      {m.content?.trim() || (m.role === "assistant" && visibleAssistantText(m.content)) ? (
                         <MessageContent
-                          content={m.content.replace(/(\n\n)?📎 Đã gửi tệp:.*$/g, "").trim() || (m.attachments?.length ? "" : m.content)}
+                          content={m.content}
                           assistant={m.role === "assistant"}
                         />
                       ) : streaming && idx === filteredMessages.length - 1 ? (
@@ -1164,9 +1164,9 @@ export function Chat() {
                           </span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 py-1 text-xs text-neutral-400 font-medium select-none">
-                          <span className="size-2 rounded-full bg-neutral-600 shrink-0" />
-                          <span>✅ Tác vụ đã hoàn tất</span>
+                        <div className="flex items-center gap-2 py-1 text-xs text-amber-400/90 font-medium select-none">
+                          <span className="size-2 rounded-full bg-amber-400 shrink-0" />
+                          <span>⚠️ Chưa nhận được dữ liệu phản hồi (Vui lòng chọn mô hình AI khả dụng hoặc thử lại)</span>
                         </div>
                       )}
                       
