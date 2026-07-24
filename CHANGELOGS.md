@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.75] - 2026-07-24
+### GitHub Actions Production Release Runner Fix
+*   **Fix GitHub macOS Runner (`release.yml`)**: Đổi tên runner `macos-15-intel` không hợp lệ thành `macos-13` (runner x86_64 chuẩn của GitHub), bổ sung cờ `--force` khi push tag giải quyết triệt để xung đột tag release.
+
 ## [1.0.74] - 2026-07-24
 ### GitHub Actions CI Alignment
 *   **Fix CI Test Assertion (`login-check.mjs`)**: Cập nhật danh sách kiểm thử tự động `MODELS.gemini` trong kịch bản CI phù hợp với danh sách danh mục Gemini 3.6 mới (`gemini-3.6-flash-high`, `gemini-3.6-flash-medium`, `gemini-3.6-flash-low`), giúp tất cả các luồng CI & Release trên GitHub Actions vượt qua 100% xanh lá.
