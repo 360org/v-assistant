@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, HardDrive, KeyRound, LoaderCircle, Lock, LogIn, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X } from "lucide-react";
+import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, HardDrive, Info, KeyRound, LoaderCircle, Lock, LogIn, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X } from "lucide-react";
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { useApp } from "@/lib/store";
@@ -72,6 +72,7 @@ export function Settings() {
   const [manualCallbackUrl, setManualCallbackUrl] = useState("");
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
   const [connectionActionId, setConnectionActionId] = useState<string | null>(null);
+  const [expandedMessageIds, setExpandedMessageIds] = useState<Record<string, boolean>>({});
   const [editingLocalUser, setEditingLocalUser] = useState(false);
   const [localUserName, setLocalUserName] = useState("");
   const [confirmingLocalLogout, setConfirmingLocalLogout] = useState(false);
@@ -985,6 +986,16 @@ export function Settings() {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <Button
                           size="sm"
+                          variant="ghost"
+                          title="Xem thông báo chi tiết"
+                          onClick={() => setExpandedMessageIds(prev => ({ ...prev, [connection.id]: !prev[connection.id] }))}
+                          className="h-7 px-2 text-xs font-medium text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+                        >
+                          <Info className="size-3 text-amber-400" />
+                          {expandedMessageIds[connection.id] ? "Ẩn tin" : "Xem tin"}
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="secondary"
                           title="Bật lại Provider này"
                           onClick={() => void toggleConnectionState(connection)}
@@ -1011,23 +1022,27 @@ export function Settings() {
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 font-medium flex items-center gap-1.5">
-                      <span>⏸️ Provider đang TẮT (Hết token/chờ reset). AI Router tạm thời bỏ qua tài khoản này.</span>
-                    </div>
+                    {expandedMessageIds[connection.id] && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 font-medium flex items-center gap-1.5">
+                          <span>⏸️ Provider đang TẮT (Hết token/chờ reset). AI Router tạm thời bỏ qua tài khoản này.</span>
+                        </div>
 
-                    {connection.lastError && (
-                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
-                        <span>{connection.lastError}</span>
-                        {connection.lastError.includes("http") && (
-                          <button
-                            onClick={() => {
-                              const match = connection.lastError?.match(/(https?:\/\/[^\s<">]+)/);
-                              if (match?.[1]) void openExternalUrl(match[1]);
-                            }}
-                            className="flex items-center gap-1.5 self-start rounded-lg border border-gold-500/40 bg-gold-400/15 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:bg-gold-400/25 transition-colors cursor-pointer"
-                          >
-                            <ExternalLink className="size-3 text-gold-400" /> Xác thực lại tại trình duyệt
-                          </button>
+                        {connection.lastError && (
+                          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
+                            <span>{connection.lastError}</span>
+                            {connection.lastError.includes("http") && (
+                              <button
+                                onClick={() => {
+                                  const match = connection.lastError?.match(/(https?:\/\/[^\s<">]+)/);
+                                  if (match?.[1]) void openExternalUrl(match[1]);
+                                }}
+                                className="flex items-center gap-1.5 self-start rounded-lg border border-gold-500/40 bg-gold-400/15 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:bg-gold-400/25 transition-colors cursor-pointer"
+                              >
+                                <ExternalLink className="size-3 text-gold-400" /> Xác thực lại tại trình duyệt
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}

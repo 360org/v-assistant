@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.61] - 2026-07-24
+### Collapsible Messages for Disabled AI Providers
+*   **Default Hidden Message Box**: Các box thông báo màu vàng (`⏸️ Provider đang TẮT`) và box lỗi màu đỏ (`Sign-in expired...`) ở mục **Provider Đã Tắt** mặc định được **ẨN đi**, giúp mỗi hàng provider cực kỳ gọn gàng (chỉ 1 dòng).
+*   **Toggle View Message**: Thêm nút **`[ ℹ️ Xem tin / Ẩn tin ]`** cho từng provider đã tắt. Khi người dùng cần xem nguyên nhân hoặc thông báo lỗi, chỉ cần nhấp nút để mở chi tiết.
+
 ## [1.0.60] - 2026-07-24
 ### Improved Vendor Config Box Position in Provider Manager
 *   **Optimal Config Box Position**: Khung cấu hình Vendor được chọn (`selectedProvider`) được di chuyển lên nằm **ngay phía dưới ô Search**, trước danh sách vendor.
