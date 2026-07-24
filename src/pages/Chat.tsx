@@ -1153,17 +1153,20 @@ export function Chat() {
                           content={m.content.replace(/(\n\n)?📎 Đã gửi tệp:.*$/g, "").trim() || (m.attachments?.length ? "" : m.content)}
                           assistant={m.role === "assistant"}
                         />
-                      ) : (
+                      ) : streaming && idx === messages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">
                           <span className="relative flex size-2.5 shrink-0">
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
                             <span className="relative inline-flex size-2.5 rounded-full bg-gold-400"></span>
                           </span>
                           <span className="animate-pulse">
-                            {streaming
-                              ? "⚡ AI Agent đang xử lý... (Đang đọc dữ liệu & thực thi tác vụ)"
-                              : "⏳ Tác vụ đang chờ thực thi... (Đang phân tích câu lệnh)"}
+                            ⚡ AI Agent đang xử lý... (Đang đọc dữ liệu & thực thi tác vụ)
                           </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 py-1 text-xs text-neutral-400 font-medium select-none">
+                          <span className="size-2 rounded-full bg-neutral-600 shrink-0" />
+                          <span>✅ Tác vụ đã hoàn tất</span>
                         </div>
                       )}
                       

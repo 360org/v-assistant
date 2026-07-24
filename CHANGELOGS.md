@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.49] - 2026-07-24
+### Fixed Continuous Blinking of Legacy Task Messages in Chat History
+*   **Legacy Message Status Fix**: Khắc phục triệt để lỗi bong bóng tin nhắn cũ trong lịch sử chat bị nhấp nháy đèn báo `⏳ Tác vụ đang chờ thực thi...` liên tục.
+*   **Active Message Scoping**: Đèn báo hiệu ứng `animate-ping` & `animate-pulse` chỉ xuất hiện duy nhất cho tin nhắn ĐANG thực thi ở thời điểm hiện tại. Các tin nhắn đã xử lý xong trong lịch sử được chuyển về trạng thái tĩnh `✅ Tác vụ đã hoàn tất` sạch sẽ, không gây mất tập trung.
+
 ## [1.0.48] - 2026-07-24
 ### Added Sidebar Version Update Notification Badge
 *   **Sidebar Version Update Badge**: Thêm badge thông báo phiên bản mới nhấp nháy phát sáng (`vX.Y.Z`) trực tiếp trên mục menu **Settings** ở Sidebar trái. Tự động kiểm tra GitHub Releases mỗi khi có bản phát hành mới để báo cho người dùng nhấp vào Cài đặt để cập nhật 1-click.
