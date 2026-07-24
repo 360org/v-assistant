@@ -1104,7 +1104,7 @@ export function Chat() {
             </div>
           ) : (
             <div className="mx-auto flex max-w-2xl flex-col gap-4">
-              {filteredMessages.map((m) => {
+              {filteredMessages.map((m, idx) => {
               const isUser = m.role === "user";
               const formattedTime = new Date(m.createdAt).toLocaleTimeString("vi-VN", {
                 hour: "2-digit",
@@ -1153,7 +1153,7 @@ export function Chat() {
                           content={m.content.replace(/(\n\n)?📎 Đã gửi tệp:.*$/g, "").trim() || (m.attachments?.length ? "" : m.content)}
                           assistant={m.role === "assistant"}
                         />
-                      ) : streaming && idx === messages.length - 1 ? (
+                      ) : streaming && idx === filteredMessages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">
                           <span className="relative flex size-2.5 shrink-0">
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
