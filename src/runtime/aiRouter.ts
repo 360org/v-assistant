@@ -146,17 +146,37 @@ export async function getAiRouterModels(signal?: AbortSignal): Promise<AiRouterM
 }
 
 export async function getAiRouterConnections(signal?: AbortSignal): Promise<AiRouterConnection[]> {
-  const response = await fetch(`${AI_ROUTER_BASE_URL}/providers`, { signal });
-  if (!response.ok) throw new Error(`AI Router connections are unavailable (${response.status})`);
-  const payload = (await response.json()) as { connections?: AiRouterConnection[] };
-  return payload.connections ?? [];
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const response = await fetch(`${AI_ROUTER_BASE_URL}/providers`, { signal });
+      if (!response.ok) throw new Error(`AI Router connections are unavailable (${response.status})`);
+      const payload = (await response.json()) as { connections?: AiRouterConnection[] };
+      return payload.connections ?? [];
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+      await new Promise((res) => setTimeout(res, 350));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export async function getAiRouterProviderCatalog(signal?: AbortSignal): Promise<AiRouterProvider[]> {
-  const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/catalog`, { signal });
-  if (!response.ok) throw new Error(`AI Router provider catalog is unavailable (${response.status})`);
-  const payload = (await response.json()) as { providers?: AiRouterProvider[] };
-  return payload.providers ?? [];
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/catalog`, { signal });
+      if (!response.ok) throw new Error(`AI Router provider catalog is unavailable (${response.status})`);
+      const payload = (await response.json()) as { providers?: AiRouterProvider[] };
+      return payload.providers ?? [];
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+      await new Promise((res) => setTimeout(res, 350));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export async function saveAiRouterConnection(connection: CreateAiRouterConnection): Promise<AiRouterConnection> {

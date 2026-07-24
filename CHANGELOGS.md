@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.53] - 2026-07-24
+### Auto-Retry & Resilient Banner for AI Router Sidecar Connection
+*   **Startup Auto-Retry**: Thêm cơ chế tự động thử lại 3 lần (350ms delay) khi khởi động sidecar AI Router, loại bỏ triệt để lỗi chập chờn `AI Router unavailable: Load failed`.
+*   **Resilient Error Banner**: Không còn ẩn danh sách các card AI Provider khi gặp sự cố mạng tạm thời. Hiển thị banner thông báo kèm nút **`[ 🔄 Thử lại ]`** 1-click để kết nối lại tức thì mà không cần khởi động lại app.
+
 ## [1.0.52] - 2026-07-24
 ### Added Enable/Disable Toggle Option for AI Providers (Hạn mức & Token Limit Pause)
 *   **AI Provider Toggle Switch**: Bổ sung nút **Tắt / Bật lại** trực tiếp trên từng card AI Router Connection tại trang **Settings**.

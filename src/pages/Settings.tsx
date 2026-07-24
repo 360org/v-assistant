@@ -820,12 +820,24 @@ export function Settings() {
             <RefreshCw className={cn("size-4", loadingConnections && "animate-spin")} />
           </button>
         </div>
-        {connectionError ? (
-          <Card className="mt-3 text-sm text-amber-200">
-            AI Router unavailable: {connectionError}
+        {connectionError && (
+          <Card className="mt-3 text-sm border-amber-500/30 bg-amber-500/10 text-amber-200 flex items-center justify-between gap-3">
+            <div>
+              <span className="font-semibold">AI Router chưa sẵn sàng:</span> {connectionError}
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void refreshConnections()}
+              disabled={loadingConnections}
+              className="shrink-0 h-7 px-2.5 text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/40"
+            >
+              {loadingConnections ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              Thử lại
+            </Button>
           </Card>
-        ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        )}
+        <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             {connections.map((connection) => (
               <div
                 key={connection.id}
@@ -955,7 +967,6 @@ export function Settings() {
               </Card>
             )}
           </div>
-        )}
         <Button className="mt-3" variant="secondary" onClick={() => setShowProviderManager(true)}>
           <ExternalLink className="size-4" /> Connect or manage vendors
         </Button>
