@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.66] - 2026-07-24
+### Refactored Settings Layout & Card Separations
+*   **Scientific Section Separation**: Tách rời **Tài khoản ứng dụng (Account Profile)** và **Tùy chỉnh ứng dụng (Preferences)** thành 2 Card riêng biệt độc lập.
+*   **Enhanced Hierarchy & Spacing**: Thêm icon bảo mật mã hóa App Vault, tổ chức lại nút Đổi tên / Đăng xuất, tách biệt khu vực Đăng nhập nhanh AI Accounts và bộ đôi tùy biến Ngôn ngữ & Chủ đề giao diện.
+
 ## [1.0.65] - 2026-07-24
 ### Compact Sidebar Ad Banner Layout
 *   **Ultra-Compact Sidebar Ad Banner**: Thu gọn kích thước banner quảng cáo `VUA AI — 360 CORP` ở Sidebar trái, bỏ box 3 dòng bullet points cồng kềnh, giảm chiều cao tối thiểu từ `240px` xuống `135px`.

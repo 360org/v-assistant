@@ -688,150 +688,168 @@ export function Settings() {
       <h1 className="text-2xl font-bold">Settings</h1>
       <p className="mt-1 text-neutral-400">Simple by design.</p>
 
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-neutral-300">Account</h2>
-        {user ? (
-          <Card className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{user.name}</div>
-              <div className="text-xs text-neutral-500">
-                Local App Profile{user.detail ? ` · ${user.detail}` : ""}
+      <section className="mt-8 space-y-6">
+        {/* Section 1: Account Profile Card */}
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-300">Tài khoản ứng dụng (Account Profile)</h2>
+          {user ? (
+            <Card className="mt-2.5 flex flex-col gap-4">
+              {/* Profile Header Row */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950 shadow-md">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-bold text-sm text-neutral-100">{user.name}</div>
+                    <div className="text-xs text-neutral-400 truncate">
+                      Local Profile{user.detail ? ` · ${user.detail}` : ""}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-500">
+                      <Lock className="size-3 text-emerald-400" />
+                      {vaultIsSecure()
+                        ? "Encrypted App Vault"
+                        : "Development preview storage"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Badge tone="green" className="text-[10px] px-2 py-0.5 font-medium">Local Profile</Badge>
+                  <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser} className="h-8 px-2.5 text-xs text-neutral-300 hover:text-white">
+                    <Pencil className="size-3.5" />
+                    Đổi tên
+                  </Button>
+                  <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)} className="h-8 px-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                    Đăng xuất
+                  </Button>
+                </div>
               </div>
-              <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-600">
-                <Lock className="size-3" />
-                {vaultIsSecure()
-                  ? "Connections stored in the encrypted App Vault"
-                  : "Development preview storage"}
+
+              {/* Fast Sign-in AI Accounts Sub-row */}
+              <div className="border-t border-neutral-800/80 pt-3">
+                <div className="mb-2 text-xs font-medium text-neutral-400">Kết nối nhanh tài khoản AI (Fast Sign-in)</div>
+                <div className="flex flex-wrap gap-2">
+                  {LOCAL_AI_ACCOUNTS.map((account) => {
+                    const connected = isLocalAccountConnected(account.id);
+                    return (
+                      <Button
+                        key={account.id}
+                        size="sm"
+                        variant={connected ? "secondary" : "ghost"}
+                        onClick={() => void signInLocalAiAccount(account.id)}
+                        disabled={connecting}
+                        className={cn(
+                          "h-8 px-3 text-xs font-medium transition-all",
+                          connected ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "text-neutral-300 hover:bg-neutral-800"
+                        )}
+                      >
+                        {connecting ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
+                        {connected ? `${account.name} connected` : `Sign in ${account.name}`}
+                      </Button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            <div className="ml-auto flex items-center gap-1">
-              <Badge tone="green">Local user</Badge>
-              <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser}>
-                <Pencil className="size-4" />
-              </Button>
-              <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)}>
-                Log out
-              </Button>
-            </div>
-            <div className="w-full border-t border-neutral-800 pt-3">
-              <div className="mb-2 text-xs font-medium text-neutral-300">AI accounts</div>
+            </Card>
+          ) : (
+            <Card className="mt-2.5 flex flex-col gap-3">
+              <div className="flex-1">
+                <div className="font-semibold text-sm">Tạo Local User Profile</div>
+                <div className="text-xs text-neutral-500">
+                  Đăng nhập với bất kỳ tài khoản AI nào để khởi tạo hồ sơ cá nhân trên máy.
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {LOCAL_AI_ACCOUNTS.map((account) => {
-                  const connected = isLocalAccountConnected(account.id);
-                  return (
-                    <Button
-                      key={account.id}
-                      size="sm"
-                      variant={connected ? "secondary" : "ghost"}
-                      onClick={() => void signInLocalAiAccount(account.id)}
-                      disabled={connecting}
-                    >
-                      {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-                      {connected ? `${account.name} connected` : `Sign in ${account.name}`}
-                    </Button>
-                  );
-                })}
+                {LOCAL_AI_ACCOUNTS.map((account) => (
+                  <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
+                    {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                    Sign in {account.name}
+                  </Button>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Section 2: Preferences Card (Giao diện & Ngôn ngữ) */}
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-300">Tùy chỉnh ứng dụng (Preferences)</h2>
+          <Card className="mt-2.5 space-y-3.5 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-neutral-200">Ngôn ngữ hiển thị (Language)</div>
+                <div className="text-[11px] text-neutral-400">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setLanguage("vi")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                    language === "vi"
+                      ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
+                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  🇻🇳 Tiếng Việt
+                </button>
+                <button
+                  onClick={() => setLanguage("en")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                    language === "en"
+                      ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
+                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  🇬🇧 English
+                </button>
               </div>
             </div>
 
-            {/* Integrated Preferences: Language & Theme */}
-            <div className="w-full border-t border-neutral-800/80 pt-3 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-medium text-neutral-200">Ngôn ngữ hiển thị (Language)</div>
-                  <div className="text-[11px] text-neutral-500">Ngôn ngữ mặc định cho giao diện</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setLanguage("vi")}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
-                      language === "vi"
-                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                    )}
-                  >
-                    🇻🇳 Tiếng Việt
-                  </button>
-                  <button
-                    onClick={() => setLanguage("en")}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
-                      language === "en"
-                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                    )}
-                  >
-                    🇬🇧 English
-                  </button>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/80 pt-3">
+              <div>
+                <div className="text-xs font-semibold text-neutral-200">Chủ đề giao diện (UI Theme)</div>
+                <div className="text-[11px] text-neutral-400">Tùy biến phong cách màu sắc sang trọng</div>
               </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/40 pt-2.5">
-                <div>
-                  <div className="text-xs font-medium text-neutral-200">Chủ đề giao diện (UI Theme)</div>
-                  <div className="text-[11px] text-neutral-500">Tùy biến phong cách màu sắc sang trọng</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setTheme("dark")}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
-                      theme === "dark"
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
-                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                    )}
-                  >
-                    🟢 Dark Emerald
-                  </button>
-                  <button
-                    onClick={() => setTheme("gold")}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
-                      theme === "gold"
-                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                    )}
-                  >
-                    🟡 Warm Gold
-                  </button>
-                  <button
-                    onClick={() => setTheme("midnight")}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
-                      theme === "midnight"
-                        ? "bg-blue-500/20 text-blue-300 border-blue-400/40"
-                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                    )}
-                  >
-                    🔵 Midnight Blue
-                  </button>
-                </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                    theme === "dark"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-xs"
+                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  🟢 Dark Emerald
+                </button>
+                <button
+                  onClick={() => setTheme("gold")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                    theme === "gold"
+                      ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
+                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  🟡 Warm Gold
+                </button>
+                <button
+                  onClick={() => setTheme("midnight")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                    theme === "midnight"
+                      ? "bg-blue-500/20 text-blue-300 border-blue-400/40 shadow-xs"
+                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  🔵 Midnight Blue
+                </button>
               </div>
             </div>
           </Card>
-        ) : (
-          <Card className="mt-3 flex flex-col gap-3">
-            <div className="flex-1">
-              <div className="font-semibold">Create your local user</div>
-              <div className="text-xs text-neutral-500">
-                Sign in with an AI account. Its profile creates this device-local user;
-                a paid subscription is also connected to AI Router when available.
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {LOCAL_AI_ACCOUNTS.map((account) => (
-                <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
-                  {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-                  Sign in {account.name}
-                </Button>
-              ))}
-            </div>
-          </Card>
-        )}
+        </div>
       </section>
 
       {editingLocalUser && (
