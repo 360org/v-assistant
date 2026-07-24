@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.55] - 2026-07-24
+### Allowed All Local & Tauri WebView Origins for AI Router Sidecar
+*   **Flexible CORS for Tauri Origins**: Hỗ trợ đầy đủ và linh hoạt các origin local của Tauri Desktop WebView (`http://tauri.localhost`, `tauri://localhost`, `http://vassistant.localhost`, `http://localhost:*`, `127.0.0.1`, `app://`).
+*   **Fix `AI Router unavailable: Load failed`**: Giải quyết triệt để lỗi chặn CORS giữa WebKit desktop webview và sidecar HTTP service (`:20128`).
+
 ## [1.0.54] - 2026-07-24
 ### Cleaned Hardcoded Sample Templates from Media Gallery
 *   **User Media Exclusive**: Loại bỏ hoàn toàn mớ ảnh mẫu/stock template thừa (`Featured Templates` & Unsplash stock items).

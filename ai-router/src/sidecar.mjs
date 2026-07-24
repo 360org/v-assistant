@@ -35,19 +35,18 @@ const legacyConnectionPath = join(process.cwd(), ".vua_ai_router_connections.jso
 
 function allowedUiOrigin(request) {
   const origin = request?.headers?.origin;
-  if (!origin || origin === uiOrigin) return origin || uiOrigin;
-  if (["http://vassistant.localhost", "https://vassistant.localhost", "vassistant://localhost"].includes(origin)) {
+  if (!origin) return uiOrigin;
+  // Allow all local Tauri app origins (tauri.localhost, tauri://localhost, vassistant.localhost, localhost, 127.0.0.1, app://, etc.)
+  if (
+    origin.includes("localhost") ||
+    origin.includes("tauri") ||
+    origin.includes("vassistant") ||
+    origin.includes("127.0.0.1") ||
+    origin.startsWith("app://")
+  ) {
     return origin;
   }
-  try {
-    const candidate = new URL(origin);
-    if (
-      candidate.protocol === "http:"
-      && ["127.0.0.1", "localhost"].includes(candidate.hostname)
-      && candidate.port === "1420"
-    ) return origin;
-  } catch { /* browser will reject the configured fallback origin */ }
-  return uiOrigin;
+  return origin || uiOrigin;
 }
 
 function corsHeaders(request) {
