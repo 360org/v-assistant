@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.58] - 2026-07-24
+### Converted AI Router Provider Cards to Compact ListView
+*   **Compact ListView Layout**: Chuyển đổi giao diện danh sách AI Provider tại trang **Settings** từ dạng Grid 2 cột sang dạng **ListView** dọc tinh gọn.
+*   **Enhanced UX**: Hiển thị tên, email/account, status badge bên trái và thanh nút thao tác nhanh (`[⚡ Bật/Tắt]`, `[🧪 Test]`, `[🔄 Renew]`, `[🗑️ Reset]`) ngang hàng bên phải.
+
 ## [1.0.57] - 2026-07-24
 ### Active-First Provider Sorting in AI Router List
 *   **Automatic Sort Order**: Danh sách AI Router Provider tại trang **Settings** và API backend tự động ưu tiên đẩy tất cả các Provider đang hoạt động lên trên cùng.
