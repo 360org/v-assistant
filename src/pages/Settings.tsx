@@ -287,6 +287,30 @@ export function Settings() {
     };
   };
 
+  const resetVendorForm = () => {
+    signInAttemptRef.current++;
+    setSelectedProvider(null);
+    setConnecting(false);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
+    setDeviceCodeSubscription(null);
+    setDeviceCodeUserCode("");
+    setConnectMessage(null);
+    setApiKey("");
+  };
+
+  const selectVendorForm = (provider: AiRouterProvider) => {
+    signInAttemptRef.current++;
+    setSelectedProvider(provider);
+    setConnecting(false);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
+    setDeviceCodeSubscription(null);
+    setDeviceCodeUserCode("");
+    setConnectMessage(null);
+    setApiKey("");
+  };
+
   const connectSubscription = async (providerToConnect = selectedProvider) => {
     const oauthProvider = providerToConnect?.oauthProvider;
     if (!oauthProvider || !providerToConnect) return;
@@ -309,7 +333,15 @@ export function Settings() {
       if (attemptId !== signInAttemptRef.current) return;
       const providerConnections = latestConnections.filter((connection) => connection.provider === provider.id);
       const identity = accountIdentity(result);
-      const id = createConnectionId(provider.id);
+
+      // Deduplicate: If connection with same provider and email already exists, update existing connection instead of duplicating!
+      const existingConnection = providerConnections.find(
+        (c) =>
+          (identity.email && c.email?.toLowerCase().trim() === identity.email.toLowerCase().trim()) ||
+          (identity.accountLabel && c.accountLabel?.toLowerCase().trim() === identity.accountLabel.toLowerCase().trim()),
+      );
+      const id = existingConnection ? existingConnection.id : createConnectionId(provider.id);
+
       await vaultSet(`ai-router:credential:${id}`, JSON.stringify({
         accessToken,
         apiKey: result.apiKey,
@@ -330,10 +362,13 @@ export function Settings() {
         label: provider.name,
         email: identity.email,
         accountLabel: identity.accountLabel,
-        priority: providerConnections.length + 1,
+        priority: existingConnection ? existingConnection.priority : providerConnections.length + 1,
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
       });
+      if (existingConnection && (existingConnection.status === "disabled" || !existingConnection.isActive)) {
+        await toggleAiRouterConnection(id, true);
+      }
       if (attemptId !== signInAttemptRef.current) return;
       ensureLocalUser({
         name: identity.accountLabel || provider.name,
@@ -688,168 +723,162 @@ export function Settings() {
       <h1 className="text-2xl font-bold">Settings</h1>
       <p className="mt-1 text-neutral-400">Simple by design.</p>
 
-      <section className="mt-8 space-y-6">
-        {/* Section 1: Account Profile Card */}
-        <div>
-          <h2 className="text-sm font-semibold text-neutral-300">Tài khoản ứng dụng (Account Profile)</h2>
-          {user ? (
-            <Card className="mt-2.5 flex flex-col gap-4">
-              {/* Profile Header Row */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950 shadow-md">
-                    {user.name.charAt(0).toUpperCase()}
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-neutral-300">Tài khoản & Thiết lập (Account & Preferences)</h2>
+        {user ? (
+          <Card className="mt-2.5 flex flex-col gap-4 p-4.5">
+            {/* Row 1: Profile Identity */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950 shadow-md ring-2 ring-gold-400/20">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-extrabold text-sm text-neutral-100">{user.name}</span>
+                    <Badge tone="green" className="text-[10px] px-2 py-0.2 font-semibold">Local Profile</Badge>
                   </div>
-                  <div className="min-w-0">
-                    <div className="truncate font-bold text-sm text-neutral-100">{user.name}</div>
-                    <div className="text-xs text-neutral-400 truncate">
-                      Local Profile{user.detail ? ` · ${user.detail}` : ""}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-500">
-                      <Lock className="size-3 text-emerald-400" />
-                      {vaultIsSecure()
-                        ? "Encrypted App Vault"
-                        : "Development preview storage"}
-                    </div>
+                  <div className="text-xs text-neutral-400 truncate mt-0.5">
+                    {user.detail ? user.detail : "Local App Profile"}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono">
+                    <Lock className="size-3 text-emerald-400" />
+                    {vaultIsSecure() ? "Encrypted App Vault" : "Development preview storage"}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Badge tone="green" className="text-[10px] px-2 py-0.5 font-medium">Local Profile</Badge>
-                  <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser} className="h-8 px-2.5 text-xs text-neutral-300 hover:text-white">
-                    <Pencil className="size-3.5" />
-                    Đổi tên
-                  </Button>
-                  <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)} className="h-8 px-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                    Đăng xuất
-                  </Button>
-                </div>
               </div>
 
-              {/* Fast Sign-in AI Accounts Sub-row */}
-              <div className="border-t border-neutral-800/80 pt-3">
-                <div className="mb-2 text-xs font-medium text-neutral-400">Kết nối nhanh tài khoản AI (Fast Sign-in)</div>
-                <div className="flex flex-wrap gap-2">
-                  {LOCAL_AI_ACCOUNTS.map((account) => {
-                    const connected = isLocalAccountConnected(account.id);
-                    return (
-                      <Button
-                        key={account.id}
-                        size="sm"
-                        variant={connected ? "secondary" : "ghost"}
-                        onClick={() => void signInLocalAiAccount(account.id)}
-                        disabled={connecting}
-                        className={cn(
-                          "h-8 px-3 text-xs font-medium transition-all",
-                          connected ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "text-neutral-300 hover:bg-neutral-800"
-                        )}
-                      >
-                        {connecting ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
-                        {connected ? `${account.name} connected` : `Sign in ${account.name}`}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-            </Card>
-          ) : (
-            <Card className="mt-2.5 flex flex-col gap-3">
-              <div className="flex-1">
-                <div className="font-semibold text-sm">Tạo Local User Profile</div>
-                <div className="text-xs text-neutral-500">
-                  Đăng nhập với bất kỳ tài khoản AI nào để khởi tạo hồ sơ cá nhân trên máy.
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {LOCAL_AI_ACCOUNTS.map((account) => (
-                  <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
-                    {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-                    Sign in {account.name}
-                  </Button>
-                ))}
-              </div>
-            </Card>
-          )}
-        </div>
-
-        {/* Section 2: Preferences Card (Giao diện & Ngôn ngữ) */}
-        <div>
-          <h2 className="text-sm font-semibold text-neutral-300">Tùy chỉnh ứng dụng (Preferences)</h2>
-          <Card className="mt-2.5 space-y-3.5 p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold text-neutral-200">Ngôn ngữ hiển thị (Language)</div>
-                <div className="text-[11px] text-neutral-400">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
-              </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setLanguage("vi")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                    language === "vi"
-                      ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
-                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                  )}
-                >
-                  🇻🇳 Tiếng Việt
-                </button>
-                <button
-                  onClick={() => setLanguage("en")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                    language === "en"
-                      ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
-                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                  )}
-                >
-                  🇬🇧 English
-                </button>
+                <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser} className="h-8 px-3 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 border border-neutral-800">
+                  <Pencil className="size-3.5" />
+                  Đổi tên
+                </Button>
+                <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)} className="h-8 px-3 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20">
+                  Đăng xuất
+                </Button>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/80 pt-3">
-              <div>
-                <div className="text-xs font-semibold text-neutral-200">Chủ đề giao diện (UI Theme)</div>
-                <div className="text-[11px] text-neutral-400">Tùy biến phong cách màu sắc sang trọng</div>
+            {/* Row 2: Fast Sign-in AI Accounts */}
+            <div className="border-t border-neutral-800/70 pt-3.5">
+              <div className="mb-2 text-xs font-semibold text-neutral-300">Kết nối nhanh tài khoản AI (Fast Sign-in)</div>
+              <div className="flex flex-wrap gap-2">
+                {LOCAL_AI_ACCOUNTS.map((account) => {
+                  const connected = isLocalAccountConnected(account.id);
+                  return (
+                    <Button
+                      key={account.id}
+                      size="sm"
+                      variant={connected ? "secondary" : "ghost"}
+                      onClick={() => void signInLocalAiAccount(account.id)}
+                      disabled={connecting}
+                      className={cn(
+                        "h-8 px-3 text-xs font-medium transition-all",
+                        connected ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "text-neutral-300 hover:bg-neutral-800 border border-neutral-800"
+                      )}
+                    >
+                      {connecting ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
+                      {connected ? `${account.name} connected` : `Sign in ${account.name}`}
+                    </Button>
+                  );
+                })}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setTheme("dark")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                    theme === "dark"
-                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-xs"
-                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                  )}
-                >
-                  🟢 Dark Emerald
-                </button>
-                <button
-                  onClick={() => setTheme("gold")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                    theme === "gold"
-                      ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
-                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                  )}
-                >
-                  🟡 Warm Gold
-                </button>
-                <button
-                  onClick={() => setTheme("midnight")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                    theme === "midnight"
-                      ? "bg-blue-500/20 text-blue-300 border-blue-400/40 shadow-xs"
-                      : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                  )}
-                >
-                  🔵 Midnight Blue
-                </button>
+            </div>
+
+            {/* Row 3: Preferences (Language & UI Theme) */}
+            <div className="border-t border-neutral-800/70 pt-3.5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-neutral-200">Ngôn ngữ hiển thị (Language)</div>
+                  <div className="text-[11px] text-neutral-400">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setLanguage("vi")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      language === "vi"
+                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
+                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                    )}
+                  >
+                    🇻🇳 Tiếng Việt
+                  </button>
+                  <button
+                    onClick={() => setLanguage("en")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      language === "en"
+                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
+                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                    )}
+                  >
+                    🇬🇧 English
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/40 pt-2.5">
+                <div>
+                  <div className="text-xs font-semibold text-neutral-200">Chủ đề giao diện (UI Theme)</div>
+                  <div className="text-[11px] text-neutral-400">Tùy biến phong cách màu sắc sang trọng</div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setTheme("dark")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      theme === "dark"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-xs"
+                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                    )}
+                  >
+                    🟢 Dark Emerald
+                  </button>
+                  <button
+                    onClick={() => setTheme("gold")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      theme === "gold"
+                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
+                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                    )}
+                  >
+                    🟡 Warm Gold
+                  </button>
+                  <button
+                    onClick={() => setTheme("midnight")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      theme === "midnight"
+                        ? "bg-blue-500/20 text-blue-300 border-blue-400/40 shadow-xs"
+                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                    )}
+                  >
+                    🔵 Midnight Blue
+                  </button>
+                </div>
               </div>
             </div>
           </Card>
-        </div>
+        ) : (
+          <Card className="mt-2.5 flex flex-col gap-3">
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Tạo Local User Profile</div>
+              <div className="text-xs text-neutral-500">
+                Đăng nhập với bất kỳ tài khoản AI nào để khởi tạo hồ sơ cá nhân trên máy.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {LOCAL_AI_ACCOUNTS.map((account) => (
+                <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
+                  {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                  Sign in {account.name}
+                </Button>
+              ))}
+            </div>
+          </Card>
+        )}
       </section>
 
       {editingLocalUser && (
@@ -1178,7 +1207,7 @@ export function Settings() {
                       <span className="ml-2 font-mono text-xs text-neutral-500">({selectedProvider.id})</span>
                     </div>
                     <button
-                      onClick={() => setSelectedProvider(null)}
+                      onClick={resetVendorForm}
                       className="cursor-pointer text-xs font-semibold text-neutral-400 hover:text-neutral-200"
                     >
                       ✕ Close form
@@ -1308,13 +1337,7 @@ export function Settings() {
                   {filteredProviders.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => {
-                        setSelectedProvider(item);
-                        setApiKey("");
-                        setConnectMessage(null);
-                        setManualAuthUrl(null);
-                        setManualCallbackUrl("");
-                      }}
+                      onClick={() => selectVendorForm(item)}
                       className={cn(
                         "flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-800",
                         selectedProvider?.id === item.id && "bg-gold-400/10 text-gold-200 font-semibold border-l-2 border-gold-400",

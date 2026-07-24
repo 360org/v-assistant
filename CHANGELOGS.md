@@ -2,6 +2,12 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.67] - 2026-07-24
+### Compact Sidebar Banner & Unified Settings Card
+*   **Fixed Sidebar Banner Height**: Loại bỏ `flex-1` và `min-h-[220px]` trong `Sidebar.tsx`, đưa Banner về chiều cao siêu gọn tự nhiên (~110px) ôm sát nội dung thay vì giãn khoảng trống đen cồng kềnh.
+*   **Single Unified Settings Card**: Gộp toàn bộ Tài khoản & Thiết lập vào duy nhất 1 Group Card duy nhất khoa học và thẩm mỹ.
+*   **Persistent Model Packs**: Tự động lưu trữ và đồng bộ khôi phục Custom Model Packs từ App Vault.
+
 ## [1.0.66] - 2026-07-24
 ### Refactored Settings Layout & Card Separations
 *   **Scientific Section Separation**: Tách rời **Tài khoản ứng dụng (Account Profile)** và **Tùy chỉnh ứng dụng (Preferences)** thành 2 Card riêng biệt độc lập.
