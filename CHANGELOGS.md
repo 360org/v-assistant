@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.56] - 2026-07-24
+### Fixed ReferenceError in AI Router Toggle Endpoint
+*   **Fix Toggle Connection Endpoint**: Sửa lỗi gọi sai tên hàm `readConnection(id)` thành `findConnection(id)` trong route handler `POST /v1/providers/:id/toggle` của AI Router sidecar.
+*   **Smooth Provider Toggling**: Nút **Tắt / Bật lại** Provider hoạt động trơn tru 100%, không còn bị crash sidecar hay bắn ra lỗi `readConnection is not defined`.
+
 ## [1.0.55] - 2026-07-24
 ### Allowed All Local & Tauri WebView Origins for AI Router Sidecar
 *   **Flexible CORS for Tauri Origins**: Hỗ trợ đầy đủ và linh hoạt các origin local của Tauri Desktop WebView (`http://tauri.localhost`, `tauri://localhost`, `http://vassistant.localhost`, `http://localhost:*`, `127.0.0.1`, `app://`).

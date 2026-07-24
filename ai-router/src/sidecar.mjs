@@ -1027,7 +1027,7 @@ const server = createServer((request, response) => {
     const id = decodeURIComponent(togglePath[1]);
     void readJson(request)
       .then(async (input) => {
-        const existing = await readConnection(id);
+        const existing = await findConnection(id);
         if (!existing) {
           sendJson(response, 404, { error: "AI Router connection not found." });
           return;
