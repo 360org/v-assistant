@@ -1051,21 +1051,23 @@ export function Chat() {
                         </div>
                       )}
 
-                      {m.content ? (
+                      {m.content?.trim() ? (
                         <MessageContent
                           content={m.content.replace(/(\n\n)?📎 Đã gửi tệp:.*$/g, "").trim() || (m.attachments?.length ? "" : m.content)}
                           assistant={m.role === "assistant"}
                         />
                       ) : (
-                        streaming && (
-                          <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium">
-                            <span className="relative flex size-2.5">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
-                              <span className="relative inline-flex size-2.5 rounded-full bg-gold-400"></span>
-                            </span>
-                            <span className="animate-pulse">⚡ Vua AI Agent đang xử lý ngầm (Đang đọc dữ liệu & thực thi tool...)...</span>
-                          </div>
-                        )
+                        <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">
+                          <span className="relative flex size-2.5 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
+                            <span className="relative inline-flex size-2.5 rounded-full bg-gold-400"></span>
+                          </span>
+                          <span className="animate-pulse">
+                            {streaming
+                              ? "⚡ AI Agent đang xử lý... (Đang đọc dữ liệu & thực thi tác vụ)"
+                              : "⏳ Tác vụ đang chờ thực thi... (Đang phân tích câu lệnh)"}
+                          </span>
+                        </div>
                       )}
                       
                       {/* Meta/Timestamp footer inside the bubble */}
