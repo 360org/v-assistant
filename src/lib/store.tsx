@@ -28,6 +28,7 @@ import {
 export const fileObjectURLs = new Map<string, string>();
 import { parseSkillMd } from "@/lib/skills";
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
+import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
   notifyTelegram,
@@ -358,6 +359,8 @@ interface AppStore extends PersistedState {
   activeBackgroundTasks: ActiveBackgroundTask[];
   startBackgroundTask: (name: string, command?: string) => string;
   stopBackgroundTask: (id: string) => void;
+  appUpdate: AppUpdateInfo | null;
+  checkForAppUpdate: () => Promise<AppUpdateInfo>;
   setActiveAgent: (agentId: string | null) => void;
   /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
   agents: AgentTemplate[];
@@ -387,6 +390,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>("chat");
   const [chatDraft, setChatDraft] = useState<string | null>(null);
   const [activeSkill, setActiveSkill] = useState<ActiveSkill | null>(null);
+  const [appUpdate, setAppUpdate] = useState<AppUpdateInfo | null>(null);
+
+  const checkForAppUpdate = useCallback(async () => {
+    const info = await checkAppUpdate();
+    setAppUpdate(info);
+    return info;
+  }, []);
+
+  useEffect(() => {
+    void checkForAppUpdate();
+    const interval = window.setInterval(checkForAppUpdate, 300_000);
+    return () => window.clearInterval(interval);
+  }, [checkForAppUpdate]);
   const [oauthReturn, setOauthReturn] = useState<OAuthReturn | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [hasHydratedCredentials, setHasHydratedCredentials] = useState(false);
@@ -1505,6 +1521,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeBackgroundTasks,
       startBackgroundTask,
       stopBackgroundTask,
+      appUpdate,
+      checkForAppUpdate,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,

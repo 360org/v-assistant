@@ -38,7 +38,7 @@ export function Sidebar({
   /** Called after picking a menu item (used to close the mobile drawer). */
   onNavigate?: () => void;
 }) {
-  const { view, setView, user } = useApp();
+  const { view, setView, user, appUpdate } = useApp();
   const go = (v: View) => {
     setView(v);
     onNavigate?.();
@@ -87,14 +87,25 @@ export function Sidebar({
         <button
           onClick={() => go("settings")}
           className={cn(
-            "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+            "flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors",
             view === "settings"
               ? "bg-neutral-800 text-neutral-50"
               : "text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-200",
           )}
         >
-          <Settings className="size-4" />
-          Settings
+          <div className="flex items-center gap-3">
+            <Settings className="size-4" />
+            <span>Settings</span>
+          </div>
+          {appUpdate?.hasUpdate && (
+            <span className="flex items-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-400/20 px-2 py-0.5 text-[10px] font-bold text-gold-300 shadow-xs animate-pulse">
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
+                <span className="relative inline-flex size-1.5 rounded-full bg-gold-400"></span>
+              </span>
+              v{appUpdate.latestVersion}
+            </span>
+          )}
         </button>
 
         <button

@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.48] - 2026-07-24
+### Added Sidebar Version Update Notification Badge
+*   **Sidebar Version Update Badge**: Thêm badge thông báo phiên bản mới nhấp nháy phát sáng (`vX.Y.Z`) trực tiếp trên mục menu **Settings** ở Sidebar trái. Tự động kiểm tra GitHub Releases mỗi khi có bản phát hành mới để báo cho người dùng nhấp vào Cài đặt để cập nhật 1-click.
+
 ## [1.0.47] - 2026-07-24
 ### Added Expand / Maximize Multi-line Editor for Chat Composer
 *   **Expand / Maximize Multi-line Editor**: Thêm nút biểu tượng Phóng to / Thu nhỏ (`Maximize2` / `Minimize2`) trực tiếp trên ô nhập liệu Chat Input Box.
