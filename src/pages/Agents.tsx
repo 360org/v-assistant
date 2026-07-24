@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { SKILLS, parseSkillMd, toTemplate } from "@/lib/skills";
+import { cn } from "@/lib/utils";
 import {
   Check,
   Download,
@@ -266,39 +267,6 @@ function AgentConfigDialog({
   const [isMaximized, setIsMaximized] = useState(false);
 
   const { customSkills } = useApp();
-
-  const handleExport = () => {
-    const skillsList = enabledSkills.map((s) => `- ${s}`).join("\n");
-    const memoriesList = memory.map((m) => `- ${m}`).join("\n");
-    const md = `---
-name: ${agent.name}
-emoji: ${agent.emoji}
-category: ${agent.category}
-description: ${agent.description}
----
-
-# Instructions
-${instructions || "No instructions provided."}
-
-# Soul
-${soul || "No soul provided."}
-
-# Memory
-${memoriesList || "No memory entries."}
-
-# Skills
-${skillsList || "No skills enabled."}
-`;
-
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `${agent.id}-config.md`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const allSkills = useMemo(() => {
     const builtIn = SKILLS.map((s) => ({

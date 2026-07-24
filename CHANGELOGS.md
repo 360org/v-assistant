@@ -2,6 +2,12 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.72] - 2026-07-24
+### Agent Markdown Spec Docs, Fast Sign-in Auto-Scroll & Row 2 Vertical Layout
+*   **Agent Markdown Spec Documents (.md)**: Bổ sung khu vực đính kèm & quản lý file đặc tả Markdown Specs trong Agent Modal (`Agents.tsx`), hỗ trợ đầy đủ 11 file tiêu chuẩn Paperclip / 360 CORP (`SOUL.md`, `MISSION.md`, `NORTH_STAR.md`, `HEARTBEAT.md`, `PRINCIPLES.md`, `VALUES.md`, `THINKING.md`, `DECISION.md`, `GOVERNANCE.md`, `PLAYBOOK.md`, `MANIFESTO.md`) cùng tính năng tạo file `.md` tùy chỉnh.
+*   **Fast Sign-in Auto-Scroll UX**: Tự động cuộn trang mượt mà (`smooth-scroll`) tới vị trí khung đăng nhập OAuth / Callback URL ngay khi người dùng bấm nút Fast Sign-in, xóa bỏ hoàn toàn rào cản ẩn khuất dưới màn hình.
+*   **Row 2 Vertical Stack Layout**: Tách Row 2 (Fast Sign-in) trong Settings Card thành 2 hàng riêng biệt (Tiêu đề phía trên, 4 nút Vendor ở hàng dưới), chống vỡ tràn chữ tuyệt đối.
+
 ## [1.0.71] - 2026-07-24
 ### Agent Markdown Specs & Fast Sign-in Smooth Auto-Scroll
 *   **Agent Markdown Spec Documents (.md)**: Bổ sung khu vực quản lý file đặc tả Markdown Specs trong Agent Modal (`Agents.tsx`), hỗ trợ sẵn 11 file chuẩn Paperclip / 360 CORP (`SOUL.md`, `MISSION.md`, `NORTH_STAR.md`, `HEARTBEAT.md`, `PRINCIPLES.md`, `VALUES.md`, `THINKING.md`, `DECISION.md`, `GOVERNANCE.md`, `PLAYBOOK.md`, `MANIFESTO.md`) cùng tùy chọn đính kèm file `.md` tùy chỉnh.
