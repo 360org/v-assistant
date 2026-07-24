@@ -192,6 +192,21 @@ export async function deleteAiRouterConnection(id: string): Promise<void> {
   }
 }
 
+export async function toggleAiRouterConnection(id: string, isActive: boolean): Promise<AiRouterConnection> {
+  const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/${encodeURIComponent(id)}/toggle`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ isActive }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || `AI Router could not toggle the connection (${response.status})`);
+  }
+  const payload = (await response.json()) as { connection?: AiRouterConnection };
+  if (!payload.connection) throw new Error("AI Router did not return updated connection");
+  return payload.connection;
+}
+
 /**
  * One browser-OAuth client for every authorization-code provider published by
  * the vendored AI Router Core. Provider-specific PKCE and token exchange live

@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.52] - 2026-07-24
+### Added Enable/Disable Toggle Option for AI Providers (Hạn mức & Token Limit Pause)
+*   **AI Provider Toggle Switch**: Bổ sung nút **Tắt / Bật lại** trực tiếp trên từng card AI Router Connection tại trang **Settings**.
+*   **Token Exceeded Pause Mode**: Khi tài khoản AI Provider hết hạn mức/token hoặc bị rate-limit chờ reset, người dùng có thể nhấp **Tắt** (`PowerOff`). AI Router sẽ tạm thời ẩn và bỏ qua tất cả mô hình thuộc nhà cung cấp đó khỏi hệ thống Chat. Người dùng có thể nhấp **Bật lại** (`Power`) bất kỳ lúc nào khi hạn mức khôi phục!
+
 ## [1.0.51] - 2026-07-24
 ### Standardized Official App Protocol & Origin to vassistant.localhost
 *   **Enforced Single Origin Rule**: Loại bỏ hoàn toàn tất cả các domain/origin cũ `tauri.localhost` và `tauri://localhost` trong AI Router sidecar & cấu hình ứng dụng.

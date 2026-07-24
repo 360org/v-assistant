@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, HardDrive, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, Save, Sparkles, X } from "lucide-react";
+import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, HardDrive, KeyRound, LoaderCircle, Lock, LogIn, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X } from "lucide-react";
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { useApp } from "@/lib/store";
@@ -13,6 +13,7 @@ import {
   saveAiRouterConnection,
   signInWithAiRouterCore,
   testAiRouterConnection,
+  toggleAiRouterConnection,
   type AiRouterConnection,
   type AiRouterProvider,
 } from "@/runtime/aiRouter";
@@ -664,6 +665,23 @@ export function Settings() {
     }
   };
 
+  const toggleConnectionState = async (connection: AiRouterConnection) => {
+    setConnectionActionId(connection.id);
+    setConnectionError(null);
+    try {
+      const nextActive = connection.isActive === false;
+      await toggleAiRouterConnection(connection.id, nextActive);
+      setConnections((prev) =>
+        prev.map((c) => (c.id === connection.id ? { ...c, isActive: nextActive } : c))
+      );
+      void refreshAiRouter();
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnectionActionId(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
       <h1 className="text-2xl font-bold">Settings</h1>
@@ -811,13 +829,20 @@ export function Settings() {
             {connections.map((connection) => (
               <div
                 key={connection.id}
-                className="flex flex-col justify-between gap-3 p-4 rounded-2xl border border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900 transition-all shadow-md"
+                className={cn(
+                  "flex flex-col justify-between gap-3 p-4 rounded-2xl border transition-all shadow-md",
+                  connection.isActive === false
+                    ? "border-neutral-800/60 bg-neutral-950/70 opacity-80"
+                    : "border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900"
+                )}
               >
                 {/* Header: Name, Email & Status Badge */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-sm text-neutral-100 truncate">
-                      {connection.name || connection.provider}
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-neutral-100 truncate">
+                        {connection.name || connection.provider}
+                      </span>
                     </div>
                     <div className="mt-0.5 text-xs text-neutral-400 truncate">
                       {connection.email || connection.accountLabel || connection.id}
@@ -828,9 +853,16 @@ export function Settings() {
                     tone={connection.isActive === false ? "neutral" : connection.testStatus === "Verified" ? "green" : "gold"}
                     className="shrink-0 font-medium"
                   >
-                    {connection.isActive === false ? "Disabled" : connection.testStatus || "Pending test"}
+                    {connection.isActive === false ? "Tắt (Bị ẩn)" : connection.testStatus || "Pending test"}
                   </Badge>
                 </div>
+
+                {/* Disabled Note */}
+                {connection.isActive === false && (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300 font-medium flex items-center gap-1.5">
+                    <span>⏸️ Provider đang TẮT (Hết token/chờ reset). AI Router tạm thời bỏ qua tài khoản này.</span>
+                  </div>
+                )}
 
                 {/* Error message (If present - confined strictly to this card) */}
                 {connection.lastError && (
@@ -852,6 +884,28 @@ export function Settings() {
 
                 {/* Bottom Row: Action Buttons */}
                 <div className="flex items-center justify-end gap-1.5 pt-2.5 border-t border-neutral-800/80">
+                  <Button
+                    size="sm"
+                    variant={connection.isActive === false ? "secondary" : "ghost"}
+                    title={connection.isActive === false ? "Bật lại Provider này" : "Tắt Provider (Tạm dừng khi hết token/hạn mức)"}
+                    onClick={() => void toggleConnectionState(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className={cn(
+                      "h-8 px-2.5 text-xs font-medium",
+                      connection.isActive === false
+                        ? "border border-gold-500/40 text-gold-300 hover:bg-gold-500/20"
+                        : "text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10"
+                    )}
+                  >
+                    {connectionActionId === connection.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : connection.isActive === false ? (
+                      <Power className="size-3.5" />
+                    ) : (
+                      <PowerOff className="size-3.5" />
+                    )}
+                    {connection.isActive === false ? "Bật lại" : "Tắt"}
+                  </Button>
                   <Button
                     size="sm"
                     variant="secondary"

@@ -1012,7 +1012,7 @@ const server = createServer((request, response) => {
         authType,
         credentialRef,
         defaultModel: typeof input.defaultModel === "string" ? input.defaultModel : undefined,
-        isActive: existing?.isActive !== false,
+        isActive: typeof input.isActive === "boolean" ? input.isActive : (existing?.isActive !== false),
         testStatus: existing?.testStatus || "Pending test",
         connectedAt: existing?.connectedAt || new Date().toISOString(),
       };
@@ -1021,6 +1021,23 @@ const server = createServer((request, response) => {
       await writeConnections(connections);
       sendJson(response, 201, { connection });
     }).catch((error) => sendJson(response, 400, { error: error.message }));
+    return;
+  }
+  const togglePath = url.pathname.match(/^\/v1\/providers\/([^/]+)\/toggle$/);
+  if (togglePath && (request.method === "POST" || request.method === "PATCH")) {
+    const id = decodeURIComponent(togglePath[1]);
+    void readJson(request)
+      .then(async (input) => {
+        const existing = await readConnection(id);
+        if (!existing) {
+          sendJson(response, 404, { error: "AI Router connection not found." });
+          return;
+        }
+        const newActive = typeof input?.isActive === "boolean" ? input.isActive : (existing.isActive === false);
+        const updated = await updateConnection(id, { isActive: newActive });
+        sendJson(response, 200, { connection: updated });
+      })
+      .catch((error) => sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }));
     return;
   }
   const connectionPath = url.pathname.match(/^\/v1\/providers\/([^/]+)$/);
