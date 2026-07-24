@@ -2,6 +2,150 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.72] - 2026-07-24
+### Agent Markdown Spec Docs, Fast Sign-in Auto-Scroll & Row 2 Vertical Layout
+*   **Agent Markdown Spec Documents (.md)**: Bổ sung khu vực đính kèm & quản lý file đặc tả Markdown Specs trong Agent Modal (`Agents.tsx`), hỗ trợ đầy đủ 11 file tiêu chuẩn Paperclip / 360 CORP (`SOUL.md`, `MISSION.md`, `NORTH_STAR.md`, `HEARTBEAT.md`, `PRINCIPLES.md`, `VALUES.md`, `THINKING.md`, `DECISION.md`, `GOVERNANCE.md`, `PLAYBOOK.md`, `MANIFESTO.md`) cùng tính năng tạo file `.md` tùy chỉnh.
+*   **Fast Sign-in Auto-Scroll UX**: Tự động cuộn trang mượt mà (`smooth-scroll`) tới vị trí khung đăng nhập OAuth / Callback URL ngay khi người dùng bấm nút Fast Sign-in, xóa bỏ hoàn toàn rào cản ẩn khuất dưới màn hình.
+*   **Row 2 Vertical Stack Layout**: Tách Row 2 (Fast Sign-in) trong Settings Card thành 2 hàng riêng biệt (Tiêu đề phía trên, 4 nút Vendor ở hàng dưới), chống vỡ tràn chữ tuyệt đối.
+
+## [1.0.71] - 2026-07-24
+### Agent Markdown Specs & Fast Sign-in Smooth Auto-Scroll
+*   **Agent Markdown Spec Documents (.md)**: Bổ sung khu vực quản lý file đặc tả Markdown Specs trong Agent Modal (`Agents.tsx`), hỗ trợ sẵn 11 file chuẩn Paperclip / 360 CORP (`SOUL.md`, `MISSION.md`, `NORTH_STAR.md`, `HEARTBEAT.md`, `PRINCIPLES.md`, `VALUES.md`, `THINKING.md`, `DECISION.md`, `GOVERNANCE.md`, `PLAYBOOK.md`, `MANIFESTO.md`) cùng tùy chọn đính kèm file `.md` tùy chỉnh.
+*   **Fast Sign-in Smooth Auto-Scroll**: Tự động cuộn trang mượt mà (`smooth-scroll`) xuống đúng khung kết nối AI Vendor khi bấm nút Fast Sign-in, không còn bị ẩn khuất dưới màn hình làm người dùng bối rối.
+*   **Row 2 Multi-line Layout**: Chuyển Row 2 (Fast Sign-in) trong Settings Card thành 2 hàng dọc (Tiêu đề ở trên, 4 nút Vendor ở dưới) chống đè tràn chữ trên mọi kích thước màn hình.
+
+## [1.0.70] - 2026-07-24
+### Pixel-Perfect Account & Preferences Mockup Design
+*   **Exact Mockup Layout**: Tái thiết kế toàn bộ khu vực **Tài khoản & Thiết lập (Account & Preferences)** khớp chính xác 100% bản vẽ Mockup người dùng yêu cầu:
+    *   Thanh chỉ báo màu xanh dương nổi bật (`|`) ở tiêu đề nhóm.
+    *   Hồ sơ cá nhân với Avatar 3 lớp có vòng sáng phát quang gradient xanh cyan/blue và viền ánh kim.
+    *   Icon hộp vuông màu xanh đậm (`Zap`, `Globe`, `Palette`) định danh cho từng hàng tùy chọn.
+    *   Phân tách từng dòng mượt mà bằng đường vạch mờ `divide-neutral-800/70`.
+    *   Nút Fast Sign-in gắn logo Vendor chuẩn, nút Đăng xuất chữ đỏ viền đỏ sang trọng.
+
+## [1.0.69] - 2026-07-24
+### Perfect Proportioned Sidebar Banner Height
+*   **Optimal Banner Height (~175px)**: Bổ sung hiển thị danh sách 3 tính năng nổi bật (`features`) với icon tích xanh `CheckCircle2` trong `SidebarAdBanner.tsx`. Chiều cao của Banner đạt chuẩn ~175px vừa khít hoàn hảo như khung hình ảnh 2, giàu thông tin và thẩm mỹ cao.
+
+## [1.0.68] - 2026-07-24
+### Isolated Fast Sign-in Button Loaders
+*   **Isolated Button Spinners**: Sửa triệt để lỗi 4 nút Fast Sign-in đồng loạt quay spinner khi click vào 1 nút. Giờ đây chỉ đúng 1 nút AI Account được người dùng bấm chọn mới hiển thị spinner xoay tròn (`fastSignInAccountId`), 3 nút còn lại giữ nguyên icon Đăng nhập tĩnh.
+
+## [1.0.67] - 2026-07-24
+### Compact Sidebar Banner & Unified Settings Card
+*   **Fixed Sidebar Banner Height**: Loại bỏ `flex-1` và `min-h-[220px]` trong `Sidebar.tsx`, đưa Banner về chiều cao siêu gọn tự nhiên (~110px) ôm sát nội dung thay vì giãn khoảng trống đen cồng kềnh.
+*   **Single Unified Settings Card**: Gộp toàn bộ Tài khoản & Thiết lập vào duy nhất 1 Group Card duy nhất khoa học và thẩm mỹ.
+*   **Persistent Model Packs**: Tự động lưu trữ và đồng bộ khôi phục Custom Model Packs từ App Vault.
+
+## [1.0.66] - 2026-07-24
+### Refactored Settings Layout & Card Separations
+*   **Scientific Section Separation**: Tách rời **Tài khoản ứng dụng (Account Profile)** và **Tùy chỉnh ứng dụng (Preferences)** thành 2 Card riêng biệt độc lập.
+*   **Enhanced Hierarchy & Spacing**: Thêm icon bảo mật mã hóa App Vault, tổ chức lại nút Đổi tên / Đăng xuất, tách biệt khu vực Đăng nhập nhanh AI Accounts và bộ đôi tùy biến Ngôn ngữ & Chủ đề giao diện.
+
+## [1.0.65] - 2026-07-24
+### Compact Sidebar Ad Banner Layout
+*   **Ultra-Compact Sidebar Ad Banner**: Thu gọn kích thước banner quảng cáo `VUA AI — 360 CORP` ở Sidebar trái, bỏ box 3 dòng bullet points cồng kềnh, giảm chiều cao tối thiểu từ `240px` xuống `135px`.
+*   **Optimal Proportion**: Banner vừa vặn, tinh tế, không làm chiếm diện tích danh mục Sidebar.
+
+## [1.0.64] - 2026-07-24
+### Integrated Theme & Language into Account Profile Card
+*   **Unified Account & Preferences Hub**: Nhúng trực tiếp cài đặt **Ngôn ngữ hiển thị** (`Tiếng Việt / English`) và **Chủ đề giao diện** (`Dark Emerald / Warm Gold / Midnight Blue`) vào bên trong **Account Profile Card**.
+*   **Clean Layout**: Xóa bỏ section `Giao diện & Ngôn ngữ` đứng riêng lẻ giúp giao diện Settings gọn gàng, liền mạch và chuẩn UX.
+
+## [1.0.63] - 2026-07-24
+### Isolated Action Button Spinner States
+*   **Specific Action Keying**: Chuyển đổi trạng thái `connectionActionId` thành `connectionActionKey` kèm theo action prefix (`test:`, `renew:`, `toggle:`, `reset:`).
+*   **Single Spinner Execution**: Khi người dùng nhấn nút **Test**, chỉ DUY NHẤT nút **Test** mới hiển thị icon xoay loading `LoaderCircle`, các nút bên cạnh (`Tắt`, `Renew`, `Reset`) giữ nguyên icon gốc của mình giúp giao diện chuyên nghiệp và không bị nhầm lẫn.
+
+## [1.0.62] - 2026-07-24
+### Independent Local User Profile Persistence
+*   **Local User Profile Protection**: Sửa hàm `ensureLocalUser` trong `src/lib/store.tsx` để bảo vệ thông tin Local Profile đã khởi tạo ban đầu.
+*   **Vendor Connection Isolation**: Khi kết nối hoặc đăng nhập bất kỳ vendor mới nào (Grok, OpenAI, Gemini, v.v.), hệ thống chỉ thêm connection vào AI Router vault mà **KHÔNG ĐƯỢC THAY ĐỔI / GHI ĐÈ** thông tin Local User profile (Name, Detail, Avatar) của ứng dụng.
+
+## [1.0.61] - 2026-07-24
+### Collapsible Messages for Disabled AI Providers
+*   **Default Hidden Message Box**: Các box thông báo màu vàng (`⏸️ Provider đang TẮT`) và box lỗi màu đỏ (`Sign-in expired...`) ở mục **Provider Đã Tắt** mặc định được **ẨN đi**, giúp mỗi hàng provider cực kỳ gọn gàng (chỉ 1 dòng).
+*   **Toggle View Message**: Thêm nút **`[ ℹ️ Xem tin / Ẩn tin ]`** cho từng provider đã tắt. Khi người dùng cần xem nguyên nhân hoặc thông báo lỗi, chỉ cần nhấp nút để mở chi tiết.
+
+## [1.0.60] - 2026-07-24
+### Improved Vendor Config Box Position in Provider Manager
+*   **Optimal Config Box Position**: Khung cấu hình Vendor được chọn (`selectedProvider`) được di chuyển lên nằm **ngay phía dưới ô Search**, trước danh sách vendor.
+*   **UX Friendly**: Người dùng không cần phải cuộn xuống tận cuối danh sách 50+ vendor nữa; form đăng nhập/API key xuất hiện ngay lập tức ở tầm mắt khi chọn vendor.
+
+## [1.0.59] - 2026-07-24
+### Active Cards & Disabled ListView Hybrid Layout for AI Router
+*   **Active Cards Grid**: Các AI Provider đang hoạt động (`Active / Verified`) được giữ nguyên dưới dạng Card 2 cột to đẹp, nổi bật phía trên.
+*   **Disabled ListView Section**: Các AI Provider đã bị **Tắt** (`isActive === false`) tự động tách thành một danh sách ListView tinh gọn bên dưới (`Provider Đã Tắt / Hết Token`), giúp giao diện cực kỳ ngăn nắp.
+
+## [1.0.58] - 2026-07-24
+### Converted AI Router Provider Cards to Compact ListView
+*   **Compact ListView Layout**: Chuyển đổi giao diện danh sách AI Provider tại trang **Settings** từ dạng Grid 2 cột sang dạng **ListView** dọc tinh gọn.
+*   **Enhanced UX**: Hiển thị tên, email/account, status badge bên trái và thanh nút thao tác nhanh (`[⚡ Bật/Tắt]`, `[🧪 Test]`, `[🔄 Renew]`, `[🗑️ Reset]`) ngang hàng bên phải.
+
+## [1.0.57] - 2026-07-24
+### Active-First Provider Sorting in AI Router List
+*   **Automatic Sort Order**: Danh sách AI Router Provider tại trang **Settings** và API backend tự động ưu tiên đẩy tất cả các Provider đang hoạt động lên trên cùng.
+*   **Push Disabled to Bottom**: Các Provider đã bấm **Tắt** (`isActive === false`) tự động bị đẩy xuống cuối danh sách, giúp giao diện gọn gàng và ưu tiên các tài khoản active.
+
+## [1.0.56] - 2026-07-24
+### Fixed ReferenceError in AI Router Toggle Endpoint
+*   **Fix Toggle Connection Endpoint**: Sửa lỗi gọi sai tên hàm `readConnection(id)` thành `findConnection(id)` trong route handler `POST /v1/providers/:id/toggle` của AI Router sidecar.
+*   **Smooth Provider Toggling**: Nút **Tắt / Bật lại** Provider hoạt động trơn tru 100%, không còn bị crash sidecar hay bắn ra lỗi `readConnection is not defined`.
+
+## [1.0.55] - 2026-07-24
+### Allowed All Local & Tauri WebView Origins for AI Router Sidecar
+*   **Flexible CORS for Tauri Origins**: Hỗ trợ đầy đủ và linh hoạt các origin local của Tauri Desktop WebView (`http://tauri.localhost`, `tauri://localhost`, `http://vassistant.localhost`, `http://localhost:*`, `127.0.0.1`, `app://`).
+*   **Fix `AI Router unavailable: Load failed`**: Giải quyết triệt để lỗi chặn CORS giữa WebKit desktop webview và sidecar HTTP service (`:20128`).
+
+## [1.0.54] - 2026-07-24
+### Cleaned Hardcoded Sample Templates from Media Gallery
+*   **User Media Exclusive**: Loại bỏ hoàn toàn mớ ảnh mẫu/stock template thừa (`Featured Templates` & Unsplash stock items).
+*   **Clean Vault Layout**: Trang **Media Gallery** giờ đây hiển thị duy nhất tệp hình ảnh & phương tiện do chính người dùng hoặc AI Agent tải lên/gửi qua Chat (và Knowledge). Tích hợp giao diện Empty State sạch sẽ khi chưa có phương tiện nào.
+
+## [1.0.53] - 2026-07-24
+### Auto-Retry & Resilient Banner for AI Router Sidecar Connection
+*   **Startup Auto-Retry**: Thêm cơ chế tự động thử lại 3 lần (350ms delay) khi khởi động sidecar AI Router, loại bỏ triệt để lỗi chập chờn `AI Router unavailable: Load failed`.
+*   **Resilient Error Banner**: Không còn ẩn danh sách các card AI Provider khi gặp sự cố mạng tạm thời. Hiển thị banner thông báo kèm nút **`[ 🔄 Thử lại ]`** 1-click để kết nối lại tức thì mà không cần khởi động lại app.
+
+## [1.0.52] - 2026-07-24
+### Added Enable/Disable Toggle Option for AI Providers (Hạn mức & Token Limit Pause)
+*   **AI Provider Toggle Switch**: Bổ sung nút **Tắt / Bật lại** trực tiếp trên từng card AI Router Connection tại trang **Settings**.
+*   **Token Exceeded Pause Mode**: Khi tài khoản AI Provider hết hạn mức/token hoặc bị rate-limit chờ reset, người dùng có thể nhấp **Tắt** (`PowerOff`). AI Router sẽ tạm thời ẩn và bỏ qua tất cả mô hình thuộc nhà cung cấp đó khỏi hệ thống Chat. Người dùng có thể nhấp **Bật lại** (`Power`) bất kỳ lúc nào khi hạn mức khôi phục!
+
+## [1.0.51] - 2026-07-24
+### Standardized Official App Protocol & Origin to vassistant.localhost
+*   **Enforced Single Origin Rule**: Loại bỏ hoàn toàn tất cả các domain/origin cũ `tauri.localhost` và `tauri://localhost` trong AI Router sidecar & cấu hình ứng dụng.
+*   **Strict Standard Protocol**: Đơn nhất 1 origin duy nhất chuẩn hóa toàn hệ thống: `http://vassistant.localhost` (`customProtocol: vassistant`).
+
+## [1.0.50] - 2026-07-24
+### Restored Full Agent Response Text Display
+*   **Full Response Content Render**: Sửa dứt điểm lỗi ẩn câu trả lời của Agent hoặc thay thế câu trả lời thực tế bằng nhãn tĩnh. Toàn bộ nội dung văn bản, bảng biểu, danh sách và suy luận `<think>` từ Agent đều được hiển thị đầy đủ 100%.
+*   **Reasoning Extraction**: Tự động hiển thị phần suy luận suy nghĩ `💭 Suy luận Agent` nếu mô hình AI sử dụng định dạng `<think>...` thay vì nuốt mất chuỗi nội dung.
+
+## [1.0.49] - 2026-07-24
+### Fixed Continuous Blinking of Legacy Task Messages in Chat History
+*   **Legacy Message Status Fix**: Khắc phục triệt để lỗi bong bóng tin nhắn cũ trong lịch sử chat bị nhấp nháy đèn báo `⏳ Tác vụ đang chờ thực thi...` liên tục.
+*   **Active Message Scoping**: Đèn báo hiệu ứng `animate-ping` & `animate-pulse` chỉ xuất hiện duy nhất cho tin nhắn ĐANG thực thi ở thời điểm hiện tại. Các tin nhắn đã xử lý xong trong lịch sử được chuyển về trạng thái tĩnh `✅ Tác vụ đã hoàn tất` sạch sẽ, không gây mất tập trung.
+
+## [1.0.48] - 2026-07-24
+### Added Sidebar Version Update Notification Badge
+*   **Sidebar Version Update Badge**: Thêm badge thông báo phiên bản mới nhấp nháy phát sáng (`vX.Y.Z`) trực tiếp trên mục menu **Settings** ở Sidebar trái. Tự động kiểm tra GitHub Releases mỗi khi có bản phát hành mới để báo cho người dùng nhấp vào Cài đặt để cập nhật 1-click.
+
+## [1.0.47] - 2026-07-24
+### Added Expand / Maximize Multi-line Editor for Chat Composer
+*   **Expand / Maximize Multi-line Editor**: Thêm nút biểu tượng Phóng to / Thu nhỏ (`Maximize2` / `Minimize2`) trực tiếp trên ô nhập liệu Chat Input Box.
+*   **Multi-line Code Editor Mode**: Khi bấm mở rộng, ô nhập liệu sẽ tự động giãn chiều cao rộng rãi (`h-64 sm:h-80`) kèm thanh công cụ hiển thị số dòng, số ký tự theo thời gian thực (`X dòng · Y ký tự`), giúp người dùng thoải mái gõ và chỉnh sửa các đoạn văn bản dài, prompt phức tạp hoặc mã nguồn nhiều dòng.
+
+## [1.0.46] - 2026-07-24
+### Refined Drag & Drop Scope to Input Box Only
+*   **Input Box Drag & Drop Scoping**: Tinh chỉnh lại khu vực Kéo & Thả (Drag & Drop): Thu gọn phạm vi thả tệp/thư mục và hiệu ứng overlay thông báo vừa vặn duy nhất trong khung nhập liệu Chat Input Box (không phủ mờ toàn bộ màn hình Chat), mang lại trải nghiệm tinh tế và chuẩn xác cho người dùng.
+
+## [1.0.45] - 2026-07-24
+### Added GitHub Auto-Updater, Drag & Drop Folders/Files & Smart Task Status Widget
+*   **GitHub Releases Auto-Updater**: Thêm cơ chế tự động kiểm tra phiên bản mới từ GitHub Releases (`360org/v-assistant`). Hiển thị thông báo nổi bật tại màn hình Settings kèm Release Notes và nút tải tự động `.dmg` 1-click.
+*   **Drag & Drop Folders and Files**: Hỗ trợ kéo thả trực tiếp Thư mục (Folder) và Tệp tin từ macOS Finder vào khung Chat. Tự động nhận diện đường dẫn tuyệt đối của thư mục và tự điền cấu hình yêu cầu làm việc cho Agent.
+*   **Smart Background Task Widget & Status**: Lọc và chỉ hiển thị Widget "1 task running" cho các tiến trình chạy ngầm đa nhiệm (build image, async runner). Khắc phục triệt để lỗi bong bóng chat bị rỗng khi task chưa thực thi.
+
 ## [1.0.44] - 2026-07-23
 ### Added Step-by-Step Wizard, Realtime Status, Theme/Language & Data Export/Import
 *   **Step-by-Step Connector Wizard**: Tích hợp Interactive Wizard 3 bước cho trang Integrations hướng dẫn từng bước chuẩn bị credentials, nhập thông tin và kiểm tra kết nối.

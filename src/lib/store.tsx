@@ -28,6 +28,7 @@ import {
 export const fileObjectURLs = new Map<string, string>();
 import { parseSkillMd } from "@/lib/skills";
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
+import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
   notifyTelegram,
@@ -105,6 +106,8 @@ export interface AgentConfig {
   memory?: string[];
   /** Enabled skill IDs/names for this agent. */
   skills?: string[];
+  /** Custom Markdown spec docs (SOUL.md, MISSION.md, NORTH_STAR.md, etc.) */
+  docs?: Record<string, string>;
 }
 
 /**
@@ -213,6 +216,13 @@ interface PersistedState {
   language?: "vi" | "en";
   /** Chủ đề giao diện: "dark" | "gold" | "midnight" */
   theme?: "dark" | "gold" | "midnight";
+}
+
+export interface ActiveBackgroundTask {
+  id: string;
+  name: string;
+  command?: string;
+  startedAt: number;
 }
 
 const STORAGE_KEY = "v-assistant-state-v1";
@@ -348,6 +358,11 @@ interface AppStore extends PersistedState {
   setTheme: (theme: "dark" | "gold" | "midnight") => void;
   exportFullBackupData: () => string;
   importFullBackupData: (jsonStr: string) => boolean;
+  activeBackgroundTasks: ActiveBackgroundTask[];
+  startBackgroundTask: (name: string, command?: string) => string;
+  stopBackgroundTask: (id: string) => void;
+  appUpdate: AppUpdateInfo | null;
+  checkForAppUpdate: () => Promise<AppUpdateInfo>;
   setActiveAgent: (agentId: string | null) => void;
   /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
   agents: AgentTemplate[];
@@ -377,6 +392,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>("chat");
   const [chatDraft, setChatDraft] = useState<string | null>(null);
   const [activeSkill, setActiveSkill] = useState<ActiveSkill | null>(null);
+  const [appUpdate, setAppUpdate] = useState<AppUpdateInfo | null>(null);
+
+  const checkForAppUpdate = useCallback(async () => {
+    const info = await checkAppUpdate();
+    setAppUpdate(info);
+    return info;
+  }, []);
+
+  useEffect(() => {
+    void checkForAppUpdate();
+    const interval = window.setInterval(checkForAppUpdate, 300_000);
+    return () => window.clearInterval(interval);
+  }, [checkForAppUpdate]);
   const [oauthReturn, setOauthReturn] = useState<OAuthReturn | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [hasHydratedCredentials, setHasHydratedCredentials] = useState(false);
@@ -784,14 +812,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const ensureLocalUser = useCallback((input: Omit<LocalUser, "createdAt">) => {
-    const newUser: LocalUser = { ...input, createdAt: Date.now() };
-    const userKey = getUserStorageKey(newUser);
-    const existingState = loadStateForUser(userKey);
+    setState((s) => {
+      // Nếu đã có Local User profile trên thiết bị, giữ nguyên profile người dùng hiện tại
+      if (s.user) {
+        return {
+          ...s,
+          onboarded: true,
+        };
+      }
 
-    setState({
-      ...existingState,
-      user: newUser,
-      onboarded: true,
+      // Nếu là lần đầu tiên chưa từng có Local User profile, tạo mới từ thông tin vendor kết nối đầu tiên
+      const newUser: LocalUser = { ...input, createdAt: Date.now() };
+      const userKey = getUserStorageKey(newUser);
+      const existingState = loadStateForUser(userKey);
+
+      return {
+        ...existingState,
+        user: newUser,
+        onboarded: true,
+      };
     });
   }, []);
 
@@ -1027,6 +1066,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const [activeBackgroundTasks, setActiveBackgroundTasks] = useState<ActiveBackgroundTask[]>([]);
+
+  const startBackgroundTask = useCallback((name: string, command?: string) => {
+    const id = `bg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setActiveBackgroundTasks((prev) => [...prev, { id, name, command, startedAt: Date.now() }]);
+    return id;
+  }, []);
+
+  const stopBackgroundTask = useCallback((id: string) => {
+    setActiveBackgroundTasks((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const toggleAgent = useCallback((agentId: string) => {
     setState((s) => ({
@@ -1480,6 +1531,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTheme,
       exportFullBackupData,
       importFullBackupData,
+      activeBackgroundTasks,
+      startBackgroundTask,
+      stopBackgroundTask,
+      appUpdate,
+      checkForAppUpdate,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,

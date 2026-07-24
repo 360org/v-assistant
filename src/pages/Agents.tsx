@@ -1,17 +1,21 @@
 import { useState, useMemo } from "react";
 import { SKILLS, parseSkillMd, toTemplate } from "@/lib/skills";
+import { cn } from "@/lib/utils";
 import {
   Check,
   Download,
+  FileCode,
+  FilePlus,
+  FileText,
   Link as LinkIcon,
   Loader2,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   Plus,
   Settings2,
   Trash2,
   X,
-  Maximize2,
-  Minimize2,
 } from "lucide-react";
 import { type AgentTemplate } from "@/lib/catalog";
 import { useApp, type AgentConfig } from "@/lib/store";
@@ -264,39 +268,6 @@ function AgentConfigDialog({
 
   const { customSkills } = useApp();
 
-  const handleExport = () => {
-    const skillsList = enabledSkills.map((s) => `- ${s}`).join("\n");
-    const memoriesList = memory.map((m) => `- ${m}`).join("\n");
-    const md = `---
-name: ${agent.name}
-emoji: ${agent.emoji}
-category: ${agent.category}
-description: ${agent.description}
----
-
-# Instructions
-${instructions || "No instructions provided."}
-
-# Soul
-${soul || "No soul provided."}
-
-# Memory
-${memoriesList || "No memory entries."}
-
-# Skills
-${skillsList || "No skills enabled."}
-`;
-
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `${agent.id}-config.md`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const allSkills = useMemo(() => {
     const builtIn = SKILLS.map((s) => ({
       id: s.id,
@@ -333,6 +304,72 @@ ${skillsList || "No skills enabled."}
     return [...builtInIds, ...customIds];
   });
 
+  const [docs, setDocs] = useState<Record<string, string>>(() => {
+    const initialDocs = initial.docs ? { ...initial.docs } : {};
+    if (initial.soul && !initialDocs["SOUL.md"]) {
+      initialDocs["SOUL.md"] = initial.soul;
+    }
+    return initialDocs;
+  });
+  const [activeMdFile, setActiveMdFile] = useState<string>("SOUL.md");
+  const [customMdInput, setCustomMdInput] = useState<string>("");
+
+  const addMdFile = (fileName: string) => {
+    const name = fileName.trim();
+    if (!name) return;
+    const formattedName = name.endsWith(".md") || name.endsWith(".MD") ? name : `${name}.md`;
+    setDocs((prev) => ({ ...prev, [formattedName]: prev[formattedName] || "" }));
+    setActiveMdFile(formattedName);
+    setCustomMdInput("");
+  };
+
+  const removeMdFile = (fileName: string) => {
+    const nextDocs = { ...docs };
+    delete nextDocs[fileName];
+    setDocs(nextDocs);
+    const keys = Object.keys(nextDocs);
+    if (keys.length > 0) {
+      setActiveMdFile(keys[0]);
+    } else {
+      setActiveMdFile("SOUL.md");
+    }
+  };
+
+  const handleExport = () => {
+    let md = `# Agent Configuration: ${agent.name}\n\n`;
+    if (instructions) md += `## Instructions\n${instructions}\n\n`;
+    if (soul) md += `## Soul\n${soul}\n\n`;
+    if (memory.length) md += `## Memory\n${memory.map((m) => `- ${m}`).join("\n")}\n\n`;
+    if (enabledSkills.length) md += `## Skills\n${enabledSkills.map((s) => `- ${s}`).join("\n")}\n\n`;
+    Object.entries(docs).forEach(([filename, content]) => {
+      if (content.trim()) {
+        md += `## File: ${filename}\n\`\`\`markdown\n${content}\n\`\`\`\n\n`;
+      }
+    });
+
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${agent.name.toLowerCase().replace(/\s+/g, "-")}-config.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const PRESET_MD_FILES = [
+    "SOUL.md",
+    "MISSION.md",
+    "NORTH_STAR.md",
+    "HEARTBEAT.md",
+    "PRINCIPLES.md",
+    "VALUES.md",
+    "THINKING.md",
+    "DECISION.md",
+    "GOVERNANCE.md",
+    "PLAYBOOK.md",
+    "MANIFESTO.md",
+  ];
+
   const addMemory = () => {
     const v = newMemory.trim();
     if (!v) return;
@@ -349,7 +386,7 @@ ${skillsList || "No skills enabled."}
         className={
           isMaximized
             ? "fixed inset-4 z-50 flex flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl overflow-hidden"
-            : "max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
+            : "max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
         }
         onClick={(e) => e.stopPropagation()}
       >
@@ -379,12 +416,12 @@ ${skillsList || "No skills enabled."}
         </div>
 
         <div className={isMaximized ? "mt-5 grid grid-cols-2 gap-6 flex-1 overflow-hidden min-h-0" : "mt-4 flex flex-col gap-4"}>
-          {/* Cột 1: Instructions & Soul */}
+          {/* Cột 1: Instructions & Markdown Specs */}
           <div className={isMaximized ? "flex flex-col gap-4 h-full overflow-y-auto pr-1" : "flex flex-col gap-4"}>
-            <label className="text-xs text-neutral-400 flex flex-col flex-1">
+            <label className="text-xs text-neutral-400 flex flex-col shrink-0">
               Instructions — how it works
               <textarea
-                className={`${inputClass} mt-1 resize-none flex-1 min-h-28 ${isMaximized ? "h-full" : "h-36"}`}
+                className={`${inputClass} mt-1 resize-none h-32`}
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
                 placeholder={
@@ -393,15 +430,106 @@ ${skillsList || "No skills enabled."}
                 }
               />
             </label>
-            <label className="text-xs text-neutral-400 flex flex-col shrink-0">
-              Soul — personality & voice
-              <textarea
-                className={`${inputClass} mt-1 resize-y ${isMaximized ? "h-32 min-h-24" : "min-h-20"}`}
-                value={soul}
-                onChange={(e) => setSoul(e.target.value)}
-                placeholder="Warm, concise, a little witty. Speaks like a trusted colleague."
-              />
-            </label>
+
+            {/* Markdown Spec Documents Section */}
+            <div className="text-xs text-neutral-400 flex flex-col flex-1 min-h-0">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+                  <FileCode className="size-3.5 text-gold-400" />
+                  Markdown Spec Documents (.md)
+                </span>
+                <span className="text-[10px] text-neutral-500">Paperclip / 360 Spec</span>
+              </div>
+
+              {/* Active Markdown Tabs */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {Object.keys(docs).length > 0 ? (
+                  Object.keys(docs).map((fileName) => (
+                    <div
+                      key={fileName}
+                      onClick={() => setActiveMdFile(fileName)}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-mono transition-all border",
+                        activeMdFile === fileName
+                          ? "border-gold-500/50 bg-gold-500/15 text-gold-300 font-bold shadow-xs"
+                          : "border-neutral-800 bg-neutral-950 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                      )}
+                    >
+                      <FileText className="size-3 text-gold-400" />
+                      <span>{fileName}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeMdFile(fileName);
+                        }}
+                        className="ml-0.5 rounded p-0.5 text-neutral-500 hover:text-red-400"
+                        title="Remove file"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-neutral-500 italic">Chưa đính kèm file .md</span>
+                )}
+              </div>
+
+              {/* Quick Add Presets & Custom File Input */}
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                <span className="text-[10px] text-neutral-500 font-medium mr-1">Tạo nhanh:</span>
+                {PRESET_MD_FILES.map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => addMdFile(preset)}
+                    className={cn(
+                      "cursor-pointer rounded-md border border-neutral-800 bg-neutral-950 px-1.5 py-0.5 text-[10px] font-mono transition-all hover:bg-neutral-800",
+                      docs[preset] ? "text-emerald-400 border-emerald-500/30" : "text-neutral-400 hover:text-white"
+                    )}
+                    title={`Thêm ${preset}`}
+                  >
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-2 flex gap-2">
+                <input
+                  className={`${inputClass} text-xs py-1 flex-1 font-mono`}
+                  value={customMdInput}
+                  onChange={(e) => setCustomMdInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addMdFile(customMdInput);
+                    }
+                  }}
+                  placeholder="Nhập tên file tùy chỉnh (e.g. RULES.md)..."
+                />
+                <Button size="sm" variant="secondary" onClick={() => addMdFile(customMdInput)} disabled={!customMdInput.trim()} className="h-8 text-xs">
+                  <FilePlus className="size-3.5" /> Add MD
+                </Button>
+              </div>
+
+              {/* Markdown Content Editor */}
+              {activeMdFile && (
+                <div className="mt-2.5 flex flex-col flex-1">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-gold-400 mb-1">
+                    <span>Editing {activeMdFile}</span>
+                    <span className="text-[10px] text-neutral-500">Auto-saved to Agent</span>
+                  </div>
+                  <textarea
+                    className={`${inputClass} resize-y font-mono text-xs ${isMaximized ? "flex-1 min-h-36" : "min-h-28"}`}
+                    value={docs[activeMdFile] || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDocs((prev) => ({ ...prev, [activeMdFile]: val }));
+                      if (activeMdFile === "SOUL.md") setSoul(val);
+                    }}
+                    placeholder={`Nội dung định dạng Markdown cho ${activeMdFile}...`}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Cột 2: Memory & Skills */}
@@ -512,9 +640,10 @@ ${skillsList || "No skills enabled."}
             onClick={() =>
               onSave({
                 instructions: instructions.trim() || undefined,
-                soul: soul.trim() || undefined,
+                soul: (docs["SOUL.md"] || soul).trim() || undefined,
                 memory: memory.length ? memory : undefined,
                 skills: enabledSkills,
+                docs: Object.keys(docs).length ? docs : undefined,
               })
             }
           >

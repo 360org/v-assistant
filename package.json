@@ -1,7 +1,7 @@
 {
   "name": "v-assistant",
   "private": true,
-  "version": "1.0.44",
+  "version": "1.0.72",
   "type": "module",
   "description": "V Assistant — AI for everyone. Download, install, login, connect, start.",
   "author": {
@@ -22,6 +22,7 @@
     "preview": "vite preview",
     "install:local": "node scripts/install-local.mjs",
     "build:local": "npx tauri build && node scripts/install-local.mjs",
+    "tauri:dev": "npx tauri dev",
     "tauri": "tauri"
   },
   "dependencies": {

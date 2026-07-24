@@ -116,6 +116,42 @@ function normalizeModels(payload: unknown): AiRouterModel[] {
     .filter((model) => model.id);
 }
 
+import { vaultGet, vaultSet } from "./vault";
+
+const PACKS_VAULT_KEY = "ai_router_custom_packs_v1";
+
+async function persistPacksToVault(packs: AiRouterPack[]): Promise<void> {
+  try {
+    await vaultSet(PACKS_VAULT_KEY, JSON.stringify(packs));
+  } catch {
+    /* ignore vault write errors */
+  }
+}
+
+export async function syncSavedPacksFromVault(): Promise<void> {
+  try {
+    const raw = await vaultGet(PACKS_VAULT_KEY);
+    if (!raw) return;
+    const savedPacks = JSON.parse(raw) as AiRouterPack[];
+    if (!Array.isArray(savedPacks) || savedPacks.length === 0) return;
+
+    const currentPacks = await getAiRouterPacks().catch(() => []);
+    const currentPackIds = new Set(currentPacks.map((p) => p.id));
+
+    for (const pack of savedPacks) {
+      if (!currentPackIds.has(pack.id)) {
+        await fetch(`${AI_ROUTER_BASE_URL}/packs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pack),
+        }).catch(() => null);
+      }
+    }
+  } catch {
+    /* ignore restore errors */
+  }
+}
+
 export async function getAiRouterPacks(signal?: AbortSignal): Promise<AiRouterPack[]> {
   const response = await fetch(`${AI_ROUTER_BASE_URL}/packs`, { signal });
   if (!response.ok) throw new Error(`AI Router packs are unavailable (${response.status})`);
@@ -131,32 +167,62 @@ export async function saveAiRouterPack(input: Omit<AiRouterPack, "id"> & { id?: 
   });
   const payload = (await response.json()) as { pack?: AiRouterPack; error?: string };
   if (!response.ok || !payload.pack) throw new Error(payload.error || `AI Router could not save the pack (${response.status})`);
+
+  // Persist updated packs list to Vault
+  const latestPacks = await getAiRouterPacks().catch(() => [payload.pack!]);
+  void persistPacksToVault(latestPacks);
+
   return payload.pack;
 }
 
 export async function deleteAiRouterPack(id: string): Promise<void> {
   const response = await fetch(`${AI_ROUTER_BASE_URL}/packs/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (response.status !== 204) throw new Error(`AI Router could not delete the pack (${response.status})`);
+
+  // Persist updated packs list to Vault
+  const latestPacks = await getAiRouterPacks().catch(() => []);
+  void persistPacksToVault(latestPacks);
 }
 
 export async function getAiRouterModels(signal?: AbortSignal): Promise<AiRouterModel[]> {
+  await syncSavedPacksFromVault().catch(() => null);
   const response = await fetch(`${AI_ROUTER_BASE_URL}/models`, { signal });
   if (!response.ok) throw new Error(`AI Router is unavailable (${response.status})`);
   return normalizeModels(await response.json());
 }
 
 export async function getAiRouterConnections(signal?: AbortSignal): Promise<AiRouterConnection[]> {
-  const response = await fetch(`${AI_ROUTER_BASE_URL}/providers`, { signal });
-  if (!response.ok) throw new Error(`AI Router connections are unavailable (${response.status})`);
-  const payload = (await response.json()) as { connections?: AiRouterConnection[] };
-  return payload.connections ?? [];
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const response = await fetch(`${AI_ROUTER_BASE_URL}/providers`, { signal });
+      if (!response.ok) throw new Error(`AI Router connections are unavailable (${response.status})`);
+      const payload = (await response.json()) as { connections?: AiRouterConnection[] };
+      return payload.connections ?? [];
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+      await new Promise((res) => setTimeout(res, 350));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export async function getAiRouterProviderCatalog(signal?: AbortSignal): Promise<AiRouterProvider[]> {
-  const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/catalog`, { signal });
-  if (!response.ok) throw new Error(`AI Router provider catalog is unavailable (${response.status})`);
-  const payload = (await response.json()) as { providers?: AiRouterProvider[] };
-  return payload.providers ?? [];
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/catalog`, { signal });
+      if (!response.ok) throw new Error(`AI Router provider catalog is unavailable (${response.status})`);
+      const payload = (await response.json()) as { providers?: AiRouterProvider[] };
+      return payload.providers ?? [];
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      lastErr = err;
+      await new Promise((res) => setTimeout(res, 350));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export async function saveAiRouterConnection(connection: CreateAiRouterConnection): Promise<AiRouterConnection> {
@@ -190,6 +256,21 @@ export async function deleteAiRouterConnection(id: string): Promise<void> {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(payload?.error || `AI Router could not reset the connection (${response.status})`);
   }
+}
+
+export async function toggleAiRouterConnection(id: string, isActive: boolean): Promise<AiRouterConnection> {
+  const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/${encodeURIComponent(id)}/toggle`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ isActive }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || `AI Router could not toggle the connection (${response.status})`);
+  }
+  const payload = (await response.json()) as { connection?: AiRouterConnection };
+  if (!payload.connection) throw new Error("AI Router did not return updated connection");
+  return payload.connection;
 }
 
 /**

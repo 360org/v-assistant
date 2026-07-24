@@ -35,19 +35,18 @@ const legacyConnectionPath = join(process.cwd(), ".vua_ai_router_connections.jso
 
 function allowedUiOrigin(request) {
   const origin = request?.headers?.origin;
-  if (!origin || origin === uiOrigin) return origin || uiOrigin;
-  if (["http://vassistant.localhost", "https://vassistant.localhost", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"].includes(origin)) {
+  if (!origin) return uiOrigin;
+  // Allow all local Tauri app origins (tauri.localhost, tauri://localhost, vassistant.localhost, localhost, 127.0.0.1, app://, etc.)
+  if (
+    origin.includes("localhost") ||
+    origin.includes("tauri") ||
+    origin.includes("vassistant") ||
+    origin.includes("127.0.0.1") ||
+    origin.startsWith("app://")
+  ) {
     return origin;
   }
-  try {
-    const candidate = new URL(origin);
-    if (
-      candidate.protocol === "http:"
-      && ["127.0.0.1", "localhost"].includes(candidate.hostname)
-      && candidate.port === "1420"
-    ) return origin;
-  } catch { /* browser will reject the configured fallback origin */ }
-  return uiOrigin;
+  return origin || uiOrigin;
 }
 
 function corsHeaders(request) {
@@ -939,7 +938,16 @@ const server = createServer((request, response) => {
   }
   if (url.pathname === "/v1/providers" && request.method === "GET") {
     void readConnections()
-      .then((connections) => sendJson(response, 200, { connections }))
+      .then((connections) => {
+        const sorted = [...connections].sort((a, b) => {
+          const aDisabled = a.isActive === false;
+          const bDisabled = b.isActive === false;
+          if (aDisabled && !bDisabled) return 1;
+          if (!aDisabled && bDisabled) return -1;
+          return 0;
+        });
+        sendJson(response, 200, { connections: sorted });
+      })
       .catch((error) => sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }));
     return;
   }
@@ -1012,7 +1020,7 @@ const server = createServer((request, response) => {
         authType,
         credentialRef,
         defaultModel: typeof input.defaultModel === "string" ? input.defaultModel : undefined,
-        isActive: existing?.isActive !== false,
+        isActive: typeof input.isActive === "boolean" ? input.isActive : (existing?.isActive !== false),
         testStatus: existing?.testStatus || "Pending test",
         connectedAt: existing?.connectedAt || new Date().toISOString(),
       };
@@ -1021,6 +1029,23 @@ const server = createServer((request, response) => {
       await writeConnections(connections);
       sendJson(response, 201, { connection });
     }).catch((error) => sendJson(response, 400, { error: error.message }));
+    return;
+  }
+  const togglePath = url.pathname.match(/^\/v1\/providers\/([^/]+)\/toggle$/);
+  if (togglePath && (request.method === "POST" || request.method === "PATCH")) {
+    const id = decodeURIComponent(togglePath[1]);
+    void readJson(request)
+      .then(async (input) => {
+        const existing = await findConnection(id);
+        if (!existing) {
+          sendJson(response, 404, { error: "AI Router connection not found." });
+          return;
+        }
+        const newActive = typeof input?.isActive === "boolean" ? input.isActive : (existing.isActive === false);
+        const updated = await updateConnection(id, { isActive: newActive });
+        sendJson(response, 200, { connection: updated });
+      })
+      .catch((error) => sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }));
     return;
   }
   const connectionPath = url.pathname.match(/^\/v1\/providers\/([^/]+)$/);

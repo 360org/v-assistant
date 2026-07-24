@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, HardDrive, KeyRound, LoaderCircle, Lock, LogIn, Pencil, RefreshCw, RotateCcw, Save, Sparkles, X } from "lucide-react";
+import { Bot, Brain, Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, Globe, HardDrive, Info, KeyRound, LoaderCircle, Lock, LogIn, LogOut, Palette, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X, Zap } from "lucide-react";
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { useApp } from "@/lib/store";
-import { getProvider, type ProviderId } from "@/lib/catalog";
+
 import {
   AI_ROUTER_BASE_URL,
   captureGrokWebSsoCookie,
@@ -13,6 +13,7 @@ import {
   saveAiRouterConnection,
   signInWithAiRouterCore,
   testAiRouterConnection,
+  toggleAiRouterConnection,
   type AiRouterConnection,
   type AiRouterProvider,
 } from "@/runtime/aiRouter";
@@ -70,7 +71,8 @@ export function Settings() {
   const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
   const [manualCallbackUrl, setManualCallbackUrl] = useState("");
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
-  const [connectionActionId, setConnectionActionId] = useState<string | null>(null);
+  const [connectionActionKey, setConnectionActionKey] = useState<string | null>(null);
+  const [expandedMessageIds, setExpandedMessageIds] = useState<Record<string, boolean>>({});
   const [editingLocalUser, setEditingLocalUser] = useState(false);
   const [localUserName, setLocalUserName] = useState("");
   const [confirmingLocalLogout, setConfirmingLocalLogout] = useState(false);
@@ -285,6 +287,26 @@ export function Settings() {
     };
   };
 
+  const resetVendorForm = () => {
+    signInAttemptRef.current++;
+    setSelectedProvider(null);
+    setConnecting(false);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
+    setConnectMessage(null);
+    setApiKey("");
+  };
+
+  const selectVendorForm = (provider: AiRouterProvider) => {
+    signInAttemptRef.current++;
+    setSelectedProvider(provider);
+    setConnecting(false);
+    setManualAuthUrl(null);
+    setManualCallbackUrl("");
+    setConnectMessage(null);
+    setApiKey("");
+  };
+
   const connectSubscription = async (providerToConnect = selectedProvider) => {
     const oauthProvider = providerToConnect?.oauthProvider;
     if (!oauthProvider || !providerToConnect) return;
@@ -307,7 +329,15 @@ export function Settings() {
       if (attemptId !== signInAttemptRef.current) return;
       const providerConnections = latestConnections.filter((connection) => connection.provider === provider.id);
       const identity = accountIdentity(result);
-      const id = createConnectionId(provider.id);
+
+      // Deduplicate: If connection with same provider and email already exists, update existing connection instead of duplicating!
+      const existingConnection = providerConnections.find(
+        (c) =>
+          (identity.email && c.email?.toLowerCase().trim() === identity.email.toLowerCase().trim()) ||
+          (identity.accountLabel && c.accountLabel?.toLowerCase().trim() === identity.accountLabel.toLowerCase().trim()),
+      );
+      const id = existingConnection ? existingConnection.id : createConnectionId(provider.id);
+
       await vaultSet(`ai-router:credential:${id}`, JSON.stringify({
         accessToken,
         apiKey: result.apiKey,
@@ -328,10 +358,13 @@ export function Settings() {
         label: provider.name,
         email: identity.email,
         accountLabel: identity.accountLabel,
-        priority: providerConnections.length + 1,
+        priority: existingConnection ? existingConnection.priority : providerConnections.length + 1,
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
       });
+      if (existingConnection && existingConnection.isActive === false) {
+        await toggleAiRouterConnection(id, true);
+      }
       if (attemptId !== signInAttemptRef.current) return;
       ensureLocalUser({
         name: identity.accountLabel || provider.name,
@@ -404,27 +437,41 @@ export function Settings() {
     }
   };
 
+  const [fastSignInAccountId, setFastSignInAccountId] = useState<string | null>(null);
+  const vendorSectionRef = useRef<HTMLDivElement>(null);
+
   const signInLocalAiAccount = async (providerId: string) => {
-    setShowProviderManager(true);
-    setProviderQuery("");
-    setConnectMessage(null);
-    let catalog = providerCatalog;
-    if (!catalog.length) {
-      try {
-        catalog = await getAiRouterProviderCatalog();
-        setProviderCatalog(catalog);
-      } catch (error) {
-        setConnectMessage(error instanceof Error ? error.message : String(error));
+    setFastSignInAccountId(providerId);
+    try {
+      setShowProviderManager(true);
+      setProviderQuery("");
+      setConnectMessage(null);
+      setTimeout(() => {
+        vendorSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+      let catalog = providerCatalog;
+      if (!catalog.length) {
+        try {
+          catalog = await getAiRouterProviderCatalog();
+          setProviderCatalog(catalog);
+        } catch (error) {
+          setConnectMessage(error instanceof Error ? error.message : String(error));
+          return;
+        }
+      }
+      const provider = catalog.find((item) => item.id === providerId);
+      if (!provider?.oauthProvider) {
+        setConnectMessage("This AI account is not available from the local AI Router.");
         return;
       }
+      setSelectedProvider(provider);
+      await connectSubscription(provider);
+      setTimeout(() => {
+        vendorSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    } finally {
+      setFastSignInAccountId(null);
     }
-    const provider = catalog.find((item) => item.id === providerId);
-    if (!provider?.oauthProvider) {
-      setConnectMessage("This AI account is not available from the local AI Router.");
-      return;
-    }
-    setSelectedProvider(provider);
-    await connectSubscription(provider);
   };
 
   const copyManualAuthUrl = () => {
@@ -548,7 +595,7 @@ export function Settings() {
   };
 
   const renewConnectionToken = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`renew:${connection.id}`);
     setConnectionError(null);
     try {
       const vaultKey = `ai-router:credential:${connection.id}`;
@@ -621,12 +668,12 @@ export function Settings() {
       setConnectionError(error instanceof Error ? error.message : String(error));
       await refreshConnections();
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
     }
   };
 
   const testConnection = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`test:${connection.id}`);
     setConnectionError(null);
     try {
       await testAiRouterConnection(connection.id);
@@ -646,12 +693,12 @@ export function Settings() {
         prev.map((c) => (c.id === connection.id ? { ...c, lastError: errMsg, testStatus: "Failed" } : c)),
       );
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
     }
   };
 
   const resetConnection = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`reset:${connection.id}`);
     setConnectionError(null);
     try {
       await deleteAiRouterConnection(connection.id);
@@ -660,7 +707,24 @@ export function Settings() {
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : String(error));
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
+    }
+  };
+
+  const toggleConnectionState = async (connection: AiRouterConnection) => {
+    setConnectionActionKey(`toggle:${connection.id}`);
+    setConnectionError(null);
+    try {
+      const nextActive = connection.isActive === false;
+      await toggleAiRouterConnection(connection.id, nextActive);
+      setConnections((prev) =>
+        prev.map((c) => (c.id === connection.id ? { ...c, isActive: nextActive } : c))
+      );
+      void refreshAiRouter();
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConnectionActionKey(null);
     }
   };
 
@@ -670,39 +734,72 @@ export function Settings() {
       <p className="mt-1 text-neutral-400">Simple by design.</p>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-neutral-300">Account</h2>
+        <h2 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+          <span className="inline-block w-1 h-4 rounded-full bg-blue-500 shadow-xs shadow-blue-500/80" />
+          <span>Tài khoản & Thiết lập</span>
+          <span className="text-neutral-400 font-normal text-xs ml-0.5">(Account & Preferences)</span>
+        </h2>
         {user ? (
-          <Card className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{user.name}</div>
-              <div className="text-xs text-neutral-500">
-                AI Router account · {user.providerLabel || getProvider(user.provider as ProviderId).name}
-                {user.detail ? ` · ${user.detail}` : ""}
+          <Card className="mt-3 flex flex-col gap-0 p-5 rounded-2xl border border-blue-500/20 bg-neutral-950/75 shadow-2xl backdrop-blur-md divide-y divide-neutral-800/70">
+            {/* Row 1: Profile Identity */}
+            <div className="pb-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-tr from-blue-600 via-cyan-400 to-blue-400 shadow-md shadow-blue-500/20 ring-2 ring-blue-500/30">
+                  <div className="flex size-full items-center justify-center rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-lg font-black text-neutral-950 shadow-inner">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-extrabold text-sm text-neutral-100">{user.name}</span>
+                    <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">Local Profile</span>
+                  </div>
+                  <div className="text-xs text-neutral-400 truncate mt-0.5">
+                    {user.detail ? user.detail : "Local App Profile"}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-neutral-400 font-mono">
+                    <Lock className="size-3 text-neutral-400" />
+                    {vaultIsSecure() ? "Encrypted App Vault" : "Development preview storage"}
+                  </div>
+                </div>
               </div>
-              <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-600">
-                <Lock className="size-3" />
-                {vaultIsSecure()
-                  ? "Connections stored in the encrypted App Vault"
-                  : "Development preview storage"}
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser} className="h-8.5 px-3.5 text-xs font-semibold text-neutral-200 hover:text-white bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl">
+                  <Pencil className="size-3.5 text-neutral-400" />
+                  Đổi tên
+                </Button>
+                <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)} className="h-8.5 px-3.5 text-xs font-semibold text-red-400 hover:text-red-300 bg-red-950/25 hover:bg-red-950/45 border border-red-500/30 rounded-xl">
+                  <LogOut className="size-3.5 text-red-400" />
+                  Đăng xuất
+                </Button>
               </div>
             </div>
-            <div className="ml-auto flex items-center gap-1">
-              <Badge tone="green">Local user</Badge>
-              <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser}>
-                <Pencil className="size-4" />
-              </Button>
-              <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)}>
-                Log out
-              </Button>
-            </div>
-            <div className="w-full border-t border-neutral-800 pt-3">
-              <div className="mb-2 text-xs font-medium text-neutral-300">AI accounts</div>
-              <div className="flex flex-wrap gap-2">
+
+            {/* Row 2: Fast Sign-in AI Accounts (2 Vertical Rows: Title Top, Buttons Bottom) */}
+            <div className="py-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
+                  <Zap className="size-4.5 text-blue-400 fill-blue-400/20" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    Kết nối nhanh tài khoản AI
+                    <span className="text-neutral-400 font-normal text-[11px]">(Fast Sign-in)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 {LOCAL_AI_ACCOUNTS.map((account) => {
                   const connected = isLocalAccountConnected(account.id);
+                  const isThisConnecting = fastSignInAccountId === account.id;
+
+                  let AccountIcon = Sparkles;
+                  if (account.id === "codex") AccountIcon = Bot;
+                  else if (account.id === "claude") AccountIcon = Brain;
+                  else if (account.id === "grok-cli") AccountIcon = connected ? CheckCircle2 : Zap;
+
                   return (
                     <Button
                       key={account.id}
@@ -710,28 +807,133 @@ export function Settings() {
                       variant={connected ? "secondary" : "ghost"}
                       onClick={() => void signInLocalAiAccount(account.id)}
                       disabled={connecting}
+                      className={cn(
+                        "h-8.5 px-3.5 text-xs font-semibold rounded-xl transition-all",
+                        connected
+                          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-xs shadow-emerald-500/10"
+                          : "bg-neutral-900/80 hover:bg-neutral-800 text-neutral-200 border border-neutral-800"
+                      )}
                     >
-                      {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                      {isThisConnecting ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <AccountIcon className={cn("size-3.5", connected ? "text-emerald-400" : "text-neutral-400")} />
+                      )}
                       {connected ? `${account.name} connected` : `Sign in ${account.name}`}
                     </Button>
                   );
                 })}
               </div>
             </div>
+
+            {/* Row 3: Language */}
+            <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
+                  <Globe className="size-4.5 text-blue-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    Ngôn ngữ hiển thị
+                    <span className="text-neutral-400 font-normal text-[11px]">(Language)</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-0.5">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setLanguage("vi")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    language === "vi"
+                      ? "bg-amber-500/10 text-amber-300 border-amber-500/50 shadow-xs shadow-amber-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span>🇻🇳</span> Tiếng Việt
+                </button>
+                <button
+                  onClick={() => setLanguage("en")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    language === "en"
+                      ? "bg-amber-500/10 text-amber-300 border-amber-500/50 shadow-xs shadow-amber-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span>🇬🇧</span> English
+                </button>
+              </div>
+            </div>
+
+            {/* Row 4: UI Theme */}
+            <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
+                  <Palette className="size-4.5 text-blue-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    Chủ đề giao diện
+                    <span className="text-neutral-400 font-normal text-[11px]">(UI Theme)</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-0.5">Tùy biến phong cách màu sắc sang trọng</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    theme === "dark"
+                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-xs shadow-emerald-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span className="size-2.5 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400" />
+                  Dark Emerald
+                </button>
+                <button
+                  onClick={() => setTheme("gold")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    theme === "gold"
+                      ? "bg-amber-500/15 text-amber-300 border-amber-500/40 shadow-xs shadow-amber-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span className="size-2.5 rounded-full bg-amber-400" />
+                  Warm Gold
+                </button>
+                <button
+                  onClick={() => setTheme("midnight")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    theme === "midnight"
+                      ? "bg-blue-500/15 text-blue-300 border-blue-500/40 shadow-xs shadow-blue-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span className="size-2.5 rounded-full bg-blue-400" />
+                  Midnight Blue
+                </button>
+              </div>
+            </div>
           </Card>
         ) : (
-          <Card className="mt-3 flex flex-col gap-3">
+          <Card className="mt-2.5 flex flex-col gap-3">
             <div className="flex-1">
-              <div className="font-semibold">Create your local user</div>
+              <div className="font-semibold text-sm">Tạo Local User Profile</div>
               <div className="text-xs text-neutral-500">
-                Sign in with an AI account. Its profile creates this device-local user;
-                a paid subscription is also connected to AI Router when available.
+                Đăng nhập với bất kỳ tài khoản AI nào để khởi tạo hồ sơ cá nhân trên máy.
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {LOCAL_AI_ACCOUNTS.map((account) => (
                 <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
-                  {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                  {fastSignInAccountId === account.id ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
                   Sign in {account.name}
                 </Button>
               ))}
@@ -802,22 +1004,39 @@ export function Settings() {
             <RefreshCw className={cn("size-4", loadingConnections && "animate-spin")} />
           </button>
         </div>
-        {connectionError ? (
-          <Card className="mt-3 text-sm text-amber-200">
-            AI Router unavailable: {connectionError}
+        {connectionError && (
+          <Card className="mt-3 text-sm border-amber-500/30 bg-amber-500/10 text-amber-200 flex items-center justify-between gap-3">
+            <div>
+              <span className="font-semibold">AI Router chưa sẵn sàng:</span> {connectionError}
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void refreshConnections()}
+              disabled={loadingConnections}
+              className="shrink-0 h-7 px-2.5 text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/40"
+            >
+              {loadingConnections ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              Thử lại
+            </Button>
           </Card>
-        ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            {connections.map((connection) => (
+        )}
+        {/* Active Connections Grid */}
+        <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          {connections
+            .filter((c) => c.isActive !== false)
+            .map((connection) => (
               <div
                 key={connection.id}
-                className="flex flex-col justify-between gap-3 p-4 rounded-2xl border border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900 transition-all shadow-md"
+                className="flex flex-col justify-between gap-3 p-4 rounded-2xl border transition-all shadow-md border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900"
               >
                 {/* Header: Name, Email & Status Badge */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-sm text-neutral-100 truncate">
-                      {connection.name || connection.provider}
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-neutral-100 truncate">
+                        {connection.name || connection.provider}
+                      </span>
                     </div>
                     <div className="mt-0.5 text-xs text-neutral-400 truncate">
                       {connection.email || connection.accountLabel || connection.id}
@@ -825,14 +1044,14 @@ export function Settings() {
                     </div>
                   </div>
                   <Badge
-                    tone={connection.isActive === false ? "neutral" : connection.testStatus === "Verified" ? "green" : "gold"}
-                    className="shrink-0 font-medium"
+                    tone={connection.testStatus === "Verified" ? "green" : "gold"}
+                    className="shrink-0 font-medium text-xs"
                   >
-                    {connection.isActive === false ? "Disabled" : connection.testStatus || "Pending test"}
+                    {connection.testStatus || "Pending test"}
                   </Badge>
                 </div>
 
-                {/* Error message (If present - confined strictly to this card) */}
+                {/* Error message (If present) */}
                 {connection.lastError && (
                   <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
                     <span>{connection.lastError}</span>
@@ -854,13 +1073,28 @@ export function Settings() {
                 <div className="flex items-center justify-end gap-1.5 pt-2.5 border-t border-neutral-800/80">
                   <Button
                     size="sm"
+                    variant="ghost"
+                    title="Tắt Provider (Tạm dừng khi hết token/hạn mức)"
+                    onClick={() => void toggleConnectionState(connection)}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
+                    className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10"
+                  >
+                    {connectionActionKey === `toggle:${connection.id}` ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <PowerOff className="size-3.5" />
+                    )}
+                    Tắt
+                  </Button>
+                  <Button
+                    size="sm"
                     variant="secondary"
                     title="Test connection"
                     onClick={() => void testConnection(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                   >
-                    {connectionActionId === connection.id ? (
+                    {connectionActionKey === `test:${connection.id}` ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
                     ) : (
                       <FlaskConical className="size-3.5" />
@@ -870,12 +1104,12 @@ export function Settings() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    title="Làm mới OAuth Token (Renew token mà không cần reset tài khoản)"
+                    title="Làm mới OAuth Token"
                     onClick={() => void renewConnectionToken(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium border border-gold-500/30 text-gold-300 hover:bg-gold-500/15"
                   >
-                    {connectionActionId === connection.id ? (
+                    {connectionActionKey === `renew:${connection.id}` ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
                     ) : (
                       <RefreshCw className="size-3.5" />
@@ -885,28 +1119,136 @@ export function Settings() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    title="Reset connection and remove its Vault credential"
+                    title="Reset connection"
                     onClick={() => void resetConnection(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
                   >
-                    <RotateCcw className="size-3.5" /> Reset
+                    {connectionActionKey === `reset:${connection.id}` ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="size-3.5" />
+                    )}
+                    Reset
                   </Button>
                 </div>
               </div>
             ))}
-            {!loadingConnections && connections.length === 0 && (
-              <Card className="text-sm text-neutral-400 sm:col-span-2">
-                No vendor account connected yet.
-              </Card>
-            )}
+          {!loadingConnections && connections.length === 0 && (
+            <Card className="text-sm text-neutral-400 sm:col-span-2">
+              No vendor account connected yet.
+            </Card>
+          )}
+        </div>
+
+        {/* Disabled Connections List View */}
+        {connections.some((c) => c.isActive === false) && (
+          <div className="mt-5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+              <PowerOff className="size-3.5 text-amber-400" />
+              <span>Provider Đã Tắt / Hết Token ({connections.filter((c) => c.isActive === false).length})</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {connections
+                .filter((c) => c.isActive === false)
+                .map((connection) => (
+                  <div
+                    key={connection.id}
+                    className="flex flex-col gap-2 p-3 rounded-2xl border border-neutral-800/60 bg-neutral-950/70 opacity-80"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1 flex items-center gap-2.5">
+                        <Badge tone="neutral" className="shrink-0 text-[10px] px-2 py-0.5 font-medium bg-neutral-800 text-neutral-400">
+                          Tắt (Bị ẩn)
+                        </Badge>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-xs text-neutral-200 truncate block">
+                            {connection.name || connection.provider}
+                          </span>
+                          <span className="text-[11px] text-neutral-400 truncate block">
+                            {connection.email || connection.accountLabel || connection.id}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Xem thông báo chi tiết"
+                          onClick={() => setExpandedMessageIds(prev => ({ ...prev, [connection.id]: !prev[connection.id] }))}
+                          className="h-7 px-2 text-xs font-medium text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+                        >
+                          <Info className="size-3 text-amber-400" />
+                          {expandedMessageIds[connection.id] ? "Ẩn tin" : "Xem tin"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          title="Bật lại Provider này"
+                          onClick={() => void toggleConnectionState(connection)}
+                          disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
+                          className="h-7 px-2.5 text-xs font-semibold border border-gold-500/40 text-gold-300 hover:bg-gold-500/20"
+                        >
+                          {connectionActionKey === `toggle:${connection.id}` ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <Power className="size-3" />
+                          )}
+                          Bật lại
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Reset connection"
+                          onClick={() => void resetConnection(connection)}
+                          disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
+                          className="h-7 px-2 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          {connectionActionKey === `reset:${connection.id}` ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="size-3" />
+                          )}
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+
+                    {expandedMessageIds[connection.id] && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 font-medium flex items-center gap-1.5">
+                          <span>⏸️ Provider đang TẮT (Hết token/chờ reset). AI Router tạm thời bỏ qua tài khoản này.</span>
+                        </div>
+
+                        {connection.lastError && (
+                          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
+                            <span>{connection.lastError}</span>
+                            {connection.lastError.includes("http") && (
+                              <button
+                                onClick={() => {
+                                  const match = connection.lastError?.match(/(https?:\/\/[^\s<">]+)/);
+                                  if (match?.[1]) void openExternalUrl(match[1]);
+                                }}
+                                className="flex items-center gap-1.5 self-start rounded-lg border border-gold-500/40 bg-gold-400/15 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:bg-gold-400/25 transition-colors cursor-pointer"
+                              >
+                                <ExternalLink className="size-3 text-gold-400" /> Xác thực lại tại trình duyệt
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
           </div>
         )}
         <Button className="mt-3" variant="secondary" onClick={() => setShowProviderManager(true)}>
           <ExternalLink className="size-4" /> Connect or manage vendors
         </Button>
         {showProviderManager && (
-          <div className="mt-4 border border-neutral-800 bg-neutral-950">
+          <div ref={vendorSectionRef} className="mt-4 scroll-mt-6 rounded-2xl border border-neutral-800 bg-neutral-950 p-1 shadow-2xl">
             <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2 text-xs text-neutral-400">
               <span>AI Router Provider Manager</span>
               <button className="cursor-pointer text-gold-300 hover:text-gold-200" onClick={() => setShowProviderManager(false)}>Close</button>
@@ -918,44 +1260,20 @@ export function Settings() {
                 placeholder="Search a vendor"
                 className="w-full border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-gold-400/60"
               />
-              {catalogError ? (
-                <div className="mt-3 flex items-center justify-between gap-3 text-sm text-red-300">
-                  <span>{catalogError}</span>
-                  <Button size="sm" variant="secondary" onClick={() => void refreshProviderCatalog()}>
-                    <RefreshCw className="size-4" /> Retry
-                  </Button>
-                </div>
-              ) : (
-                <div className="mt-3 grid max-h-[28rem] grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
-                  {filteredProviders.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setSelectedProvider(item);
-                        setApiKey("");
-                        setConnectMessage(null);
-                        setManualAuthUrl(null);
-                        setManualCallbackUrl("");
-                      }}
-                      className={cn(
-                        "flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-800",
-                        selectedProvider?.id === item.id && "bg-gold-400/10 text-gold-200",
-                      )}
-                    >
-                      <span className="min-w-0 truncate">{item.name}</span>
-                      <span className="shrink-0 text-[10px] text-neutral-500">
-                        {item.oauth && item.apiKey
-                          ? "Subscription / API key"
-                          : item.oauth || item.cookie ? "Subscription" : item.apiKey ? "API key" : "Provider"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
               {selectedProvider && (
-                <div className="mt-3 border-t border-neutral-800 pt-3 text-sm">
-                  <div className="font-medium">{selectedProvider.name}</div>
-                  <div className="mt-1 font-mono text-xs text-neutral-500">{selectedProvider.id}</div>
+                <div className="mt-3 rounded-xl border border-gold-500/40 bg-neutral-900 p-3.5 text-sm shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-neutral-100">{selectedProvider.name}</span>
+                      <span className="ml-2 font-mono text-xs text-neutral-500">({selectedProvider.id})</span>
+                    </div>
+                    <button
+                      onClick={resetVendorForm}
+                      className="cursor-pointer text-xs font-semibold text-neutral-400 hover:text-neutral-200"
+                    >
+                      ✕ Close form
+                    </button>
+                  </div>
                   {subscriptionProvider && (
                     <Button className="mt-3" size="sm" onClick={() => void connectSubscription()} disabled={connecting}>
                       {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
@@ -1065,6 +1383,35 @@ export function Settings() {
                       {connectMessage}
                     </p>
                   )}
+                </div>
+              )}
+
+              {catalogError ? (
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm text-red-300">
+                  <span>{catalogError}</span>
+                  <Button size="sm" variant="secondary" onClick={() => void refreshProviderCatalog()}>
+                    <RefreshCw className="size-4" /> Retry
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-3 grid max-h-[22rem] grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
+                  {filteredProviders.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => selectVendorForm(item)}
+                      className={cn(
+                        "flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-800",
+                        selectedProvider?.id === item.id && "bg-gold-400/10 text-gold-200 font-semibold border-l-2 border-gold-400",
+                      )}
+                    >
+                      <span className="min-w-0 truncate">{item.name}</span>
+                      <span className="shrink-0 text-[10px] text-neutral-500">
+                        {item.oauth && item.apiKey
+                          ? "Subscription / API key"
+                          : item.oauth || item.cookie ? "Subscription" : item.apiKey ? "API key" : "Provider"}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -1214,86 +1561,7 @@ export function Settings() {
         </Card>
       </section>
 
-      {/* Task 3: Theme & Language Settings */}
-      <section className="mt-10">
-        <h2 className="text-sm font-semibold text-neutral-300">
-          🌐 Giao diện & Ngôn ngữ (Theme & Language)
-        </h2>
-        <Card className="mt-3 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium text-neutral-100">Ngôn ngữ hiển thị (Language)</div>
-              <div className="text-xs text-neutral-400">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setLanguage("vi")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  language === "vi"
-                    ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🇻🇳 Tiếng Việt
-              </button>
-              <button
-                onClick={() => setLanguage("en")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  language === "en"
-                    ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🇬🇧 English
-              </button>
-            </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/80 pt-3">
-            <div>
-              <div className="text-sm font-medium text-neutral-100">Chủ đề giao diện (UI Theme)</div>
-              <div className="text-xs text-neutral-400">Tùy biến phong cách màu sắc sang trọng</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTheme("dark")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  theme === "dark"
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🟢 Dark Emerald
-              </button>
-              <button
-                onClick={() => setTheme("gold")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  theme === "gold"
-                    ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🟡 Warm Gold
-              </button>
-              <button
-                onClick={() => setTheme("midnight")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  theme === "midnight"
-                    ? "bg-blue-500/20 text-blue-300 border-blue-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🔵 Midnight Blue
-              </button>
-            </div>
-          </div>
-        </Card>
-      </section>
 
       {/* Task 4: Full Data Backup & Restore */}
       <section className="mt-10">

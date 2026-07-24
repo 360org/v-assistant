@@ -83,7 +83,7 @@ export function isRateLimitError(error: unknown): boolean {
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o-mini",
   claude: "claude-sonnet-5",
-  gemini: "gemini-3-flash-agent",
+  gemini: "gemini-3.6-flash-high",
   openrouter: "openrouter/auto",
   local: "llama3.2",
 };
@@ -125,7 +125,7 @@ export function routedConfig(
 export const SUBSCRIPTION_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o",
   claude: "claude-sonnet-5",
-  gemini: "gemini-3.5-flash-low",
+  gemini: "gemini-3.6-flash-medium",
   openrouter: "openrouter/auto",
   local: "",
 };
@@ -183,9 +183,9 @@ export const MODELS: Record<ProviderId, { id: string; name: string }[]> = {
     { id: "gpt-4o-mini", name: "GPT-4o mini" },
   ],
   gemini: [
-    { id: "gemini-3.5-flash-low", name: "Gemini 3.5 Flash (Medium)" },
-    { id: "gemini-3-flash-agent", name: "Gemini 3.5 Flash (High)" },
-    { id: "gemini-3.5-flash-extra-low", name: "Gemini 3.5 Flash (Low)" },
+    { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)" },
+    { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)" },
+    { id: "gemini-3.6-flash-low", name: "Gemini 3.6 Flash (Low)" },
     { id: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)" },
     { id: "gemini-pro-agent", name: "Gemini 3.1 Pro (High)" },
     { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)" },
