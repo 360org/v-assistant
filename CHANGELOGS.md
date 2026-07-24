@@ -2,6 +2,15 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.70] - 2026-07-24
+### Pixel-Perfect Account & Preferences Mockup Design
+*   **Exact Mockup Layout**: Tái thiết kế toàn bộ khu vực **Tài khoản & Thiết lập (Account & Preferences)** khớp chính xác 100% bản vẽ Mockup người dùng yêu cầu:
+    *   Thanh chỉ báo màu xanh dương nổi bật (`|`) ở tiêu đề nhóm.
+    *   Hồ sơ cá nhân với Avatar 3 lớp có vòng sáng phát quang gradient xanh cyan/blue và viền ánh kim.
+    *   Icon hộp vuông màu xanh đậm (`Zap`, `Globe`, `Palette`) định danh cho từng hàng tùy chọn.
+    *   Phân tách từng dòng mượt mà bằng đường vạch mờ `divide-neutral-800/70`.
+    *   Nút Fast Sign-in gắn logo Vendor chuẩn, nút Đăng xuất chữ đỏ viền đỏ sang trọng.
+
 ## [1.0.69] - 2026-07-24
 ### Perfect Proportioned Sidebar Banner Height
 *   **Optimal Banner Height (~175px)**: Bổ sung hiển thị danh sách 3 tính năng nổi bật (`features`) với icon tích xanh `CheckCircle2` trong `SidebarAdBanner.tsx`. Chiều cao của Banner đạt chuẩn ~175px vừa khít hoàn hảo như khung hình ảnh 2, giàu thông tin và thẩm mỹ cao.

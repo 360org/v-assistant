@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, HardDrive, Info, KeyRound, LoaderCircle, Lock, LogIn, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X } from "lucide-react";
+import { Bot, Brain, Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, Globe, HardDrive, Info, KeyRound, LoaderCircle, Lock, LogIn, LogOut, Palette, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X, Zap } from "lucide-react";
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { useApp } from "@/lib/store";
@@ -727,48 +727,72 @@ export function Settings() {
       <p className="mt-1 text-neutral-400">Simple by design.</p>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-neutral-300">Tài khoản & Thiết lập (Account & Preferences)</h2>
+        <h2 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+          <span className="inline-block w-1 h-4 rounded-full bg-blue-500 shadow-xs shadow-blue-500/80" />
+          <span>Tài khoản & Thiết lập</span>
+          <span className="text-neutral-400 font-normal text-xs ml-0.5">(Account & Preferences)</span>
+        </h2>
         {user ? (
-          <Card className="mt-2.5 flex flex-col gap-4 p-4.5">
+          <Card className="mt-3 flex flex-col gap-0 p-5 rounded-2xl border border-blue-500/20 bg-neutral-950/75 shadow-2xl backdrop-blur-md divide-y divide-neutral-800/70">
             {/* Row 1: Profile Identity */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-lg font-bold text-neutral-950 shadow-md ring-2 ring-gold-400/20">
-                  {user.name.charAt(0).toUpperCase()}
+            <div className="pb-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-full p-0.5 bg-gradient-to-tr from-blue-600 via-cyan-400 to-blue-400 shadow-md shadow-blue-500/20 ring-2 ring-blue-500/30">
+                  <div className="flex size-full items-center justify-center rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-lg font-black text-neutral-950 shadow-inner">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-extrabold text-sm text-neutral-100">{user.name}</span>
-                    <Badge tone="green" className="text-[10px] px-2 py-0.2 font-semibold">Local Profile</Badge>
+                    <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">Local Profile</span>
                   </div>
                   <div className="text-xs text-neutral-400 truncate mt-0.5">
                     {user.detail ? user.detail : "Local App Profile"}
                   </div>
-                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono">
-                    <Lock className="size-3 text-emerald-400" />
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-neutral-400 font-mono">
+                    <Lock className="size-3 text-neutral-400" />
                     {vaultIsSecure() ? "Encrypted App Vault" : "Development preview storage"}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser} className="h-8 px-3 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 border border-neutral-800">
-                  <Pencil className="size-3.5" />
+              <div className="flex items-center gap-2.5 shrink-0">
+                <Button size="sm" variant="ghost" title="Edit local profile" onClick={editLocalUser} className="h-8.5 px-3.5 text-xs font-semibold text-neutral-200 hover:text-white bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl">
+                  <Pencil className="size-3.5 text-neutral-400" />
                   Đổi tên
                 </Button>
-                <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)} className="h-8 px-3 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20">
+                <Button size="sm" variant="ghost" title="Log out local user" onClick={() => setConfirmingLocalLogout(true)} className="h-8.5 px-3.5 text-xs font-semibold text-red-400 hover:text-red-300 bg-red-950/25 hover:bg-red-950/45 border border-red-500/30 rounded-xl">
+                  <LogOut className="size-3.5 text-red-400" />
                   Đăng xuất
                 </Button>
               </div>
             </div>
 
             {/* Row 2: Fast Sign-in AI Accounts */}
-            <div className="border-t border-neutral-800/70 pt-3.5">
-              <div className="mb-2 text-xs font-semibold text-neutral-300">Kết nối nhanh tài khoản AI (Fast Sign-in)</div>
-              <div className="flex flex-wrap gap-2">
+            <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
+                  <Zap className="size-4.5 text-blue-400 fill-blue-400/20" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    Kết nối nhanh tài khoản AI
+                    <span className="text-neutral-400 font-normal text-[11px]">(Fast Sign-in)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {LOCAL_AI_ACCOUNTS.map((account) => {
                   const connected = isLocalAccountConnected(account.id);
                   const isThisConnecting = fastSignInAccountId === account.id;
+
+                  let AccountIcon = Sparkles;
+                  if (account.id === "chatgpt") AccountIcon = Bot;
+                  else if (account.id === "claude") AccountIcon = Brain;
+                  else if (account.id === "grok-cli") AccountIcon = connected ? CheckCircle2 : Zap;
+
                   return (
                     <Button
                       key={account.id}
@@ -777,11 +801,17 @@ export function Settings() {
                       onClick={() => void signInLocalAiAccount(account.id)}
                       disabled={connecting}
                       className={cn(
-                        "h-8 px-3 text-xs font-medium transition-all",
-                        connected ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "text-neutral-300 hover:bg-neutral-800 border border-neutral-800"
+                        "h-8.5 px-3.5 text-xs font-semibold rounded-xl transition-all",
+                        connected
+                          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-xs shadow-emerald-500/10"
+                          : "bg-neutral-900/80 hover:bg-neutral-800 text-neutral-200 border border-neutral-800"
                       )}
                     >
-                      {isThisConnecting ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
+                      {isThisConnecting ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <AccountIcon className={cn("size-3.5", connected ? "text-emerald-400" : "text-neutral-400")} />
+                      )}
                       {connected ? `${account.name} connected` : `Sign in ${account.name}`}
                     </Button>
                   );
@@ -789,79 +819,99 @@ export function Settings() {
               </div>
             </div>
 
-            {/* Row 3: Preferences (Language & UI Theme) */}
-            <div className="border-t border-neutral-800/70 pt-3.5 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold text-neutral-200">Ngôn ngữ hiển thị (Language)</div>
-                  <div className="text-[11px] text-neutral-400">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
+            {/* Row 3: Language */}
+            <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
+                  <Globe className="size-4.5 text-blue-400" />
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => setLanguage("vi")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                      language === "vi"
-                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
-                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                    )}
-                  >
-                    🇻🇳 Tiếng Việt
-                  </button>
-                  <button
-                    onClick={() => setLanguage("en")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                      language === "en"
-                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
-                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                    )}
-                  >
-                    🇬🇧 English
-                  </button>
+                <div>
+                  <div className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    Ngôn ngữ hiển thị
+                    <span className="text-neutral-400 font-normal text-[11px]">(Language)</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-0.5">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/40 pt-2.5">
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setLanguage("vi")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    language === "vi"
+                      ? "bg-amber-500/10 text-amber-300 border-amber-500/50 shadow-xs shadow-amber-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span>🇻🇳</span> Tiếng Việt
+                </button>
+                <button
+                  onClick={() => setLanguage("en")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    language === "en"
+                      ? "bg-amber-500/10 text-amber-300 border-amber-500/50 shadow-xs shadow-amber-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span>🇬🇧</span> English
+                </button>
+              </div>
+            </div>
+
+            {/* Row 4: UI Theme */}
+            <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
+                  <Palette className="size-4.5 text-blue-400" />
+                </div>
                 <div>
-                  <div className="text-xs font-semibold text-neutral-200">Chủ đề giao diện (UI Theme)</div>
-                  <div className="text-[11px] text-neutral-400">Tùy biến phong cách màu sắc sang trọng</div>
+                  <div className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    Chủ đề giao diện
+                    <span className="text-neutral-400 font-normal text-[11px]">(UI Theme)</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-0.5">Tùy biến phong cách màu sắc sang trọng</div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => setTheme("dark")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                      theme === "dark"
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-xs"
-                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                    )}
-                  >
-                    🟢 Dark Emerald
-                  </button>
-                  <button
-                    onClick={() => setTheme("gold")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                      theme === "gold"
-                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40 shadow-xs"
-                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                    )}
-                  >
-                    🟡 Warm Gold
-                  </button>
-                  <button
-                    onClick={() => setTheme("midnight")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                      theme === "midnight"
-                        ? "bg-blue-500/20 text-blue-300 border-blue-400/40 shadow-xs"
-                        : "border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-                    )}
-                  >
-                    🔵 Midnight Blue
-                  </button>
-                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    theme === "dark"
+                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-xs shadow-emerald-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span className="size-2.5 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400" />
+                  Dark Emerald
+                </button>
+                <button
+                  onClick={() => setTheme("gold")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    theme === "gold"
+                      ? "bg-amber-500/15 text-amber-300 border-amber-500/40 shadow-xs shadow-amber-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span className="size-2.5 rounded-full bg-amber-400" />
+                  Warm Gold
+                </button>
+                <button
+                  onClick={() => setTheme("midnight")}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer h-8.5 flex items-center gap-1.5",
+                    theme === "midnight"
+                      ? "bg-blue-500/15 text-blue-300 border-blue-500/40 shadow-xs shadow-blue-500/10"
+                      : "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+                  )}
+                >
+                  <span className="size-2.5 rounded-full bg-blue-400" />
+                  Midnight Blue
+                </button>
               </div>
             </div>
           </Card>
