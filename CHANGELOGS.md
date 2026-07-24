@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.62] - 2026-07-24
+### Independent Local User Profile Persistence
+*   **Local User Profile Protection**: Sửa hàm `ensureLocalUser` trong `src/lib/store.tsx` để bảo vệ thông tin Local Profile đã khởi tạo ban đầu.
+*   **Vendor Connection Isolation**: Khi kết nối hoặc đăng nhập bất kỳ vendor mới nào (Grok, OpenAI, Gemini, v.v.), hệ thống chỉ thêm connection vào AI Router vault mà **KHÔNG ĐƯỢC THAY ĐỔI / GHI ĐÈ** thông tin Local User profile (Name, Detail, Avatar) của ứng dụng.
+
 ## [1.0.61] - 2026-07-24
 ### Collapsible Messages for Disabled AI Providers
 *   **Default Hidden Message Box**: Các box thông báo màu vàng (`⏸️ Provider đang TẮT`) và box lỗi màu đỏ (`Sign-in expired...`) ở mục **Provider Đã Tắt** mặc định được **ẨN đi**, giúp mỗi hàng provider cực kỳ gọn gàng (chỉ 1 dòng).

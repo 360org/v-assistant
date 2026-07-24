@@ -698,8 +698,7 @@ export function Settings() {
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{user.name}</div>
               <div className="text-xs text-neutral-500">
-                AI Router account · {user.providerLabel || getProvider(user.provider as ProviderId).name}
-                {user.detail ? ` · ${user.detail}` : ""}
+                Local App Profile{user.detail ? ` · ${user.detail}` : ""}
               </div>
               <div className="mt-1 flex items-center gap-1 text-[11px] text-neutral-600">
                 <Lock className="size-3" />

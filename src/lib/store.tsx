@@ -810,14 +810,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const ensureLocalUser = useCallback((input: Omit<LocalUser, "createdAt">) => {
-    const newUser: LocalUser = { ...input, createdAt: Date.now() };
-    const userKey = getUserStorageKey(newUser);
-    const existingState = loadStateForUser(userKey);
+    setState((s) => {
+      // Nếu đã có Local User profile trên thiết bị, giữ nguyên profile người dùng hiện tại
+      if (s.user) {
+        return {
+          ...s,
+          onboarded: true,
+        };
+      }
 
-    setState({
-      ...existingState,
-      user: newUser,
-      onboarded: true,
+      // Nếu là lần đầu tiên chưa từng có Local User profile, tạo mới từ thông tin vendor kết nối đầu tiên
+      const newUser: LocalUser = { ...input, createdAt: Date.now() };
+      const userKey = getUserStorageKey(newUser);
+      const existingState = loadStateForUser(userKey);
+
+      return {
+        ...existingState,
+        user: newUser,
+        onboarded: true,
+      };
     });
   }, []);
 
