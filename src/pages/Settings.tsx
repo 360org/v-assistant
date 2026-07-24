@@ -293,8 +293,6 @@ export function Settings() {
     setConnecting(false);
     setManualAuthUrl(null);
     setManualCallbackUrl("");
-    setDeviceCodeSubscription(null);
-    setDeviceCodeUserCode("");
     setConnectMessage(null);
     setApiKey("");
   };
@@ -305,8 +303,6 @@ export function Settings() {
     setConnecting(false);
     setManualAuthUrl(null);
     setManualCallbackUrl("");
-    setDeviceCodeSubscription(null);
-    setDeviceCodeUserCode("");
     setConnectMessage(null);
     setApiKey("");
   };
@@ -366,7 +362,7 @@ export function Settings() {
         authType: "subscription",
         credentialRef: `ai-router:credential:${id}`,
       });
-      if (existingConnection && (existingConnection.status === "disabled" || !existingConnection.isActive)) {
+      if (existingConnection && existingConnection.isActive === false) {
         await toggleAiRouterConnection(id, true);
       }
       if (attemptId !== signInAttemptRef.current) return;
