@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.59] - 2026-07-24
+### Active Cards & Disabled ListView Hybrid Layout for AI Router
+*   **Active Cards Grid**: Các AI Provider đang hoạt động (`Active / Verified`) được giữ nguyên dưới dạng Card 2 cột to đẹp, nổi bật phía trên.
+*   **Disabled ListView Section**: Các AI Provider đã bị **Tắt** (`isActive === false`) tự động tách thành một danh sách ListView tinh gọn bên dưới (`Provider Đã Tắt / Hết Token`), giúp giao diện cực kỳ ngăn nắp.
+
 ## [1.0.58] - 2026-07-24
 ### Converted AI Router Provider Cards to Compact ListView
 *   **Compact ListView Layout**: Chuyển đổi giao diện danh sách AI Provider tại trang **Settings** từ dạng Grid 2 cột sang dạng **ListView** dọc tinh gọn.

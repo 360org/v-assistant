@@ -837,118 +837,37 @@ export function Settings() {
             </Button>
           </Card>
         )}
-        <div className="mt-3 flex flex-col gap-2.5">
-            {[...connections]
-              .sort((a, b) => {
-                const aDisabled = a.isActive === false;
-                const bDisabled = b.isActive === false;
-                if (aDisabled && !bDisabled) return 1;
-                if (!aDisabled && bDisabled) return -1;
-                return 0;
-              })
-              .map((connection) => (
+        {/* Active Connections Grid */}
+        <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          {connections
+            .filter((c) => c.isActive !== false)
+            .map((connection) => (
               <div
                 key={connection.id}
-                className={cn(
-                  "flex flex-col gap-2.5 p-3.5 rounded-2xl border transition-all shadow-sm",
-                  connection.isActive === false
-                    ? "border-neutral-800/50 bg-neutral-950/60 opacity-75"
-                    : "border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900"
-                )}
+                className="flex flex-col justify-between gap-3 p-4 rounded-2xl border transition-all shadow-md border-neutral-800/80 bg-neutral-900/80 hover:border-neutral-700 hover:bg-neutral-900"
               >
-                {/* Main Row: Info (Left) + Actions (Right) */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  {/* Left Info: Name, Email & Status Badge */}
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-neutral-100 truncate">
-                          {connection.name || connection.provider}
-                        </span>
-                        <Badge
-                          tone={connection.isActive === false ? "neutral" : connection.testStatus === "Verified" ? "green" : "gold"}
-                          className="shrink-0 text-[10px] py-0 px-2 font-medium"
-                        >
-                          {connection.isActive === false ? "Tắt (Bị ẩn)" : connection.testStatus || "Pending test"}
-                        </Badge>
-                      </div>
-                      <div className="mt-0.5 text-xs text-neutral-400 truncate">
-                        {connection.email || connection.accountLabel || connection.id}
-                        {connection.defaultModel ? ` · ${connection.defaultModel}` : ""}
-                      </div>
+                {/* Header: Name, Email & Status Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-neutral-100 truncate">
+                        {connection.name || connection.provider}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-neutral-400 truncate">
+                      {connection.email || connection.accountLabel || connection.id}
+                      {connection.defaultModel ? ` · ${connection.defaultModel}` : ""}
                     </div>
                   </div>
-
-                  {/* Right Actions Bar */}
-                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                    <Button
-                      size="sm"
-                      variant={connection.isActive === false ? "secondary" : "ghost"}
-                      title={connection.isActive === false ? "Bật lại Provider này" : "Tắt Provider (Tạm dừng khi hết token/hạn mức)"}
-                      onClick={() => void toggleConnectionState(connection)}
-                      disabled={connectionActionId === connection.id}
-                      className={cn(
-                        "h-7 px-2.5 text-xs font-medium",
-                        connection.isActive === false
-                          ? "border border-gold-500/40 text-gold-300 hover:bg-gold-500/20"
-                          : "text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10"
-                      )}
-                    >
-                      {connectionActionId === connection.id ? (
-                        <LoaderCircle className="size-3 animate-spin" />
-                      ) : connection.isActive === false ? (
-                        <Power className="size-3" />
-                      ) : (
-                        <PowerOff className="size-3" />
-                      )}
-                      {connection.isActive === false ? "Bật lại" : "Tắt"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      title="Test connection"
-                      onClick={() => void testConnection(connection)}
-                      disabled={connectionActionId === connection.id}
-                      className="h-7 px-2.5 text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                    >
-                      {connectionActionId === connection.id ? (
-                        <LoaderCircle className="size-3 animate-spin" />
-                      ) : (
-                        <FlaskConical className="size-3" />
-                      )}
-                      Test
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      title="Làm mới OAuth Token"
-                      onClick={() => void renewConnectionToken(connection)}
-                      disabled={connectionActionId === connection.id}
-                      className="h-7 px-2.5 text-xs font-medium border border-gold-500/30 text-gold-300 hover:bg-gold-500/15"
-                    >
-                      <RefreshCw className="size-3" /> Renew
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title="Reset connection"
-                      onClick={() => void resetConnection(connection)}
-                      disabled={connectionActionId === connection.id}
-                      className="h-7 px-2 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
-                    >
-                      <RotateCcw className="size-3" /> Reset
-                    </Button>
-                  </div>
+                  <Badge
+                    tone={connection.testStatus === "Verified" ? "green" : "gold"}
+                    className="shrink-0 font-medium text-xs"
+                  >
+                    {connection.testStatus || "Pending test"}
+                  </Badge>
                 </div>
 
-                {/* Disabled Note Banner if disabled */}
-                {connection.isActive === false && (
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 font-medium flex items-center gap-1.5">
-                    <span>⏸️ Provider đang TẮT (Hết token/chờ reset). AI Router tạm thời bỏ qua tài khoản này.</span>
-                  </div>
-                )}
-
-                {/* Error message if present */}
+                {/* Error message (If present) */}
                 {connection.lastError && (
                   <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
                     <span>{connection.lastError}</span>
@@ -965,14 +884,158 @@ export function Settings() {
                     )}
                   </div>
                 )}
+
+                {/* Bottom Row: Action Buttons */}
+                <div className="flex items-center justify-end gap-1.5 pt-2.5 border-t border-neutral-800/80">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Tắt Provider (Tạm dừng khi hết token/hạn mức)"
+                    onClick={() => void toggleConnectionState(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10"
+                  >
+                    {connectionActionId === connection.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <PowerOff className="size-3.5" />
+                    )}
+                    Tắt
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    title="Test connection"
+                    onClick={() => void testConnection(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                  >
+                    {connectionActionId === connection.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <FlaskConical className="size-3.5" />
+                    )}
+                    Test
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    title="Làm mới OAuth Token"
+                    onClick={() => void renewConnectionToken(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium border border-gold-500/30 text-gold-300 hover:bg-gold-500/15"
+                  >
+                    {connectionActionId === connection.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                    Renew
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Reset connection"
+                    onClick={() => void resetConnection(connection)}
+                    disabled={connectionActionId === connection.id}
+                    className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
+                  >
+                    <RotateCcw className="size-3.5" /> Reset
+                  </Button>
+                </div>
               </div>
             ))}
-            {!loadingConnections && connections.length === 0 && (
-              <Card className="text-sm text-neutral-400">
-                No vendor account connected yet.
-              </Card>
-            )}
+          {!loadingConnections && connections.length === 0 && (
+            <Card className="text-sm text-neutral-400 sm:col-span-2">
+              No vendor account connected yet.
+            </Card>
+          )}
+        </div>
+
+        {/* Disabled Connections List View */}
+        {connections.some((c) => c.isActive === false) && (
+          <div className="mt-5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+              <PowerOff className="size-3.5 text-amber-400" />
+              <span>Provider Đã Tắt / Hết Token ({connections.filter((c) => c.isActive === false).length})</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {connections
+                .filter((c) => c.isActive === false)
+                .map((connection) => (
+                  <div
+                    key={connection.id}
+                    className="flex flex-col gap-2 p-3 rounded-2xl border border-neutral-800/60 bg-neutral-950/70 opacity-80"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1 flex items-center gap-2.5">
+                        <Badge tone="neutral" className="shrink-0 text-[10px] px-2 py-0.5 font-medium bg-neutral-800 text-neutral-400">
+                          Tắt (Bị ẩn)
+                        </Badge>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-xs text-neutral-200 truncate block">
+                            {connection.name || connection.provider}
+                          </span>
+                          <span className="text-[11px] text-neutral-400 truncate block">
+                            {connection.email || connection.accountLabel || connection.id}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          title="Bật lại Provider này"
+                          onClick={() => void toggleConnectionState(connection)}
+                          disabled={connectionActionId === connection.id}
+                          className="h-7 px-2.5 text-xs font-semibold border border-gold-500/40 text-gold-300 hover:bg-gold-500/20"
+                        >
+                          {connectionActionId === connection.id ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <Power className="size-3" />
+                          )}
+                          Bật lại
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Reset connection"
+                          onClick={() => void resetConnection(connection)}
+                          disabled={connectionActionId === connection.id}
+                          className="h-7 px-2 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          <RotateCcw className="size-3" /> Reset
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 font-medium flex items-center gap-1.5">
+                      <span>⏸️ Provider đang TẮT (Hết token/chờ reset). AI Router tạm thời bỏ qua tài khoản này.</span>
+                    </div>
+
+                    {connection.lastError && (
+                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300 font-mono leading-relaxed break-words flex flex-col gap-2">
+                        <span>{connection.lastError}</span>
+                        {connection.lastError.includes("http") && (
+                          <button
+                            onClick={() => {
+                              const match = connection.lastError?.match(/(https?:\/\/[^\s<">]+)/);
+                              if (match?.[1]) void openExternalUrl(match[1]);
+                            }}
+                            className="flex items-center gap-1.5 self-start rounded-lg border border-gold-500/40 bg-gold-400/15 px-2.5 py-1 text-[11px] font-semibold text-gold-300 hover:bg-gold-400/25 transition-colors cursor-pointer"
+                          >
+                            <ExternalLink className="size-3 text-gold-400" /> Xác thực lại tại trình duyệt
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
           </div>
+        )}
         <Button className="mt-3" variant="secondary" onClick={() => setShowProviderManager(true)}>
           <ExternalLink className="size-4" /> Connect or manage vendors
         </Button>

@@ -1,7 +1,7 @@
 {
   "name": "v-assistant",
   "private": true,
-  "version": "1.0.58",
+  "version": "1.0.59",
   "type": "module",
   "description": "V Assistant — AI for everyone. Download, install, login, connect, start.",
   "author": {
