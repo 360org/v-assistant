@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Square, Trash2, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
@@ -259,6 +259,101 @@ export function Chat() {
   const agentPickerRef = useRef<HTMLDivElement>(null);
   const [taskExpanded, setTaskExpanded] = useState(true);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const processDroppedPaths = useCallback((paths: string[], files: File[]) => {
+    const folderPaths: string[] = [];
+    const regularFiles: File[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const p = (file as any).path || (file as any).webkitRelativePath || file.name;
+      if (!file.type && (file.size === 0 || file.size % 4096 === 0)) {
+        folderPaths.push(p);
+      } else {
+        regularFiles.push(file);
+      }
+    }
+
+    for (const p of paths) {
+      if (!folderPaths.includes(p)) {
+        folderPaths.push(p);
+      }
+    }
+
+    if (regularFiles.length > 0) {
+      addKnowledgeFiles(regularFiles);
+    }
+
+    if (folderPaths.length > 0) {
+      const pathText = folderPaths.map((p) => `📁 ${p}`).join("\n");
+      setInput((prev) => {
+        const prefix = prev.trim() ? prev + "\n\n" : "";
+        return `${prefix}Thư mục/File làm việc:\n${pathText}\n\nYêu cầu công việc: `;
+      });
+      setTimeout(() => composerRef.current?.focus(), 100);
+    }
+  }, [addKnowledgeFiles]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingOver) setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    const files = Array.from(e.dataTransfer.files || []);
+    const items = Array.from(e.dataTransfer.items || []);
+    const extractedPaths: string[] = [];
+
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      const file = item.getAsFile();
+      const p = (file as any)?.path;
+      if (entry?.isDirectory && p) {
+        extractedPaths.push(p);
+      }
+    }
+
+    processDroppedPaths(extractedPaths, files);
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+    let unlistenDrop: (() => void) | undefined;
+    let unlistenOver: (() => void) | undefined;
+    let unlistenLeave: (() => void) | undefined;
+
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<{ paths: string[] }>("tauri://drag-drop", (e) => {
+        setIsDraggingOver(false);
+        const paths = e.payload?.paths || [];
+        if (paths.length > 0) {
+          processDroppedPaths(paths, []);
+        }
+      }).then((un) => { unlistenDrop = un; });
+
+      listen("tauri://drag-over", () => setIsDraggingOver(true)).then((un) => { unlistenOver = un; });
+      listen("tauri://drag-leave", () => setIsDraggingOver(false)).then((un) => { unlistenLeave = un; });
+    }).catch(() => {});
+
+    return () => {
+      unlistenDrop?.();
+      unlistenOver?.();
+      unlistenLeave?.();
+    };
+  }, [processDroppedPaths]);
 
   const activeAgent = useMemo(
     () => agents.find((a) => a.id === activeAgentId) ?? null,
@@ -566,7 +661,25 @@ export function Chat() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className="relative flex h-full flex-col"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag & Drop Visual Overlay */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 backdrop-blur-md border-2 border-dashed border-gold-400 p-6 text-center animate-fadeIn select-none">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-gold-400/20 text-gold-400 shadow-xl shadow-gold-500/10 mb-4 animate-bounce">
+            <UploadCloud className="size-8 text-gold-300" />
+          </div>
+          <h2 className="text-lg font-bold text-neutral-100">Thả File hoặc Thư mục vào đây</h2>
+          <p className="mt-1.5 text-xs text-neutral-400 max-w-md">
+            Hệ thống sẽ tự động nhận diện đường dẫn thư mục công việc và đính kèm tệp dữ liệu trực tiếp cho Agent thực thi.
+          </p>
+        </div>
+      )}
+
       {/* Header: agent context + model catalog supplied by AI Router. */}
       <header className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
