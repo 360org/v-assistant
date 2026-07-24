@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Bot, CheckCircle2, ExternalLink, Zap } from "lucide-react";
+import { ArrowRight, Bot, ExternalLink, Zap } from "lucide-react";
 import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 
@@ -88,8 +88,6 @@ export function SidebarAdBanner({ className }: { className?: string }) {
     const url = banner.linkUrl || "https://vuaai.net";
     void openExternalUrl(url);
   };
-
-  const featuresList = banner.features || DEFAULT_BANNER.features || [];
 
   return (
     <div
