@@ -661,24 +661,7 @@ export function Chat() {
   };
 
   return (
-    <div
-      className="relative flex h-full flex-col"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {/* Drag & Drop Visual Overlay */}
-      {isDraggingOver && (
-        <div className="absolute inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 backdrop-blur-md border-2 border-dashed border-gold-400 p-6 text-center animate-fadeIn select-none">
-          <div className="flex size-16 items-center justify-center rounded-2xl bg-gold-400/20 text-gold-400 shadow-xl shadow-gold-500/10 mb-4 animate-bounce">
-            <UploadCloud className="size-8 text-gold-300" />
-          </div>
-          <h2 className="text-lg font-bold text-neutral-100">Thả File hoặc Thư mục vào đây</h2>
-          <p className="mt-1.5 text-xs text-neutral-400 max-w-md">
-            Hệ thống sẽ tự động nhận diện đường dẫn thư mục công việc và đính kèm tệp dữ liệu trực tiếp cho Agent thực thi.
-          </p>
-        </div>
-      )}
+    <div className="flex h-full flex-col">
 
       {/* Header: agent context + model catalog supplied by AI Router. */}
       <header className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-3 sm:px-6">
@@ -1485,7 +1468,33 @@ export function Chat() {
           </div>
         )}
 
-        <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-2xl border border-neutral-700 bg-neutral-900 p-2 focus-within:border-gold-400/60">
+        <div
+          className="relative mx-auto max-w-2xl"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Drag & Drop Visual Overlay - Chỉ áp dụng riêng cho ô Chat Input Box */}
+          {isDraggingOver && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-gold-400 bg-neutral-950/95 backdrop-blur-xs p-3 text-center shadow-xl animate-fadeIn select-none">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gold-400/20 text-gold-300">
+                  <UploadCloud className="size-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-neutral-100">Thả File hoặc Thư mục vào đây</p>
+                  <p className="text-[11px] text-neutral-400">Tự động nhận diện đường dẫn thư mục công việc & đính kèm file</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div
+            className={cn(
+              "flex items-end gap-2 rounded-2xl border bg-neutral-900 p-2 focus-within:border-gold-400/60 transition-colors",
+              isDraggingOver ? "border-gold-400 bg-gold-400/10" : "border-neutral-700"
+            )}
+          >
           <input
             type="file"
             multiple
@@ -1560,6 +1569,7 @@ export function Chat() {
           >
             <SendHorizonal className="size-4" />
           </button>
+        </div>
         </div>
         <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-neutral-600">
           Enter to send · Shift+Enter for a new line

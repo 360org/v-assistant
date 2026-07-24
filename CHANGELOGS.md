@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.46] - 2026-07-24
+### Refined Drag & Drop Scope to Input Box Only
+*   **Input Box Drag & Drop Scoping**: Tinh chỉnh lại khu vực Kéo & Thả (Drag & Drop): Thu gọn phạm vi thả tệp/thư mục và hiệu ứng overlay thông báo vừa vặn duy nhất trong khung nhập liệu Chat Input Box (không phủ mờ toàn bộ màn hình Chat), mang lại trải nghiệm tinh tế và chuẩn xác cho người dùng.
+
 ## [1.0.45] - 2026-07-24
 ### Added GitHub Auto-Updater, Drag & Drop Folders/Files & Smart Task Status Widget
 *   **GitHub Releases Auto-Updater**: Thêm cơ chế tự động kiểm tra phiên bản mới từ GitHub Releases (`360org/v-assistant`). Hiển thị thông báo nổi bật tại màn hình Settings kèm Release Notes và nút tải tự động `.dmg` 1-click.
