@@ -14,7 +14,6 @@ import {
   getAllImageRecords,
   getKnowledgeFileRecord,
   indexKnowledgeFile,
-  savePhysicalDataFile,
   syncAllKnowledgeFilesToDisk,
 } from "@/runtime/knowledge";
 import { fileObjectURLs, useApp } from "@/lib/store";
