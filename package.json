@@ -22,6 +22,7 @@
     "preview": "vite preview",
     "install:local": "node scripts/install-local.mjs",
     "build:local": "npx tauri build && node scripts/install-local.mjs",
+    "tauri:dev": "npx tauri dev",
     "tauri": "tauri"
   },
   "dependencies": {
