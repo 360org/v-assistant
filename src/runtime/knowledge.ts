@@ -373,7 +373,7 @@ export async function syncAllKnowledgeFilesToDisk(): Promise<void> {
   try {
     const records = await getAllImageRecords();
     for (const rec of records) {
-      const b64 = rec.dataUrl || rec.chunks?.[0];
+      const b64 = rec.dataUrl;
       if (b64 && b64.startsWith("data:")) {
         await savePhysicalDataFile(rec.name, b64, "uploads");
       }

@@ -583,6 +583,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             relativePath: "chats/sessions.json",
             content: JSON.stringify(safe.chatSessions, null, 2),
           }).catch(() => {});
+
+          void syncAllKnowledgeFilesToDisk();
         }).catch(() => {});
       }
 

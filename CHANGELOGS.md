@@ -4,8 +4,8 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [1.0.73] - 2026-07-24
 ### Unified Physical Disk Data Storage Architecture
-*   **Tự động lưu file vật lý vào data directory (`uploads/`)**: Tàn bộ tệp tải lên (hình ảnh, tài liệu, tệp đính kèm trò chuyện, Media Vault, Knowledge Base) đều được lưu trữ trực tiếp thành file vật lý trong thư mục `uploads/` của Data Directory (dù dùng vị trí mặc định `~/.v-assistant/data` hay vị trí mount tùy chỉnh).
-*   **Automatic Backup & Sync**: Tự động giải quyết đường dẫn hệ thống (`resolve_data_dir`) hỗ trợ dấu `~/` trên macOS/Linux, tự động đồng bộ tất cả tệp dữ liệu đã tải lên từ trước vào thư mục `uploads/` thực tế trên đĩa cứng ngay khi khởi động ứng dụng.
+*   **Tự động lưu tệp vật lý vào data directory (`uploads/`)**: Toàn bộ tệp tải lên (hình ảnh, tài liệu, tệp đính kèm trò chuyện, Media Vault, Knowledge Base) đều được lưu trữ trực tiếp thành tệp vật lý trong thư mục `uploads/` của Data Directory (cho cả vị trí mặc định `~/.v-assistant/data` và vị trí mount tùy chỉnh).
+*   **Automatic Backup & Sync**: Tự động giải quyết đường dẫn hệ thống (`resolve_data_dir`) hỗ trợ dấu `~/` trên macOS/Linux, tự động xả và đồng bộ tất cả tệp dữ liệu đã tải lên từ trước vào thư mục `uploads/` thực tế trên đĩa cứng ngay khi khởi động ứng dụng.
 
 ## [1.0.72] - 2026-07-24
 ### Agent Markdown Spec Docs, Fast Sign-in Auto-Scroll & Row 2 Vertical Layout
