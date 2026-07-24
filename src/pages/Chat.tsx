@@ -258,6 +258,7 @@ export function Chat() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const agentPickerRef = useRef<HTMLDivElement>(null);
   const [taskExpanded, setTaskExpanded] = useState(true);
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
@@ -1469,7 +1470,10 @@ export function Chat() {
         )}
 
         <div
-          className="relative mx-auto max-w-2xl"
+          className={cn(
+            "relative mx-auto transition-all duration-200",
+            isComposerExpanded ? "max-w-4xl" : "max-w-2xl"
+          )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -1489,87 +1493,132 @@ export function Chat() {
             </div>
           )}
 
+          {/* Expanded Composer Header Toolbar */}
+          {isComposerExpanded && (
+            <div className="flex items-center justify-between px-3 py-1.5 mb-1.5 rounded-xl border border-gold-400/30 bg-neutral-950/80 backdrop-blur-md text-xs text-neutral-300 animate-fadeIn">
+              <div className="flex items-center gap-2 font-medium">
+                <span className="flex size-2 rounded-full bg-gold-400 animate-pulse" />
+                <span className="text-gold-300 font-semibold">Chế độ xem mở rộng (Multi-line Editor)</span>
+                <span className="text-neutral-500 font-mono text-[11px]">
+                  · {input.split("\n").length} dòng ({input.length} ký tự)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsComposerExpanded(false)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-neutral-400 hover:text-gold-300 hover:bg-neutral-850 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                title="Thu nhỏ khung chat"
+              >
+                <Minimize2 className="size-3.5" />
+                Thu nhỏ
+              </button>
+            </div>
+          )}
+
           <div
             className={cn(
-              "flex items-end gap-2 rounded-2xl border bg-neutral-900 p-2 focus-within:border-gold-400/60 transition-colors",
-              isDraggingOver ? "border-gold-400 bg-gold-400/10" : "border-neutral-700"
+              "flex items-end gap-2 rounded-2xl border bg-neutral-900 p-2 focus-within:border-gold-400/60 transition-all",
+              isDraggingOver ? "border-gold-400 bg-gold-400/10" : "border-neutral-700",
+              isComposerExpanded && "border-gold-400/40 bg-neutral-950 shadow-2xl shadow-black/80"
             )}
           >
-          <input
-            type="file"
-            multiple
-            ref={fileInputRef}
-            className="hidden"
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              if (files.length) addKnowledgeFiles(files);
-              e.target.value = "";
-            }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach files (PDF, Word, Excel, Text...)"
-            className="cursor-pointer rounded-xl p-2 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 transition-colors"
-          >
-            <Paperclip className="size-4" />
-          </button>
-          <button
-            onClick={() => setSkillPickerOpen((o) => !o)}
-            title="Chọn Kỹ năng (Skill) kích hoạt hoặc gõ /"
-            className={cn(
-              "cursor-pointer rounded-xl p-2 transition-colors",
-              activeSkill
-                ? "bg-gold-400/20 text-gold-300 border border-gold-400/40 hover:bg-gold-400/30"
-                : "text-neutral-500 hover:bg-neutral-800 hover:text-gold-300"
-            )}
-          >
-            <Wand2 className="size-4" />
-          </button>
+            <input
+              type="file"
+              multiple
+              ref={fileInputRef}
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) addKnowledgeFiles(files);
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach files (PDF, Word, Excel, Text...)"
+              className="cursor-pointer rounded-xl p-2 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 transition-colors shrink-0"
+            >
+              <Paperclip className="size-4" />
+            </button>
+            <button
+              onClick={() => setSkillPickerOpen((o) => !o)}
+              title="Chọn Kỹ năng (Skill) kích hoạt hoặc gõ /"
+              className={cn(
+                "cursor-pointer rounded-xl p-2 transition-colors shrink-0",
+                activeSkill
+                  ? "bg-gold-400/20 text-gold-300 border border-gold-400/40 hover:bg-gold-400/30"
+                  : "text-neutral-500 hover:bg-neutral-800 hover:text-gold-300"
+              )}
+            >
+              <Wand2 className="size-4" />
+            </button>
 
-          <textarea
-            ref={composerRef}
-            rows={1}
-            value={input}
-            placeholder={
-              activeSkill
-                ? `Đang dùng Skill: ${activeSkill.name}…`
-                : activeAgent
-                ? `Ask your ${activeAgent.name} (gõ / chọn Skill)…`
-                : "Message V Assistant (gõ / chọn Skill)…"
-            }
-            onChange={(e) => {
-              const val = e.target.value;
-              setInput(val);
-              if (val.startsWith("/")) {
-                setShowSlashMenu(true);
-                setSlashQuery(val.slice(1));
-              } else {
-                setShowSlashMenu(false);
+            <textarea
+              ref={composerRef}
+              rows={isComposerExpanded ? 10 : 1}
+              value={input}
+              placeholder={
+                activeSkill
+                  ? `Đang dùng Skill: ${activeSkill.name}…`
+                  : activeAgent
+                  ? `Ask your ${activeAgent.name} (gõ / chọn Skill)…`
+                  : "Message V Assistant (gõ / chọn Skill)…"
               }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                setShowSlashMenu(false);
-                void send();
-              }
-            }}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData.files ?? []);
-              if (files.length > 0) {
-                addKnowledgeFiles(files);
-              }
-            }}
-            className="max-h-40 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-neutral-500"
-          />
-          <button
-            onClick={() => void send()}
-            disabled={(!input.trim() && knowledgeFiles.filter((f) => !sentFileIds.has(f.id) && f.status === "ready").length === 0) || streaming || !activeModel}
-            className="cursor-pointer rounded-xl bg-gold-400 p-2 text-neutral-950 transition-colors hover:bg-gold-300 disabled:pointer-events-none disabled:opacity-40"
-          >
-            <SendHorizonal className="size-4" />
-          </button>
-        </div>
+              onChange={(e) => {
+                const val = e.target.value;
+                setInput(val);
+                if (val.startsWith("/")) {
+                  setShowSlashMenu(true);
+                  setSlashQuery(val.slice(1));
+                } else {
+                  setShowSlashMenu(false);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !isComposerExpanded) {
+                  e.preventDefault();
+                  setShowSlashMenu(false);
+                  void send();
+                }
+              }}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files ?? []);
+                if (files.length > 0) {
+                  addKnowledgeFiles(files);
+                }
+              }}
+              className={cn(
+                "flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-neutral-500 font-mono transition-all",
+                isComposerExpanded
+                  ? "h-64 sm:h-80 max-h-[500px] overflow-y-auto leading-relaxed"
+                  : "max-h-40 min-h-[38px]"
+              )}
+            />
+
+            {/* Toggle Expand / Maximize Button */}
+            <button
+              type="button"
+              onClick={() => setIsComposerExpanded((prev) => !prev)}
+              title={isComposerExpanded ? "Thu nhỏ khung chat" : "Mở rộng khung nhập liệu nhiều dòng"}
+              className={cn(
+                "cursor-pointer rounded-xl p-2 transition-colors shrink-0",
+                isComposerExpanded
+                  ? "bg-gold-400/20 text-gold-300 border border-gold-400/40 hover:bg-gold-400/30"
+                  : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+              )}
+            >
+              {isComposerExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </button>
+
+            <button
+              onClick={() => void send()}
+              disabled={(!input.trim() && knowledgeFiles.filter((f) => !sentFileIds.has(f.id) && f.status === "ready").length === 0) || streaming || !activeModel}
+              className="cursor-pointer rounded-xl bg-gold-400 p-2 text-neutral-950 transition-colors hover:bg-gold-300 disabled:pointer-events-none disabled:opacity-40 shrink-0"
+              title="Gửi câu lệnh (Enter)"
+            >
+              <SendHorizonal className="size-4" />
+            </button>
+          </div>
         </div>
         <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-neutral-600">
           Enter to send · Shift+Enter for a new line

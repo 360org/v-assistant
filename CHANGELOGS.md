@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.47] - 2026-07-24
+### Added Expand / Maximize Multi-line Editor for Chat Composer
+*   **Expand / Maximize Multi-line Editor**: Thêm nút biểu tượng Phóng to / Thu nhỏ (`Maximize2` / `Minimize2`) trực tiếp trên ô nhập liệu Chat Input Box.
+*   **Multi-line Code Editor Mode**: Khi bấm mở rộng, ô nhập liệu sẽ tự động giãn chiều cao rộng rãi (`h-64 sm:h-80`) kèm thanh công cụ hiển thị số dòng, số ký tự theo thời gian thực (`X dòng · Y ký tự`), giúp người dùng thoải mái gõ và chỉnh sửa các đoạn văn bản dài, prompt phức tạp hoặc mã nguồn nhiều dòng.
+
 ## [1.0.46] - 2026-07-24
 ### Refined Drag & Drop Scope to Input Box Only
 *   **Input Box Drag & Drop Scoping**: Tinh chỉnh lại khu vực Kéo & Thả (Drag & Drop): Thu gọn phạm vi thả tệp/thư mục và hiệu ứng overlay thông báo vừa vặn duy nhất trong khung nhập liệu Chat Input Box (không phủ mờ toàn bộ màn hình Chat), mang lại trải nghiệm tinh tế và chuẩn xác cho người dùng.
