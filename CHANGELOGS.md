@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.77] - 2026-07-24
+### Update Notification Banner & Local macOS Release
+*   **Thanh Thông Báo Cập Nhật Tự Động (`UpdateNotificationBanner`)**: Tự động phát hiện phiên bản mới từ GitHub Releases API và hiển thị thanh thông báo Glassmorphic Emerald ở đầu trang với nút 1-click `Tải Cập Nhật (.dmg)`.
+*   **Cập Nhật Bản Local macOS**: Đóng gói và cập nhật trực tiếp vào `/Applications/V Assistant.app` cho người dùng kiểm thử tính năng CLI Engine & Banner mới.
+
 ## [1.0.76] - 2026-07-24
 ### MCP & Terminal CLI Execution Engine
 *   **Hỗ trợ Thực thi Lệnh Terminal / CLI (`execute_cli`)**: Đã bổ sung công cụ `execute_cli` vào hệ thống Agent Tools và Rust Backend (`execute_cli_command`). Cho phép AI Agent chạy trực tiếp các lệnh Terminal/Shell (`bash`, `zsh`, `git`, `npm`, `python`, `ls`, `curl`...) trên máy Host.

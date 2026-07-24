@@ -16,6 +16,7 @@ import { Vault } from "@/pages/Vault";
 import { Scheduled } from "@/pages/Scheduled";
 import { Integrations } from "@/pages/Integrations";
 import { Settings } from "@/pages/Settings";
+import { UpdateNotificationBanner } from "@/components/UpdateNotificationBanner";
 
 const pages: Record<View, () => JSX.Element> = {
   home: Home,
@@ -93,7 +94,9 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-y-auto">
+        <UpdateNotificationBanner />
+        <div className="flex-1 min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={view}
@@ -106,6 +109,7 @@ export default function App() {
             <Page />
           </motion.div>
         </AnimatePresence>
+        </div>
       </main>
     </div>
   );

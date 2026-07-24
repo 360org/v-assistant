@@ -36,16 +36,17 @@ const legacyConnectionPath = join(process.cwd(), ".vua_ai_router_connections.jso
 function allowedUiOrigin(request) {
   const origin = request?.headers?.origin;
   if (!origin) return uiOrigin;
-  // Allow all local Tauri app origins (tauri.localhost, tauri://localhost, vassistant.localhost, localhost, 127.0.0.1, app://, etc.)
-  if (
-    origin.includes("localhost") ||
-    origin.includes("tauri") ||
-    origin.includes("vassistant") ||
-    origin.includes("127.0.0.1") ||
-    origin.startsWith("app://")
-  ) {
-    return origin;
-  }
+  try {
+    const candidate = new URL(origin);
+    if (
+      ["127.0.0.1", "localhost"].includes(candidate.hostname) ||
+      origin.includes("tauri") ||
+      origin.includes("vassistant") ||
+      origin.startsWith("app://")
+    ) {
+      return origin;
+    }
+  } catch {}
   return origin || uiOrigin;
 }
 
@@ -880,7 +881,7 @@ const server = createServer((request, response) => {
         // The OpenAI Codex OAuth client redirects to the fixed local relay.
         // A Tauri WebView origin is not a valid callback destination, so the
         // relay always returns the browser to the app's local manual callback.
-        await startCodexCallbackRelay("http://localhost:1420/callback");
+        await startCodexCallbackRelay(redirectUri);
         redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "claude") {
         redirectUri = "http://localhost:443/callback";
