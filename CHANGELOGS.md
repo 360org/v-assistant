@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.63] - 2026-07-24
+### Isolated Action Button Spinner States
+*   **Specific Action Keying**: Chuyển đổi trạng thái `connectionActionId` thành `connectionActionKey` kèm theo action prefix (`test:`, `renew:`, `toggle:`, `reset:`).
+*   **Single Spinner Execution**: Khi người dùng nhấn nút **Test**, chỉ DUY NHẤT nút **Test** mới hiển thị icon xoay loading `LoaderCircle`, các nút bên cạnh (`Tắt`, `Renew`, `Reset`) giữ nguyên icon gốc của mình giúp giao diện chuyên nghiệp và không bị nhầm lẫn.
+
 ## [1.0.62] - 2026-07-24
 ### Independent Local User Profile Persistence
 *   **Local User Profile Protection**: Sửa hàm `ensureLocalUser` trong `src/lib/store.tsx` để bảo vệ thông tin Local Profile đã khởi tạo ban đầu.

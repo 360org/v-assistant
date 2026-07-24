@@ -71,7 +71,7 @@ export function Settings() {
   const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
   const [manualCallbackUrl, setManualCallbackUrl] = useState("");
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
-  const [connectionActionId, setConnectionActionId] = useState<string | null>(null);
+  const [connectionActionKey, setConnectionActionKey] = useState<string | null>(null);
   const [expandedMessageIds, setExpandedMessageIds] = useState<Record<string, boolean>>({});
   const [editingLocalUser, setEditingLocalUser] = useState(false);
   const [localUserName, setLocalUserName] = useState("");
@@ -550,7 +550,7 @@ export function Settings() {
   };
 
   const renewConnectionToken = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`renew:${connection.id}`);
     setConnectionError(null);
     try {
       const vaultKey = `ai-router:credential:${connection.id}`;
@@ -623,12 +623,12 @@ export function Settings() {
       setConnectionError(error instanceof Error ? error.message : String(error));
       await refreshConnections();
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
     }
   };
 
   const testConnection = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`test:${connection.id}`);
     setConnectionError(null);
     try {
       await testAiRouterConnection(connection.id);
@@ -648,12 +648,12 @@ export function Settings() {
         prev.map((c) => (c.id === connection.id ? { ...c, lastError: errMsg, testStatus: "Failed" } : c)),
       );
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
     }
   };
 
   const resetConnection = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`reset:${connection.id}`);
     setConnectionError(null);
     try {
       await deleteAiRouterConnection(connection.id);
@@ -662,12 +662,12 @@ export function Settings() {
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : String(error));
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
     }
   };
 
   const toggleConnectionState = async (connection: AiRouterConnection) => {
-    setConnectionActionId(connection.id);
+    setConnectionActionKey(`toggle:${connection.id}`);
     setConnectionError(null);
     try {
       const nextActive = connection.isActive === false;
@@ -679,7 +679,7 @@ export function Settings() {
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : String(error));
     } finally {
-      setConnectionActionId(null);
+      setConnectionActionKey(null);
     }
   };
 
@@ -892,10 +892,10 @@ export function Settings() {
                     variant="ghost"
                     title="Tắt Provider (Tạm dừng khi hết token/hạn mức)"
                     onClick={() => void toggleConnectionState(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10"
                   >
-                    {connectionActionId === connection.id ? (
+                    {connectionActionKey === `toggle:${connection.id}` ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
                     ) : (
                       <PowerOff className="size-3.5" />
@@ -907,10 +907,10 @@ export function Settings() {
                     variant="secondary"
                     title="Test connection"
                     onClick={() => void testConnection(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                   >
-                    {connectionActionId === connection.id ? (
+                    {connectionActionKey === `test:${connection.id}` ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
                     ) : (
                       <FlaskConical className="size-3.5" />
@@ -922,10 +922,10 @@ export function Settings() {
                     variant="secondary"
                     title="Làm mới OAuth Token"
                     onClick={() => void renewConnectionToken(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium border border-gold-500/30 text-gold-300 hover:bg-gold-500/15"
                   >
-                    {connectionActionId === connection.id ? (
+                    {connectionActionKey === `renew:${connection.id}` ? (
                       <LoaderCircle className="size-3.5 animate-spin" />
                     ) : (
                       <RefreshCw className="size-3.5" />
@@ -937,10 +937,15 @@ export function Settings() {
                     variant="ghost"
                     title="Reset connection"
                     onClick={() => void resetConnection(connection)}
-                    disabled={connectionActionId === connection.id}
+                    disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                     className="h-8 px-2.5 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
                   >
-                    <RotateCcw className="size-3.5" /> Reset
+                    {connectionActionKey === `reset:${connection.id}` ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="size-3.5" />
+                    )}
+                    Reset
                   </Button>
                 </div>
               </div>
@@ -998,10 +1003,10 @@ export function Settings() {
                           variant="secondary"
                           title="Bật lại Provider này"
                           onClick={() => void toggleConnectionState(connection)}
-                          disabled={connectionActionId === connection.id}
+                          disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                           className="h-7 px-2.5 text-xs font-semibold border border-gold-500/40 text-gold-300 hover:bg-gold-500/20"
                         >
-                          {connectionActionId === connection.id ? (
+                          {connectionActionKey === `toggle:${connection.id}` ? (
                             <LoaderCircle className="size-3 animate-spin" />
                           ) : (
                             <Power className="size-3" />
@@ -1013,10 +1018,15 @@ export function Settings() {
                           variant="ghost"
                           title="Reset connection"
                           onClick={() => void resetConnection(connection)}
-                          disabled={connectionActionId === connection.id}
+                          disabled={Boolean(connectionActionKey?.endsWith(`:${connection.id}`))}
                           className="h-7 px-2 text-xs font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10"
                         >
-                          <RotateCcw className="size-3" /> Reset
+                          {connectionActionKey === `reset:${connection.id}` ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="size-3" />
+                          )}
+                          Reset
                         </Button>
                       </div>
                     </div>
