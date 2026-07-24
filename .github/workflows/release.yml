@@ -59,8 +59,8 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f -a "$tag" -m "Release $tag"
-          git push origin "$tag" --force
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
 
   build_macos:
     needs: version
@@ -74,8 +74,8 @@ jobs:
             target: "aarch64-apple-darwin"
             asset_suffix: "macOS-Apple-Silicon"
           # Native Node modules such as better-sqlite3 must be compiled on an
-          # Intel runner for the Intel desktop bundle. macos-13 is x86_64.
-          - platform: macos-13
+          # Intel runner for the Intel desktop bundle. macos-latest is ARM.
+          - platform: macos-15-intel
             args: "--target x86_64-apple-darwin"
             target: "x86_64-apple-darwin"
             asset_suffix: "macOS-Intel"
