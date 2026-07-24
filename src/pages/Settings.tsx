@@ -736,6 +736,82 @@ export function Settings() {
                 })}
               </div>
             </div>
+
+            {/* Integrated Preferences: Language & Theme */}
+            <div className="w-full border-t border-neutral-800/80 pt-3 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-medium text-neutral-200">Ngôn ngữ hiển thị (Language)</div>
+                  <div className="text-[11px] text-neutral-500">Ngôn ngữ mặc định cho giao diện</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setLanguage("vi")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      language === "vi"
+                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
+                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
+                    )}
+                  >
+                    🇻🇳 Tiếng Việt
+                  </button>
+                  <button
+                    onClick={() => setLanguage("en")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      language === "en"
+                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
+                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
+                    )}
+                  >
+                    🇬🇧 English
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/40 pt-2.5">
+                <div>
+                  <div className="text-xs font-medium text-neutral-200">Chủ đề giao diện (UI Theme)</div>
+                  <div className="text-[11px] text-neutral-500">Tùy biến phong cách màu sắc sang trọng</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setTheme("dark")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      theme === "dark"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
+                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
+                    )}
+                  >
+                    🟢 Dark Emerald
+                  </button>
+                  <button
+                    onClick={() => setTheme("gold")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      theme === "gold"
+                        ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
+                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
+                    )}
+                  >
+                    🟡 Warm Gold
+                  </button>
+                  <button
+                    onClick={() => setTheme("midnight")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                      theme === "midnight"
+                        ? "bg-blue-500/20 text-blue-300 border-blue-400/40"
+                        : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
+                    )}
+                  >
+                    🔵 Midnight Blue
+                  </button>
+                </div>
+              </div>
+            </div>
           </Card>
         ) : (
           <Card className="mt-3 flex flex-col gap-3">
@@ -1383,86 +1459,7 @@ export function Settings() {
         </Card>
       </section>
 
-      {/* Task 3: Theme & Language Settings */}
-      <section className="mt-10">
-        <h2 className="text-sm font-semibold text-neutral-300">
-          🌐 Giao diện & Ngôn ngữ (Theme & Language)
-        </h2>
-        <Card className="mt-3 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium text-neutral-100">Ngôn ngữ hiển thị (Language)</div>
-              <div className="text-xs text-neutral-400">Chọn ngôn ngữ mặc định cho giao diện ứng dụng</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setLanguage("vi")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  language === "vi"
-                    ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🇻🇳 Tiếng Việt
-              </button>
-              <button
-                onClick={() => setLanguage("en")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  language === "en"
-                    ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🇬🇧 English
-              </button>
-            </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/80 pt-3">
-            <div>
-              <div className="text-sm font-medium text-neutral-100">Chủ đề giao diện (UI Theme)</div>
-              <div className="text-xs text-neutral-400">Tùy biến phong cách màu sắc sang trọng</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTheme("dark")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  theme === "dark"
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🟢 Dark Emerald
-              </button>
-              <button
-                onClick={() => setTheme("gold")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  theme === "gold"
-                    ? "bg-gold-400/20 text-gold-300 border-gold-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🟡 Warm Gold
-              </button>
-              <button
-                onClick={() => setTheme("midnight")}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                  theme === "midnight"
-                    ? "bg-blue-500/20 text-blue-300 border-blue-400/40"
-                    : "border-neutral-700 text-neutral-400 hover:bg-neutral-800"
-                )}
-              >
-                🔵 Midnight Blue
-              </button>
-            </div>
-          </div>
-        </Card>
-      </section>
 
       {/* Task 4: Full Data Backup & Restore */}
       <section className="mt-10">

@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.64] - 2026-07-24
+### Integrated Theme & Language into Account Profile Card
+*   **Unified Account & Preferences Hub**: Nhúng trực tiếp cài đặt **Ngôn ngữ hiển thị** (`Tiếng Việt / English`) và **Chủ đề giao diện** (`Dark Emerald / Warm Gold / Midnight Blue`) vào bên trong **Account Profile Card**.
+*   **Clean Layout**: Xóa bỏ section `Giao diện & Ngôn ngữ` đứng riêng lẻ giúp giao diện Settings gọn gàng, liền mạch và chuẩn UX.
+
 ## [1.0.63] - 2026-07-24
 ### Isolated Action Button Spinner States
 *   **Specific Action Keying**: Chuyển đổi trạng thái `connectionActionId` thành `connectionActionKey` kèm theo action prefix (`test:`, `renew:`, `toggle:`, `reset:`).
