@@ -215,6 +215,13 @@ interface PersistedState {
   theme?: "dark" | "gold" | "midnight";
 }
 
+export interface ActiveBackgroundTask {
+  id: string;
+  name: string;
+  command?: string;
+  startedAt: number;
+}
+
 const STORAGE_KEY = "v-assistant-state-v1";
 
 const initialChatSession = newChatSession();
@@ -348,6 +355,9 @@ interface AppStore extends PersistedState {
   setTheme: (theme: "dark" | "gold" | "midnight") => void;
   exportFullBackupData: () => string;
   importFullBackupData: (jsonStr: string) => boolean;
+  activeBackgroundTasks: ActiveBackgroundTask[];
+  startBackgroundTask: (name: string, command?: string) => string;
+  stopBackgroundTask: (id: string) => void;
   setActiveAgent: (agentId: string | null) => void;
   /** Mọi agent cài được: dựng sẵn (AGENT_STORE) + đã nhập từ ngoài. */
   agents: AgentTemplate[];
@@ -1028,6 +1038,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const [activeBackgroundTasks, setActiveBackgroundTasks] = useState<ActiveBackgroundTask[]>([]);
+
+  const startBackgroundTask = useCallback((name: string, command?: string) => {
+    const id = `bg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setActiveBackgroundTasks((prev) => [...prev, { id, name, command, startedAt: Date.now() }]);
+    return id;
+  }, []);
+
+  const stopBackgroundTask = useCallback((id: string) => {
+    setActiveBackgroundTasks((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   const toggleAgent = useCallback((agentId: string) => {
     setState((s) => ({
       ...s,
@@ -1480,6 +1502,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTheme,
       exportFullBackupData,
       importFullBackupData,
+      activeBackgroundTasks,
+      startBackgroundTask,
+      stopBackgroundTask,
       setActiveAgent,
       toggleIntegration,
       addKnowledgeFiles,
