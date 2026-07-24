@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.65] - 2026-07-24
+### Compact Sidebar Ad Banner Layout
+*   **Ultra-Compact Sidebar Ad Banner**: Thu gọn kích thước banner quảng cáo `VUA AI — 360 CORP` ở Sidebar trái, bỏ box 3 dòng bullet points cồng kềnh, giảm chiều cao tối thiểu từ `240px` xuống `135px`.
+*   **Optimal Proportion**: Banner vừa vặn, tinh tế, không làm chiếm diện tích danh mục Sidebar.
+
 ## [1.0.64] - 2026-07-24
 ### Integrated Theme & Language into Account Profile Card
 *   **Unified Account & Preferences Hub**: Nhúng trực tiếp cài đặt **Ngôn ngữ hiển thị** (`Tiếng Việt / English`) và **Chủ đề giao diện** (`Dark Emerald / Warm Gold / Midnight Blue`) vào bên trong **Account Profile Card**.
