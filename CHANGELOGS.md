@@ -2,6 +2,13 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.78] - 2026-07-24
+### Async Thread Offloading, 30s CLI Hard Timeout & Gemini 3.6/3.5 Dual Catalog
+*   **Async IPC Thread Offloading (`async fn`)**: Chuyển đổi toàn bộ các hàm Tauri IPC Handler (`execute_cli_command`, `vault_set`, `vault_get`, `vault_delete`) sang `async fn` đẩy việc xử lý ra Tokio Worker Thread Pool. Giải phóng 100% Main Event Loop Thread của macOS, loại bỏ triệt để tình trạng `Not Responding`.
+*   **Smart CLI Hard Timeout (30 Seconds)**: Tích hợp đồng hồ đếm giờ 30s tự động ngắt (`kill child process`) đối với các lệnh CLI bị treo/vòng lặp vô hạn, đảm bảo ứng dụng không bao giờ bị đơ lag.
+*   **Tự Động Nạp Cổng AI Router Sidecar (`kill_stale_port_process`)**: Tự động giải phóng cổng `20128` trước khi khởi chạy AI Router, ngăn chặn lỗi `EADDRINUSE 20128` gây mất danh sách tài khoản Vendor AI.
+*   **Bổ Sung Gemini 3.6 Flash & Gemini 3.5 Flash Catalog**: Hỗ trợ song song cả hai dòng mô hình Gemini 3.6 Flash và Gemini 3.5 Flash (High/Medium/Low) trong AI Router Registry và giao diện chọn mô hình Chat.
+
 ## [1.0.77] - 2026-07-24
 ### Update Notification Banner & Local macOS Release
 *   **Thanh Thông Báo Cập Nhật Tự Động (`UpdateNotificationBanner`)**: Tự động phát hiện phiên bản mới từ GitHub Releases API và hiển thị thanh thông báo Glassmorphic Emerald ở đầu trang với nút 1-click `Tải Cập Nhật (.dmg)`.

@@ -146,17 +146,17 @@ fn delete_secret(runtime_dir: &Path, key: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn vault_set(state: State<'_, crate::runtime::Runtime>, key: String, value: String) -> Result<(), String> {
+pub async fn vault_set(state: State<'_, crate::runtime::Runtime>, key: String, value: String) -> Result<(), String> {
     set_secret(&state.dir, &key, &value)
 }
 
 #[tauri::command]
-pub fn vault_get(state: State<'_, crate::runtime::Runtime>, key: String) -> Result<Option<String>, String> {
+pub async fn vault_get(state: State<'_, crate::runtime::Runtime>, key: String) -> Result<Option<String>, String> {
     get_secret(&state.dir, &key)
 }
 
 #[tauri::command]
-pub fn vault_delete(state: State<'_, crate::runtime::Runtime>, key: String) -> Result<(), String> {
+pub async fn vault_delete(state: State<'_, crate::runtime::Runtime>, key: String) -> Result<(), String> {
     delete_secret(&state.dir, &key)
 }
 

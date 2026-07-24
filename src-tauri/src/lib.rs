@@ -227,15 +227,19 @@ fn list_host_dir(path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn execute_cli_command(command: String, cwd: Option<String>) -> Result<String, String> {
-    use std::process::Command;
+async fn execute_cli_command(command: String, cwd: Option<String>) -> Result<String, String> {
+    use std::process::{Command, Stdio};
     use std::path::PathBuf;
+    use std::time::Duration;
 
     let shell = if cfg!(target_os = "windows") { "cmd" } else { "sh" };
     let shell_arg = if cfg!(target_os = "windows") { "/C" } else { "-c" };
 
     let mut cmd = Command::new(shell);
-    cmd.arg(shell_arg).arg(&command);
+    cmd.arg(shell_arg)
+        .arg(&command)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     if let Some(ref dir) = cwd {
         if !dir.trim().is_empty() {
@@ -249,21 +253,43 @@ fn execute_cli_command(command: String, cwd: Option<String>) -> Result<String, S
         }
     }
 
-    let output = cmd.output().map_err(|e| format!("Lỗi thực thi lệnh CLI: {}", e))?;
+    let mut child = cmd.spawn().map_err(|e| format!("Lỗi khởi tạo lệnh CLI: {}", e))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let exit_code = output.status.code().unwrap_or(-1);
-
-    if exit_code == 0 {
-        if stdout.trim().is_empty() && !stderr.trim().is_empty() {
-            Ok(format!("[CLI stdout (rỗng)]\n[stderr]\n{}", stderr))
-        } else {
-            Ok(stdout)
+    let timeout = Duration::from_secs(30);
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
+                if let Some(mut out) = child.stdout.take() {
+                    let _ = std::io::Read::read_to_end(&mut out, &mut stdout);
+                }
+                if let Some(mut err_out) = child.stderr.take() {
+                    let _ = std::io::Read::read_to_end(&mut err_out, &mut stderr);
+                }
+                let stdout_str = String::from_utf8_lossy(&stdout).to_string();
+                let stderr_str = String::from_utf8_lossy(&stderr).to_string();
+                let exit_code = status.code().unwrap_or(-1);
+                if exit_code == 0 {
+                    if stdout_str.trim().is_empty() && !stderr_str.trim().is_empty() {
+                        return Ok(format!("[CLI stdout (rỗng)]\n[stderr]\n{}", stderr_str));
+                    } else {
+                        return Ok(stdout_str);
+                    }
+                } else {
+                    return Err(format!("Lỗi thực thi lệnh CLI (Mã lỗi {}):\n{}", exit_code, stderr_str));
+                }
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    return Err("Lệnh CLI bị hủy do quá thời gian chờ (Timeout 30s).".to_string());
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(e) => return Err(format!("Lỗi khi chờ lệnh CLI: {}", e)),
         }
-    } else {
-        Err(format!("Lỗi lệnh CLI (Exit code {}):\n{}\n{}", exit_code, stdout, stderr))
     }
 }
 

@@ -196,11 +196,23 @@ fn spawn_process(
     cmd.spawn().map_err(err)
 }
 
+fn kill_stale_port_process(_port: u16) {
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        let _ = Command::new("pkill")
+            .arg("-f")
+            .arg("sidecar.mjs")
+            .status();
+    }
+}
+
 fn spawn_ai_router(
     dir: &Path,
     project_dir: &Path,
     broker: &VaultBroker,
 ) -> Result<Child, String> {
+    kill_stale_port_process(20128);
     let sidecar = project_dir.join("ai-router/src/sidecar.mjs");
     if !sidecar.exists() {
         return Err("AI Router sidecar source not found".to_string());
