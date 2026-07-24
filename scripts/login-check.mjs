@@ -362,9 +362,9 @@ check("Gemini subscription → uses an Antigravity model",
   gemRun.model === mod.SUBSCRIPTION_MODELS.gemini);
 check("Gemini picker → exposes Antigravity model catalog",
   mod.MODELS.gemini.map((m) => m.id).join(",") === [
-    "gemini-3.5-flash-low",
-    "gemini-3-flash-agent",
-    "gemini-3.5-flash-extra-low",
+    "gemini-3.6-flash-high",
+    "gemini-3.6-flash-medium",
+    "gemini-3.6-flash-low",
     "gemini-3.1-pro-low",
     "gemini-pro-agent",
     "claude-sonnet-4-6",
