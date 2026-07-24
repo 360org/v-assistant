@@ -2,6 +2,12 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.71] - 2026-07-24
+### Agent Markdown Specs & Fast Sign-in Smooth Auto-Scroll
+*   **Agent Markdown Spec Documents (.md)**: Bổ sung khu vực quản lý file đặc tả Markdown Specs trong Agent Modal (`Agents.tsx`), hỗ trợ sẵn 11 file chuẩn Paperclip / 360 CORP (`SOUL.md`, `MISSION.md`, `NORTH_STAR.md`, `HEARTBEAT.md`, `PRINCIPLES.md`, `VALUES.md`, `THINKING.md`, `DECISION.md`, `GOVERNANCE.md`, `PLAYBOOK.md`, `MANIFESTO.md`) cùng tùy chọn đính kèm file `.md` tùy chỉnh.
+*   **Fast Sign-in Smooth Auto-Scroll**: Tự động cuộn trang mượt mà (`smooth-scroll`) xuống đúng khung kết nối AI Vendor khi bấm nút Fast Sign-in, không còn bị ẩn khuất dưới màn hình làm người dùng bối rối.
+*   **Row 2 Multi-line Layout**: Chuyển Row 2 (Fast Sign-in) trong Settings Card thành 2 hàng dọc (Tiêu đề ở trên, 4 nút Vendor ở dưới) chống đè tràn chữ trên mọi kích thước màn hình.
+
 ## [1.0.70] - 2026-07-24
 ### Pixel-Perfect Account & Preferences Mockup Design
 *   **Exact Mockup Layout**: Tái thiết kế toàn bộ khu vực **Tài khoản & Thiết lập (Account & Preferences)** khớp chính xác 100% bản vẽ Mockup người dùng yêu cầu:

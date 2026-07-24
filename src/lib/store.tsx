@@ -106,6 +106,8 @@ export interface AgentConfig {
   memory?: string[];
   /** Enabled skill IDs/names for this agent. */
   skills?: string[];
+  /** Custom Markdown spec docs (SOUL.md, MISSION.md, NORTH_STAR.md, etc.) */
+  docs?: Record<string, string>;
 }
 
 /**

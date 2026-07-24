@@ -438,6 +438,7 @@ export function Settings() {
   };
 
   const [fastSignInAccountId, setFastSignInAccountId] = useState<string | null>(null);
+  const vendorSectionRef = useRef<HTMLDivElement>(null);
 
   const signInLocalAiAccount = async (providerId: string) => {
     setFastSignInAccountId(providerId);
@@ -445,6 +446,9 @@ export function Settings() {
       setShowProviderManager(true);
       setProviderQuery("");
       setConnectMessage(null);
+      setTimeout(() => {
+        vendorSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
       let catalog = providerCatalog;
       if (!catalog.length) {
         try {
@@ -462,6 +466,9 @@ export function Settings() {
       }
       setSelectedProvider(provider);
       await connectSubscription(provider);
+      setTimeout(() => {
+        vendorSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
     } finally {
       setFastSignInAccountId(null);
     }
@@ -769,9 +776,9 @@ export function Settings() {
               </div>
             </div>
 
-            {/* Row 2: Fast Sign-in AI Accounts */}
-            <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
+            {/* Row 2: Fast Sign-in AI Accounts (2 Vertical Rows: Title Top, Buttons Bottom) */}
+            <div className="py-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/15 border border-blue-500/30 shadow-xs">
                   <Zap className="size-4.5 text-blue-400 fill-blue-400/20" />
                 </div>
@@ -783,7 +790,7 @@ export function Settings() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 {LOCAL_AI_ACCOUNTS.map((account) => {
                   const connected = isLocalAccountConnected(account.id);
                   const isThisConnecting = fastSignInAccountId === account.id;
@@ -1241,7 +1248,7 @@ export function Settings() {
           <ExternalLink className="size-4" /> Connect or manage vendors
         </Button>
         {showProviderManager && (
-          <div className="mt-4 border border-neutral-800 bg-neutral-950">
+          <div ref={vendorSectionRef} className="mt-4 scroll-mt-6 rounded-2xl border border-neutral-800 bg-neutral-950 p-1 shadow-2xl">
             <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2 text-xs text-neutral-400">
               <span>AI Router Provider Manager</span>
               <button className="cursor-pointer text-gold-300 hover:text-gold-200" onClick={() => setShowProviderManager(false)}>Close</button>
