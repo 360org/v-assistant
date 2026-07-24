@@ -2,6 +2,12 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.45] - 2026-07-24
+### Added GitHub Auto-Updater, Drag & Drop Folders/Files & Smart Task Status Widget
+*   **GitHub Releases Auto-Updater**: Thêm cơ chế tự động kiểm tra phiên bản mới từ GitHub Releases (`360org/v-assistant`). Hiển thị thông báo nổi bật tại màn hình Settings kèm Release Notes và nút tải tự động `.dmg` 1-click.
+*   **Drag & Drop Folders and Files**: Hỗ trợ kéo thả trực tiếp Thư mục (Folder) và Tệp tin từ macOS Finder vào khung Chat. Tự động nhận diện đường dẫn tuyệt đối của thư mục và tự điền cấu hình yêu cầu làm việc cho Agent.
+*   **Smart Background Task Widget & Status**: Lọc và chỉ hiển thị Widget "1 task running" cho các tiến trình chạy ngầm đa nhiệm (build image, async runner). Khắc phục triệt để lỗi bong bóng chat bị rỗng khi task chưa thực thi.
+
 ## [1.0.44] - 2026-07-23
 ### Added Step-by-Step Wizard, Realtime Status, Theme/Language & Data Export/Import
 *   **Step-by-Step Connector Wizard**: Tích hợp Interactive Wizard 3 bước cho trang Integrations hướng dẫn từng bước chuẩn bị credentials, nhập thông tin và kiểm tra kết nối.
