@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.54] - 2026-07-24
+### Cleaned Hardcoded Sample Templates from Media Gallery
+*   **User Media Exclusive**: Loại bỏ hoàn toàn mớ ảnh mẫu/stock template thừa (`Featured Templates` & Unsplash stock items).
+*   **Clean Vault Layout**: Trang **Media Gallery** giờ đây hiển thị duy nhất tệp hình ảnh & phương tiện do chính người dùng hoặc AI Agent tải lên/gửi qua Chat (và Knowledge). Tích hợp giao diện Empty State sạch sẽ khi chưa có phương tiện nào.
+
 ## [1.0.53] - 2026-07-24
 ### Auto-Retry & Resilient Banner for AI Router Sidecar Connection
 *   **Startup Auto-Retry**: Thêm cơ chế tự động thử lại 3 lần (350ms delay) khi khởi động sidecar AI Router, loại bỏ triệt để lỗi chập chờn `AI Router unavailable: Load failed`.

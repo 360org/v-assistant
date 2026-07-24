@@ -15,49 +15,7 @@ import { fileObjectURLs, useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// Default curated inspiration templates matching the reference UI
-const FEATURED_TEMPLATES = [
-  {
-    id: "feat-1",
-    title: "Glossy Product Shot",
-    url: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-2",
-    title: "Chibi Character",
-    url: "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-3",
-    title: "Object Remover",
-    url: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-4",
-    title: "Professional Headshot",
-    url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-5",
-    title: "Haze Portrait",
-    url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-6",
-    title: "Product Showcase",
-    url: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-7",
-    title: "Logo Editor",
-    url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
-  },
-  {
-    id: "feat-8",
-    title: "70s Street Style",
-    url: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
-  },
-];
+// Media Gallery displays ONLY media uploaded by user through chat or knowledge
 
 function GalleryCardImage({
   item,
@@ -225,7 +183,7 @@ export function MediaGallery() {
     extractFromMessages(session.messages, session.id, session.title || "Cuộc trò chuyện");
   });
 
-  // Combine chat images, IDB images, and featured templates
+  // Combine chat images & user uploaded IDB images ONLY
   const allGalleryItems = [
     ...chatMediaItems.map((item) => ({
       id: item.id,
@@ -243,12 +201,6 @@ export function MediaGallery() {
         url: img.dataUrl || fileObjectURLs.get(img.id) || "",
         type: "uploaded" as const,
       })),
-    ...FEATURED_TEMPLATES.map((tpl) => ({
-      id: tpl.id,
-      title: tpl.title,
-      url: tpl.url,
-      type: "template" as const,
-    })),
   ];
 
   const filteredItems = allGalleryItems.filter((item) => {
@@ -278,81 +230,78 @@ export function MediaGallery() {
 
       {/* Main Scrollable Content */}
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 pb-32">
-        {/* Section 1: Featured Templates */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold tracking-tight text-neutral-100">
-            Featured Templates
-          </h2>
-          <Button
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            className="cursor-pointer bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-neutral-200"
-          >
-            <Plus className="size-4" /> Upload Media
-          </Button>
-        </div>
-
-        {/* Carousel Grid */}
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-4 scrollbar-none">
-          {FEATURED_TEMPLATES.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => setSelectedImage({ id: item.id, name: item.title, url: item.url })}
-              className="group relative h-64 w-44 shrink-0 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 cursor-pointer shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-gold-400/80"
-            >
-              <img
-                src={item.url}
-                alt={item.title}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-3 flex items-end">
-                <span className="text-xs font-semibold text-white drop-shadow-md truncate">
-                  {item.title}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Section 2: Discover (Media Vault from Chat & Knowledge) */}
-        <div className="mt-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold tracking-tight text-neutral-100">
-              Discover Media Vault
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-neutral-100 flex items-center gap-2">
+              <ImageIcon className="size-5 text-gold-400" />
+              Media Vault
             </h2>
-            <div className="flex gap-1.5 text-xs">
+            <p className="mt-0.5 text-xs text-neutral-400">
+              Kho lưu trữ hình ảnh & phương tiện được tải lên từ các cuộc trò chuyện Chat
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5 text-xs bg-neutral-900/80 p-1 rounded-xl border border-neutral-800">
               <button
                 onClick={() => setFilterType("all")}
                 className={cn(
                   "px-3 py-1 rounded-lg transition-colors cursor-pointer font-medium",
-                  filterType === "all" ? "bg-gold-400/20 text-gold-300 border border-gold-400/40" : "bg-neutral-900 text-neutral-400 hover:text-neutral-200"
+                  filterType === "all" ? "bg-gold-400/20 text-gold-300 border border-gold-400/40" : "text-neutral-400 hover:text-neutral-200"
                 )}
               >
-                All Media ({allGalleryItems.length})
+                Tất cả ({allGalleryItems.length})
               </button>
               <button
                 onClick={() => setFilterType("chat")}
                 className={cn(
                   "px-3 py-1 rounded-lg transition-colors cursor-pointer font-medium",
-                  filterType === "chat" ? "bg-gold-400/20 text-gold-300 border border-gold-400/40" : "bg-neutral-900 text-neutral-400 hover:text-neutral-200"
+                  filterType === "chat" ? "bg-gold-400/20 text-gold-300 border border-gold-400/40" : "text-neutral-400 hover:text-neutral-200"
                 )}
               >
-                From Chat ({chatMediaItems.length})
+                Từ Chat ({chatMediaItems.length})
               </button>
               <button
                 onClick={() => setFilterType("uploaded")}
                 className={cn(
                   "px-3 py-1 rounded-lg transition-colors cursor-pointer font-medium",
-                  filterType === "uploaded" ? "bg-gold-400/20 text-gold-300 border border-gold-400/40" : "bg-neutral-900 text-neutral-400 hover:text-neutral-200"
+                  filterType === "uploaded" ? "bg-gold-400/20 text-gold-300 border border-gold-400/40" : "text-neutral-400 hover:text-neutral-200"
                 )}
               >
                 Knowledge Files ({idbImages.length})
               </button>
             </div>
+            <Button
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="cursor-pointer bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-neutral-200"
+            >
+              <Plus className="size-4" /> Tải ảnh lên
+            </Button>
           </div>
+        </div>
 
-          {/* Masonry Columns */}
-          <div className="mt-4 columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5">
+        {/* Gallery Grid or Empty State */}
+        {filteredItems.length === 0 ? (
+          <div className="mt-12 flex flex-col items-center justify-center rounded-3xl border border-dashed border-neutral-800 bg-neutral-900/40 p-12 text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-neutral-900 border border-neutral-800 text-gold-400 shadow-inner">
+              <ImageIcon className="size-8" />
+            </div>
+            <h3 className="mt-4 text-base font-bold text-neutral-100">Chưa có tệp Media nào</h3>
+            <p className="mt-1.5 max-w-sm text-xs text-neutral-400 leading-relaxed">
+              Tất cả ảnh và tệp truyền thông bạn hoặc AI Agent gửi trong cuộc trò chuyện Chat sẽ tự động được lưu trữ và hiển thị tại đây.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              <Button size="sm" onClick={() => setView("chat")} className="bg-gold-400 text-neutral-950 hover:bg-gold-300 font-semibold cursor-pointer shadow-md">
+                <MessageSquare className="size-4" /> Đến trang Chat ngay
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="cursor-pointer">
+                <Plus className="size-4" /> Tải ảnh trực tiếp lên
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5">
             {filteredItems.map((item, idx) => (
               <div
                 key={item.id + idx}
@@ -401,7 +350,7 @@ export function MediaGallery() {
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Floating Prompt & Filter Bar at Bottom */}
