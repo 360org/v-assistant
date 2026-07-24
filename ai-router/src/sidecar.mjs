@@ -938,7 +938,16 @@ const server = createServer((request, response) => {
   }
   if (url.pathname === "/v1/providers" && request.method === "GET") {
     void readConnections()
-      .then((connections) => sendJson(response, 200, { connections }))
+      .then((connections) => {
+        const sorted = [...connections].sort((a, b) => {
+          const aDisabled = a.isActive === false;
+          const bDisabled = b.isActive === false;
+          if (aDisabled && !bDisabled) return 1;
+          if (!aDisabled && bDisabled) return -1;
+          return 0;
+        });
+        sendJson(response, 200, { connections: sorted });
+      })
       .catch((error) => sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }));
     return;
   }

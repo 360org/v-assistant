@@ -838,7 +838,15 @@ export function Settings() {
           </Card>
         )}
         <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            {connections.map((connection) => (
+            {[...connections]
+              .sort((a, b) => {
+                const aDisabled = a.isActive === false;
+                const bDisabled = b.isActive === false;
+                if (aDisabled && !bDisabled) return 1;
+                if (!aDisabled && bDisabled) return -1;
+                return 0;
+              })
+              .map((connection) => (
               <div
                 key={connection.id}
                 className={cn(

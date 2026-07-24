@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.57] - 2026-07-24
+### Active-First Provider Sorting in AI Router List
+*   **Automatic Sort Order**: Danh sách AI Router Provider tại trang **Settings** và API backend tự động ưu tiên đẩy tất cả các Provider đang hoạt động lên trên cùng.
+*   **Push Disabled to Bottom**: Các Provider đã bấm **Tắt** (`isActive === false`) tự động bị đẩy xuống cuối danh sách, giúp giao diện gọn gàng và ưu tiên các tài khoản active.
+
 ## [1.0.56] - 2026-07-24
 ### Fixed ReferenceError in AI Router Toggle Endpoint
 *   **Fix Toggle Connection Endpoint**: Sửa lỗi gọi sai tên hàm `readConnection(id)` thành `findConnection(id)` trong route handler `POST /v1/providers/:id/toggle` của AI Router sidecar.
