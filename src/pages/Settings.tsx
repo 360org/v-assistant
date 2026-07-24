@@ -789,7 +789,7 @@ export function Settings() {
                   const isThisConnecting = fastSignInAccountId === account.id;
 
                   let AccountIcon = Sparkles;
-                  if (account.id === "chatgpt") AccountIcon = Bot;
+                  if (account.id === "codex") AccountIcon = Bot;
                   else if (account.id === "claude") AccountIcon = Brain;
                   else if (account.id === "grok-cli") AccountIcon = connected ? CheckCircle2 : Zap;
 
