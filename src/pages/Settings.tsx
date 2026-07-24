@@ -3,7 +3,7 @@ import { Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, Folder
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { useApp } from "@/lib/store";
-import { getProvider, type ProviderId } from "@/lib/catalog";
+
 import {
   AI_ROUTER_BASE_URL,
   captureGrokWebSsoCookie,
