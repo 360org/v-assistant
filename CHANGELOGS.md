@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.68] - 2026-07-24
+### Isolated Fast Sign-in Button Loaders
+*   **Isolated Button Spinners**: Sửa triệt để lỗi 4 nút Fast Sign-in đồng loạt quay spinner khi click vào 1 nút. Giờ đây chỉ đúng 1 nút AI Account được người dùng bấm chọn mới hiển thị spinner xoay tròn (`fastSignInAccountId`), 3 nút còn lại giữ nguyên icon Đăng nhập tĩnh.
+
 ## [1.0.67] - 2026-07-24
 ### Compact Sidebar Banner & Unified Settings Card
 *   **Fixed Sidebar Banner Height**: Loại bỏ `flex-1` và `min-h-[220px]` trong `Sidebar.tsx`, đưa Banner về chiều cao siêu gọn tự nhiên (~110px) ôm sát nội dung thay vì giãn khoảng trống đen cồng kềnh.

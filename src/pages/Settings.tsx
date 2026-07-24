@@ -437,27 +437,34 @@ export function Settings() {
     }
   };
 
+  const [fastSignInAccountId, setFastSignInAccountId] = useState<string | null>(null);
+
   const signInLocalAiAccount = async (providerId: string) => {
-    setShowProviderManager(true);
-    setProviderQuery("");
-    setConnectMessage(null);
-    let catalog = providerCatalog;
-    if (!catalog.length) {
-      try {
-        catalog = await getAiRouterProviderCatalog();
-        setProviderCatalog(catalog);
-      } catch (error) {
-        setConnectMessage(error instanceof Error ? error.message : String(error));
+    setFastSignInAccountId(providerId);
+    try {
+      setShowProviderManager(true);
+      setProviderQuery("");
+      setConnectMessage(null);
+      let catalog = providerCatalog;
+      if (!catalog.length) {
+        try {
+          catalog = await getAiRouterProviderCatalog();
+          setProviderCatalog(catalog);
+        } catch (error) {
+          setConnectMessage(error instanceof Error ? error.message : String(error));
+          return;
+        }
+      }
+      const provider = catalog.find((item) => item.id === providerId);
+      if (!provider?.oauthProvider) {
+        setConnectMessage("This AI account is not available from the local AI Router.");
         return;
       }
+      setSelectedProvider(provider);
+      await connectSubscription(provider);
+    } finally {
+      setFastSignInAccountId(null);
     }
-    const provider = catalog.find((item) => item.id === providerId);
-    if (!provider?.oauthProvider) {
-      setConnectMessage("This AI account is not available from the local AI Router.");
-      return;
-    }
-    setSelectedProvider(provider);
-    await connectSubscription(provider);
   };
 
   const copyManualAuthUrl = () => {
@@ -761,6 +768,7 @@ export function Settings() {
               <div className="flex flex-wrap gap-2">
                 {LOCAL_AI_ACCOUNTS.map((account) => {
                   const connected = isLocalAccountConnected(account.id);
+                  const isThisConnecting = fastSignInAccountId === account.id;
                   return (
                     <Button
                       key={account.id}
@@ -773,7 +781,7 @@ export function Settings() {
                         connected ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "text-neutral-300 hover:bg-neutral-800 border border-neutral-800"
                       )}
                     >
-                      {connecting ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
+                      {isThisConnecting ? <LoaderCircle className="size-3.5 animate-spin" /> : <LogIn className="size-3.5" />}
                       {connected ? `${account.name} connected` : `Sign in ${account.name}`}
                     </Button>
                   );
@@ -868,7 +876,7 @@ export function Settings() {
             <div className="flex flex-wrap gap-2">
               {LOCAL_AI_ACCOUNTS.map((account) => (
                 <Button key={account.id} size="sm" onClick={() => void signInLocalAiAccount(account.id)} disabled={connecting}>
-                  {connecting ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
+                  {fastSignInAccountId === account.id ? <LoaderCircle className="size-4 animate-spin" /> : <LogIn className="size-4" />}
                   Sign in {account.name}
                 </Button>
               ))}
