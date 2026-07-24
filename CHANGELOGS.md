@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.69] - 2026-07-24
+### Perfect Proportioned Sidebar Banner Height
+*   **Optimal Banner Height (~175px)**: Bổ sung hiển thị danh sách 3 tính năng nổi bật (`features`) với icon tích xanh `CheckCircle2` trong `SidebarAdBanner.tsx`. Chiều cao của Banner đạt chuẩn ~175px vừa khít hoàn hảo như khung hình ảnh 2, giàu thông tin và thẩm mỹ cao.
+
 ## [1.0.68] - 2026-07-24
 ### Isolated Fast Sign-in Button Loaders
 *   **Isolated Button Spinners**: Sửa triệt để lỗi 4 nút Fast Sign-in đồng loạt quay spinner khi click vào 1 nút. Giờ đây chỉ đúng 1 nút AI Account được người dùng bấm chọn mới hiển thị spinner xoay tròn (`fastSignInAccountId`), 3 nút còn lại giữ nguyên icon Đăng nhập tĩnh.

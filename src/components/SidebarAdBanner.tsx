@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Bot, ExternalLink, Zap } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle2, ExternalLink, Zap } from "lucide-react";
 import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 
@@ -141,6 +141,18 @@ export function SidebarAdBanner({ className }: { className?: string }) {
               <p className="text-[10px] font-medium leading-normal text-neutral-400 line-clamp-2">
                 {banner.subtitle}
               </p>
+            )}
+
+            {/* Feature bullets to achieve rich content & exact ~175px ideal height */}
+            {banner.features && banner.features.length > 0 && (
+              <div className="my-0.5 flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-950/25 p-2 backdrop-blur-xs">
+                {banner.features.map((feat, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-200/90">
+                    <CheckCircle2 className="size-3 shrink-0 text-emerald-400" />
+                    <span className="truncate">{feat}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
