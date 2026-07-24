@@ -337,6 +337,52 @@ async function withStore<T>(
 }
 
 /** Extract + chunk + persist one file into a role's bucket. Returns chunk count. */
+export async function savePhysicalDataFile(
+  filename: string,
+  fileOrB64: File | string,
+  subfolder = "uploads"
+): Promise<string | null> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    return null;
+  }
+  try {
+    const customDir = localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
+    let contentB64 = "";
+    if (typeof fileOrB64 === "string") {
+      contentB64 = fileOrB64;
+    } else {
+      contentB64 = await fileToDataUrl(fileOrB64);
+    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    const savedPath = await invoke<string>("save_custom_data_file", {
+      customDir,
+      subfolder,
+      filename,
+      contentB64,
+    });
+    console.log(`[DiskStorage] Saved ${filename} to ${savedPath}`);
+    return savedPath;
+  } catch (err) {
+    console.error(`[DiskStorage] Failed to save ${filename} to disk:`, err);
+    return null;
+  }
+}
+
+export async function syncAllKnowledgeFilesToDisk(): Promise<void> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+  try {
+    const records = await getAllImageRecords();
+    for (const rec of records) {
+      const b64 = rec.dataUrl || rec.chunks?.[0];
+      if (b64 && b64.startsWith("data:")) {
+        await savePhysicalDataFile(rec.name, b64, "uploads");
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to sync knowledge files to disk:", e);
+  }
+}
+
 export async function indexKnowledgeFile(
   agentId: string | null,
   fileId: string,
@@ -354,6 +400,9 @@ export async function indexKnowledgeFile(
       console.warn("Failed to read image as data URL:", e);
     }
   }
+
+  // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
+  void savePhysicalDataFile(file.name, file, "uploads");
 
   let text = "";
   try {

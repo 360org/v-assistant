@@ -89,19 +89,33 @@ fn pick_directory() -> Option<String> {
         .map(|path| path.to_string_lossy().to_string())
 }
 
+fn resolve_data_dir(custom_dir: &str) -> std::path::PathBuf {
+    use std::path::PathBuf;
+    let trimmed = custom_dir.trim();
+    if trimmed.is_empty() || trimmed == "~/.v-assistant/data" {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(".v-assistant/data");
+        }
+    }
+    if trimmed.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(trimmed.trim_start_matches("~/"));
+        }
+    }
+    PathBuf::from(trimmed)
+}
+
+#[tauri::command]
+fn resolve_data_dir_path(custom_dir: String) -> String {
+    resolve_data_dir(&custom_dir).to_string_lossy().to_string()
+}
+
 #[tauri::command]
 fn save_custom_data_file(custom_dir: String, subfolder: String, filename: String, content_b64: String) -> Result<String, String> {
     use std::fs;
-    use std::path::PathBuf;
     use base64::Engine;
 
-    let mut path = PathBuf::from(&custom_dir);
-    if custom_dir.starts_with("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            path = PathBuf::from(home).join(custom_dir.trim_start_matches("~/"));
-        }
-    }
-
+    let path = resolve_data_dir(&custom_dir);
     let target_dir = path.join(&subfolder);
     fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
 
@@ -143,15 +157,8 @@ fn save_custom_data_file(custom_dir: String, subfolder: String, filename: String
 #[tauri::command]
 fn save_custom_data_text(custom_dir: String, relative_path: String, content: String) -> Result<String, String> {
     use std::fs;
-    use std::path::PathBuf;
 
-    let mut path = PathBuf::from(&custom_dir);
-    if custom_dir.starts_with("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            path = PathBuf::from(home).join(custom_dir.trim_start_matches("~/"));
-        }
-    }
-
+    let path = resolve_data_dir(&custom_dir);
     let target_file = path.join(&relative_path);
     if let Some(parent) = target_file.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -286,6 +293,7 @@ pub fn run() {
             vault::vault_get,
             vault::vault_delete,
             pick_directory,
+            resolve_data_dir_path,
             save_custom_data_file,
             save_custom_data_text,
             read_host_file,

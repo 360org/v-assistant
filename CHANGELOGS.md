@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.73] - 2026-07-24
+### Unified Physical Disk Data Storage Architecture
+*   **Tự động lưu file vật lý vào data directory (`uploads/`)**: Tàn bộ tệp tải lên (hình ảnh, tài liệu, tệp đính kèm trò chuyện, Media Vault, Knowledge Base) đều được lưu trữ trực tiếp thành file vật lý trong thư mục `uploads/` của Data Directory (dù dùng vị trí mặc định `~/.v-assistant/data` hay vị trí mount tùy chỉnh).
+*   **Automatic Backup & Sync**: Tự động giải quyết đường dẫn hệ thống (`resolve_data_dir`) hỗ trợ dấu `~/` trên macOS/Linux, tự động đồng bộ tất cả tệp dữ liệu đã tải lên từ trước vào thư mục `uploads/` thực tế trên đĩa cứng ngay khi khởi động ứng dụng.
+
 ## [1.0.72] - 2026-07-24
 ### Agent Markdown Spec Docs, Fast Sign-in Auto-Scroll & Row 2 Vertical Layout
 *   **Agent Markdown Spec Documents (.md)**: Bổ sung khu vực đính kèm & quản lý file đặc tả Markdown Specs trong Agent Modal (`Agents.tsx`), hỗ trợ đầy đủ 11 file tiêu chuẩn Paperclip / 360 CORP (`SOUL.md`, `MISSION.md`, `NORTH_STAR.md`, `HEARTBEAT.md`, `PRINCIPLES.md`, `VALUES.md`, `THINKING.md`, `DECISION.md`, `GOVERNANCE.md`, `PLAYBOOK.md`, `MANIFESTO.md`) cùng tính năng tạo file `.md` tùy chỉnh.

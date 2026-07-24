@@ -39,6 +39,8 @@ import {
 import {
   clearKnowledge,
   indexKnowledgeFile,
+  savePhysicalDataFile,
+  syncAllKnowledgeFilesToDisk,
 } from "@/runtime/knowledge";
 import { runDueTasks } from "@/runtime/scheduler";
 import { newMessageId } from "@/runtime/engine";
@@ -566,17 +568,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("v-assistant-last-active-user-key", currentKey);
       }
 
-      // Sync state and sessions to customDataPath if configured by user
-      if (state.customDataPath && typeof window !== "undefined") {
+      // Sync state and sessions to data directory (custom or default ~/.v-assistant/data)
+      const dataDir = state.customDataPath || localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
         void import("@tauri-apps/api/core").then(({ invoke }) => {
           void invoke("save_custom_data_text", {
-            customDir: state.customDataPath,
+            customDir: dataDir,
             relativePath: "v_assistant_backup.json",
             content: JSON.stringify(safe, null, 2),
           }).catch(() => {});
 
           void invoke("save_custom_data_text", {
-            customDir: state.customDataPath,
+            customDir: dataDir,
             relativePath: "chats/sessions.json",
             content: JSON.stringify(safe.chatSessions, null, 2),
           }).catch(() => {});
@@ -1233,7 +1236,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const id = `${now.toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
         const ext = f.name.toLowerCase().split(".").pop() ?? "";
         const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
-        const customDir = stateRef.current.customDataPath || localStorage.getItem("vua:custom-data-path") || "";
+        // Always save physical file into <DATA_DIR>/uploads/<filename> on disk!
+        void savePhysicalDataFile(f.name, f, "uploads");
+
         if (imgExtensions.includes(ext)) {
           try {
             const url = URL.createObjectURL(f);
@@ -1245,30 +1250,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           reader.onload = () => {
             const b64 = reader.result as string;
             if (b64) fileObjectURLs.set(id, b64);
-            if (customDir && typeof window !== "undefined") {
-              void import("@tauri-apps/api/core").then(({ invoke }) => {
-                void invoke("save_custom_data_file", {
-                  customDir,
-                  subfolder: "uploads",
-                  filename: f.name,
-                  contentB64: b64,
-                }).catch((err) => console.error("Failed to save physical file to customDataPath:", err));
-              }).catch(() => {});
-            }
-          };
-          reader.readAsDataURL(f);
-        } else if (customDir && typeof window !== "undefined") {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const b64 = reader.result as string;
-            void import("@tauri-apps/api/core").then(({ invoke }) => {
-              void invoke("save_custom_data_file", {
-                customDir,
-                subfolder: "uploads",
-                filename: f.name,
-                contentB64: b64,
-              }).catch((err) => console.error("Failed to save physical file to customDataPath:", err));
-            }).catch(() => {});
           };
           reader.readAsDataURL(f);
         }
