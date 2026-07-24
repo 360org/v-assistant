@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.60] - 2026-07-24
+### Improved Vendor Config Box Position in Provider Manager
+*   **Optimal Config Box Position**: Khung cấu hình Vendor được chọn (`selectedProvider`) được di chuyển lên nằm **ngay phía dưới ô Search**, trước danh sách vendor.
+*   **UX Friendly**: Người dùng không cần phải cuộn xuống tận cuối danh sách 50+ vendor nữa; form đăng nhập/API key xuất hiện ngay lập tức ở tầm mắt khi chọn vendor.
+
 ## [1.0.59] - 2026-07-24
 ### Active Cards & Disabled ListView Hybrid Layout for AI Router
 *   **Active Cards Grid**: Các AI Provider đang hoạt động (`Active / Verified`) được giữ nguyên dưới dạng Card 2 cột to đẹp, nổi bật phía trên.
