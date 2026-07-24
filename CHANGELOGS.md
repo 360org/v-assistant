@@ -2,6 +2,11 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.51] - 2026-07-24
+### Standardized Official App Protocol & Origin to vassistant.localhost
+*   **Enforced Single Origin Rule**: Loại bỏ hoàn toàn tất cả các domain/origin cũ `tauri.localhost` và `tauri://localhost` trong AI Router sidecar & cấu hình ứng dụng.
+*   **Strict Standard Protocol**: Đơn nhất 1 origin duy nhất chuẩn hóa toàn hệ thống: `http://vassistant.localhost` (`customProtocol: vassistant`).
+
 ## [1.0.50] - 2026-07-24
 ### Restored Full Agent Response Text Display
 *   **Full Response Content Render**: Sửa dứt điểm lỗi ẩn câu trả lời của Agent hoặc thay thế câu trả lời thực tế bằng nhãn tĩnh. Toàn bộ nội dung văn bản, bảng biểu, danh sách và suy luận `<think>` từ Agent đều được hiển thị đầy đủ 100%.

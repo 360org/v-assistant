@@ -36,7 +36,7 @@ const legacyConnectionPath = join(process.cwd(), ".vua_ai_router_connections.jso
 function allowedUiOrigin(request) {
   const origin = request?.headers?.origin;
   if (!origin || origin === uiOrigin) return origin || uiOrigin;
-  if (["http://vassistant.localhost", "https://vassistant.localhost", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"].includes(origin)) {
+  if (["http://vassistant.localhost", "https://vassistant.localhost", "vassistant://localhost"].includes(origin)) {
     return origin;
   }
   try {
