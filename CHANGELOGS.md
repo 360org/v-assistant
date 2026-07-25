@@ -2,6 +2,15 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.82] - 2026-07-25
+### Multimodal Image Vision Engine for ALL AI Vendors
+*   **Hỗ Trợ Đọc & Phân Tích Hình Ảnh (Multimodal Vision Engine)**: Bổ sung hàm `parseImageDataUrl` và nâng cấp bộ đệm hội thoại `compactHistory` trong `src/runtime/providers.ts` để lưu giữ toàn bộ dữ liệu tệp đính kèm hình ảnh (`attachments`).
+*   **Tương Thích Tất Cả Vendor AI (Gemini, ChatGPT, Claude, OpenRouter)**: Tự động trích xuất dữ liệu hình ảnh sang định dạng chuẩn của từng nhà cung cấp:
+    - **Google Antigravity & Gemini Native**: Gửi `inlineData` với mimeType và base64 payload.
+    - **ChatGPT & OpenRouter**: Gửi mảng `image_url` chuẩn OpenAI Vision specification.
+    - **Claude (Anthropic)**: Gửi mảng `image` với `source.base64` theo chuẩn Anthropic Messages API.
+    Giúp AI Agent đọc, phân tích và trả lời chính xác 100% nội dung hình ảnh người dùng đính kèm.
+
 ## [1.0.81] - 2026-07-25
 ### GitHub Actions Intel Runner Alignment & Release Automation
 *   **Fix GitHub Actions macOS Intel Runner (`macos-13`)**: Đổi runner label trong `.github/workflows/release.yml` từ `macos-15-intel` sang `macos-13` (runner x86_64 Intel chính thức của GitHub). Giúp toàn bộ quy trình Production Release đóng gói tệp cài đặt cho macOS Intel (x86_64) và Apple Silicon (ARM64) tự động 100% xanh lá.

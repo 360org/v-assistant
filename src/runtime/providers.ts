@@ -421,21 +421,40 @@ async function fetchWithRateLimitRetry(
   }
 }
 
+function parseImageDataUrl(dataUrl?: string): { mimeType: string; base64: string } | null {
+  if (!dataUrl || !dataUrl.startsWith("data:")) return null;
+  const match = /^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return null;
+  return { mimeType: match[1], base64: match[2] };
+}
+
 /**
  * Provider APIs reject blank turns and some require strictly alternating roles.
  * Keep the newest context bounded, remove interrupted empty replies, and merge
  * repeated roles before any vendor-specific serialization.
  */
 function compactHistory(messages: ChatMessage[], limit = 60) {
-  const compact: { role: "user" | "assistant"; content: string }[] = [];
+  const compact: {
+    role: "user" | "assistant";
+    content: string;
+    attachments?: ChatMessage["attachments"];
+  }[] = [];
   for (const message of messages.slice(-limit)) {
     const content = typeof message.content === "string" ? message.content.trim() : "";
-    if (!content) continue;
+    const hasAttachments = message.attachments && message.attachments.some((att) => !!parseImageDataUrl(att.dataUrl));
+    if (!content && !hasAttachments) continue;
     const previous = compact[compact.length - 1];
     if (previous?.role === message.role) {
-      previous.content += `\n\n${content}`;
+      previous.content += content ? `\n\n${content}` : "";
+      if (message.attachments) {
+        previous.attachments = [...(previous.attachments ?? []), ...message.attachments];
+      }
     } else {
-      compact.push({ role: message.role, content });
+      compact.push({
+        role: message.role,
+        content: content || " ",
+        ...(message.attachments ? { attachments: message.attachments } : {}),
+      });
     }
   }
   return compact;
@@ -468,7 +487,21 @@ async function* streamOpenAICompat(
 ): AsyncGenerator<string> {
   const convo: Record<string, unknown>[] = [
     { role: "system", content: system },
-    ...compactHistory(messages).map((m) => ({ role: m.role, content: m.content })),
+    ...compactHistory(messages).map((m) => {
+      const images = (m.attachments ?? [])
+        .map((att) => att.dataUrl)
+        .filter((url): url is string => !!url && url.startsWith("data:image/"));
+      if (images.length === 0) {
+        return { role: m.role, content: m.content };
+      }
+      return {
+        role: m.role,
+        content: [
+          ...(m.content ? [{ type: "text", text: m.content }] : []),
+          ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+        ],
+      };
+    }),
   ];
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -599,7 +632,28 @@ async function* streamAnthropic(
       max_tokens: 4096,
       stream: true,
       system,
-      messages: compactHistory(messages).map((m) => ({ role: m.role, content: m.content })),
+      messages: compactHistory(messages).map((m) => {
+        const images = (m.attachments ?? [])
+          .map((att) => parseImageDataUrl(att.dataUrl))
+          .filter((img): img is { mimeType: string; base64: string } => img !== null);
+        if (images.length === 0) {
+          return { role: m.role, content: m.content };
+        }
+        return {
+          role: m.role,
+          content: [
+            ...(m.content ? [{ type: "text", text: m.content }] : []),
+            ...images.map((img) => ({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: img.mimeType,
+                data: img.base64,
+              },
+            })),
+          ],
+        };
+      }),
     }),
   });
   await raiseForStatus(response);
@@ -644,10 +698,19 @@ async function* streamGemini(
     headers,
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
-      contents: compactHistory(messages).map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      })),
+      contents: compactHistory(messages).map((m) => {
+        const images = (m.attachments ?? [])
+          .map((att) => parseImageDataUrl(att.dataUrl))
+          .filter((img): img is { mimeType: string; base64: string } => img !== null);
+        const parts: any[] = [{ text: m.content || " " }];
+        for (const img of images) {
+          parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+        }
+        return {
+          role: m.role === "assistant" ? "model" : "user",
+          parts,
+        };
+      }),
     }),
   });
   try {
@@ -777,15 +840,29 @@ async function refreshAntigravityToken(
 
 /** Antigravity requires non-empty, alternating Gemini content turns. */
 function antigravityContents(messages: ChatMessage[]) {
-  const normalized: { role: "user" | "model"; parts: { text: string }[] }[] = [];
+  const normalized: { role: "user" | "model"; parts: any[] }[] = [];
   for (const message of compactHistory(messages, MAX_ANTIGRAVITY_MESSAGES)) {
     const text = message.content;
     const role = message.role === "assistant" ? "model" : "user";
+    const parts: any[] = [{ text: text || " " }];
+    if (message.attachments) {
+      for (const att of message.attachments) {
+        const img = parseImageDataUrl(att.dataUrl);
+        if (img) {
+          parts.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: img.base64,
+            },
+          });
+        }
+      }
+    }
     const previous = normalized[normalized.length - 1];
     if (previous?.role === role) {
-      previous.parts[0].text += `\n\n${text}`;
+      previous.parts.push(...parts);
     } else {
-      normalized.push({ role, parts: [{ text }] });
+      normalized.push({ role, parts });
     }
   }
   return normalized.length ? normalized : [{ role: "user" as const, parts: [{ text: "Hello" }] }];
