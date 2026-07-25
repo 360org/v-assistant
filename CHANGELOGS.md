@@ -2,6 +2,19 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [Unreleased]
+### Interactive 1-Click Permission Approval & Absolute Host Workspace Access
+*   **Thẻ Phê Duyệt Quyền Truy Cập 1-Click (Permission Approval Card)**:
+    - Khi Agent phát hiện hoặc yêu cầu thao tác trên đường dẫn tệp/thư mục nằm ngoài phạm vi mặc định (hoặc trên máy host), giao diện Chat tự động hiển thị **Thẻ Xin Quyền Trực Quan** kèm đường dẫn và nút bấm **[ Cho phép (Approve) ]** / **[ Từ chối (Deny) ]**.
+    - Cho phép người dùng nhấp **[ Cho phép (Approve) ]** 1-Click ngay trong khung Chat để tự động cấp quyền và thực thi công việc ngay lập tức mà không phải vào Cài đặt thủ công.
+*   **Hỗ trợ đường dẫn tuyệt đối cho Native Tools (`agent-runner`)**:
+    - Chuẩn hóa hàm `workspacePath` trong `agent-runner/src/native-tools/index.ts`, hỗ trợ đọc các đường dẫn tuyệt đối trên máy chủ (`/Volumes/DATA/...`) khi được người dùng phê duyệt.
+    - Cập nhật script `build` trong `package.json` tự động biên dịch `agent-runner` (`npx tsc --project agent-runner/tsconfig.json`) đồng bộ vào gói đóng gói ứng dụng.
+*   **Robust PDF Extraction & Image-based PDF Fallback**:
+    - Bọc an toàn `extractPdf` chống lỗi Web Worker trong môi trường Tauri WebView; tự động fallback đăng ký tài liệu dạng PDF Asset đối với tệp PDF dạng ảnh quét (Delivery Slip, Hóa đơn) giúp tệp hiển thị trạng thái `Ready` tức thì.
+*   **Giao diện Sidebar Profile 2 dòng**:
+    - Tách biệt tên người dùng, thẻ Badge `v1.1.0` (Emerald) và dòng thương hiệu `Powered by VuaAI.net` thành 2 dòng riêng biệt, chống tràn/cắt chữ.
+
 ## [1.1.0] - 2026-07-25
 ### Comprehensive System Hardening, Multimodal Vision & Production Release
 *   **Multimodal Image Vision Engine for ALL AI Vendors**:
