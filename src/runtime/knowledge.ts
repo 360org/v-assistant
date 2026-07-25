@@ -148,31 +148,42 @@ async function extractPptx(buf: ArrayBuffer): Promise<string> {
 
 /** PDF needs a real parser (fonts, CMaps) — lazy-load pdfjs on demand. */
 async function extractPdf(buf: ArrayBuffer): Promise<string> {
-  const pdfjs = await import("pdfjs-dist");
-  if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
-    try {
-      // @ts-ignore
-      const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
-      // @ts-ignore
-      pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
-    } catch (e) {
-      console.warn("Failed to load PDF worker as port, falling back to URL path", e);
-      const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  try {
+    const pdfjs = await import("pdfjs-dist");
+    if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
+      try {
+        // @ts-ignore
+        const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
+        // @ts-ignore
+        pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
+      } catch (e) {
+        console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+        try {
+          const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+          pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+        } catch (err) {
+          console.warn("Worker URL fallback failed:", err);
+        }
+      }
     }
-  }
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
-  const pages: string[] = [];
-  for (let p = 1; p <= doc.numPages; p++) {
-    const content = await (await doc.getPage(p)).getTextContent();
-    pages.push(
-      content.items
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: true, disableFontFace: true }).promise;
+    const pages: string[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      const pageText = content.items
         .map((item) => ("str" in item ? item.str : ""))
-        .join(" "),
-    );
+        .join(" ");
+      if (pageText.trim()) {
+        pages.push(pageText);
+      }
+    }
+    await doc.destroy().catch(() => {});
+    return pages.join("\n\n");
+  } catch (err) {
+    console.warn("extractPdf failed:", err);
+    return "";
   }
-  await doc.destroy();
-  return pages.join("\n\n");
 }
 
 async function extractZip(buf: ArrayBuffer): Promise<string> {
@@ -404,17 +415,16 @@ export async function indexKnowledgeFile(
   // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
   void savePhysicalDataFile(file.name, file, "uploads");
 
-  let text = "";
   try {
     text = await extractText(file);
   } catch (e) {
-    text = isImage ? `[Hình ảnh: ${file.name}]` : "";
+    text = isImage || ext === "pdf" ? `[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]` : "";
   }
 
   let chunks = chunkText(text);
   if (!chunks.length) {
-    if (isImage) {
-      chunks = [`[Hình ảnh: ${file.name}]`];
+    if (isImage || ext === "pdf") {
+      chunks = [`[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]\n(Tệp tin đã được tải lên làm tài liệu tri thức cho Agent.)`];
     } else {
       throw new Error("No readable text in this file");
     }
