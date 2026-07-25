@@ -4779,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "v-assistant"
-version = "1.0.80"
+version = "1.0.81"
 dependencies = [
  "aes",
  "base64 0.22.1",

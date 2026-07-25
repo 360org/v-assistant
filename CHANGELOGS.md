@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.81] - 2026-07-25
+### GitHub Actions Intel Runner Alignment & Release Automation
+*   **Fix GitHub Actions macOS Intel Runner (`macos-13`)**: Đổi runner label trong `.github/workflows/release.yml` từ `macos-15-intel` sang `macos-13` (runner x86_64 Intel chính thức của GitHub). Giúp toàn bộ quy trình Production Release đóng gói tệp cài đặt cho macOS Intel (x86_64) và Apple Silicon (ARM64) tự động 100% xanh lá.
+
 ## [1.0.80] - 2026-07-25
 ### Custom Data Directory Persistence & Global Storage Key Sync
 *   **Ghi Nhớ Thư Mục Tùy Chỉnh (`vua:custom-data-path`)**: Tự động lưu và đồng bộ khóa `vua:custom-data-path` vào `localStorage` khi người dùng thay đổi hoặc khôi phục dữ liệu profile. Giúp các module độc lập như `savePhysicalDataFile` (`knowledge.ts`) và `saveSkillToDisk` (`tools.ts`) luôn nhận diện chính xác đường dẫn tùy chỉnh (như `/Volumes/DATA/WORK/VAssistant-Data/uploads`) mà không bị lùi về mặc định `~/.v-assistant/data`.
