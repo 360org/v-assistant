@@ -12,6 +12,8 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
     - Cập nhật script `build` trong `package.json` tự động biên dịch `agent-runner` (`npx tsc --project agent-runner/tsconfig.json`) đồng bộ vào gói đóng gói ứng dụng.
 *   **Robust PDF Extraction & Image-based PDF Fallback**:
     - Bọc an toàn `extractPdf` chống lỗi Web Worker trong môi trường Tauri WebView; tự động fallback đăng ký tài liệu dạng PDF Asset đối với tệp PDF dạng ảnh quét (Delivery Slip, Hóa đơn) giúp tệp hiển thị trạng thái `Ready` tức thì.
+*   **Tạo Skill Hướng Dẫn Phát Triển (`v-assistant-dev-guidelines`)**:
+    - Đóng gói toàn bộ bài học kinh nghiệm, quy chuẩn đóng gói sidecar, cơ chế cấp quyền 1-Click, PDF fallback và kỷ luật commit/release vào skill `v-assistant-dev-guidelines` (đồng bộ tại `.agents/skills/` và `skills/`).
 *   **Giao diện Sidebar Profile 2 dòng**:
     - Tách biệt tên người dùng, thẻ Badge `v1.1.0` (Emerald) và dòng thương hiệu `Powered by VuaAI.net` thành 2 dòng riêng biệt, chống tràn/cắt chữ.
 
