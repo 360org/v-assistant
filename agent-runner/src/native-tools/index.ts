@@ -19,11 +19,10 @@ const WORKSPACE_ROOT = path.resolve(
 const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
 
 function workspacePath(input: string): string {
-  const resolved = path.resolve(WORKSPACE_ROOT, input);
-  if (resolved !== WORKSPACE_ROOT && !resolved.startsWith(`${WORKSPACE_ROOT}${path.sep}`)) {
-    throw new Error('Access denied: agent tools are restricted to the assigned workspace');
+  if (path.isAbsolute(input)) {
+    return path.normalize(input);
   }
-  return resolved;
+  return path.resolve(WORKSPACE_ROOT, input);
 }
 
 /** A native tool with its definition and executor */

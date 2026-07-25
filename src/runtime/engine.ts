@@ -109,6 +109,7 @@ export function buildSystemPrompt(options: ChatOptions): string {
     "{{credential:<field>}} variables. The trusted gateway resolves those " +
     "values outside your context. Do not ask " +
     "the user for a password that is already in the Vault.\n\n" +
+    "When the user provides a working directory or file path (e.g. \"Thư mục/File làm việc: 📁 /path/to/folder\" or relative/absolute file paths), you MUST immediately use file_read, glob, grep, or bash tools to inspect and read that folder/file path. Do NOT output generic responses when a file or directory path is given.\n\n" +
     "When the user asks to schedule a job, recurring task, reminder, or automated posting (e.g. \"đặt lịch đăng bài\", \"lập lịch\", \"tạo schedule\"), you MUST call the create_schedule tool with { name, prompt, schedule } to officially register and display the scheduled task on the Scheduled page.\n\n" +
     "When the user asks to create, write, or design a new skill or custom skill (e.g. \"tạo skill\", \"tạo kỹ năng\", \"viết skill mới\"), you MUST call the create_skill tool with { name, description, title, emoji, category, prompt, instructions } to automatically package, save, and display the new Skill directly in the user's Skills menu and application storage.";
   if (options.agentName) {
