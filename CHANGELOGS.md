@@ -2,50 +2,26 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
-## [1.0.83] - 2026-07-25
-### Comprehensive AUDIT.md Fixes (P0 & P1 Critical System Hardening)
-*   **Agent Runner Restart Loop & Error Logging (`P0-0b`)**: Thêm cơ chế đếm số lần thất bại liên tiếp (`consecutive_failures`) và exponential backoff trong `src-tauri/src/runtime.rs`. Khi Runner lỗi 5 lần liên tiếp, ngắt vòng lặp restart lặp vô hạn và đọc 10 dòng log stderr cuối cùng của `runner.log` để log trực tiếp nguyên nhân thực tế.
-*   **Native Tools Audit Log & Security (`P0-1`)**: Tích hợp hàm `logAudit` ghi nhật ký truy vết cấu trúc JSON vào `~/.v-assistant/data/workspace/<agent_id>/.audit/tool_calls.log` cho tất cả các lượt thực thi Native Tools (`file_read`, `file_write`, `file_edit`, `grep`, `glob`, `bash`...).
-*   **Claude OAuth Token Auto-Refresh (`P0-2`)**: Lưu trữ đầy đủ `access_token`, `refresh_token` và `expiresAt` cho Claude OAuth vào Vault mã hóa. Xây dựng hàm `refreshClaudeToken()` trong `src/runtime/providers.ts` tự động làm mới token trước khi hết hạn và khi gặp lỗi HTTP 401.
-*   **Debounce State Persistence (`P1-3`)**: Tích hợp debounce 500ms cho `useEffect` lưu state vào `localStorage` và tệp backup đĩa trong `src/lib/store.tsx`, loại bỏ tình trạng khựng lag UI khi nhập tin nhắn ở các hội thoại dài.
+## [1.1.0] - 2026-07-25
+### Comprehensive System Hardening, Multimodal Vision & Production Release
+*   **Multimodal Image Vision Engine for ALL AI Vendors**:
+    - Hỗ trợ đọc & phân tích hình ảnh đính kèm (`attachments`) cho tất cả các nhà cung cấp AI (Google Antigravity, Gemini, ChatGPT, Claude, OpenRouter).
+    - Tự động chuẩn hóa định dạng hình ảnh phù hợp theo chuẩn Vision API của từng Vendor (`inlineData`, `image_url`, `base64`).
+*   **System Stability & macOS Not Responding Fix**:
+    - Chuyển đổi toàn bộ Tauri IPC Handlers (`execute_cli_command`, `vault_set`, `vault_get`, `vault_delete`) sang `async fn` chạy trên Tokio Worker Thread Pool, loại bỏ 100% tình trạng `Not Responding` freeze ứng dụng trên macOS.
+    - Tích hợp 30s CLI hard timeout tự động ngắt các lệnh treo hoặc vòng lặp vô hạn.
+    - Xử lý giải phóng cổng AI Router Sidecar (`kill_stale_port_process`) triệt tiêu lỗi `EADDRINUSE 20128`.
+*   **Agent Runner Hardening & Audit Logging**:
+    - Ngắt vòng lặp restart lặp vô hạn của Agent Runner (`consecutive_failures >= 5`), tích hợp đọc log stderr thực tế từ `runner.log`.
+    - Ghi vết truy vết cấu trúc JSON cho toàn bộ Native Tools vào `~/.v-assistant/data/workspace/<agent_id>/.audit/tool_calls.log`.
+*   **OAuth Security & Custom Data Directory Sync**:
+    - Tự động lưu trữ `refresh_token` và `expiresAt` cho Claude OAuth vào Vault mã hóa; tự động refresh token bằng `refreshClaudeToken()`.
+    - Đồng bộ khóa `vua:custom-data-path` trong `localStorage` và Vault, giúp các module đính kèm (`knowledge.ts`, `tools.ts`) lưu chính xác vào thư mục tùy chỉnh của người dùng.
+    - Debounce 500ms cho việc lưu state và tệp backup đĩa trong `store.tsx`, tối ưu hiệu năng nhập liệu chat.
+*   **AI Router & Model Catalog**:
+    - Cập nhật mô hình Gemini 3.6 Flash & Gemini 3.5 Flash (High/Medium/Low) vào AI Router Registry và UI Pickers.
+    - Cập nhật runner CI/CD GitHub Actions (`macos-13`) tự động đóng gói ứng dụng mượt mà cho cả macOS Intel & Apple Silicon.
 
-## [1.0.82] - 2026-07-25
-### Multimodal Image Vision Engine for ALL AI Vendors
-*   **Hỗ Trợ Đọc & Phân Tích Hình Ảnh (Multimodal Vision Engine)**: Bổ sung hàm `parseImageDataUrl` và nâng cấp bộ đệm hội thoại `compactHistory` trong `src/runtime/providers.ts` để lưu giữ toàn bộ dữ liệu tệp đính kèm hình ảnh (`attachments`).
-*   **Tương Thích Tất Cả Vendor AI (Gemini, ChatGPT, Claude, OpenRouter)**: Tự động trích xuất dữ liệu hình ảnh sang định dạng chuẩn của từng nhà cung cấp:
-    - **Google Antigravity & Gemini Native**: Gửi `inlineData` với mimeType và base64 payload.
-    - **ChatGPT & OpenRouter**: Gửi mảng `image_url` chuẩn OpenAI Vision specification.
-    - **Claude (Anthropic)**: Gửi mảng `image` với `source.base64` theo chuẩn Anthropic Messages API.
-    Giúp AI Agent đọc, phân tích và trả lời chính xác 100% nội dung hình ảnh người dùng đính kèm.
-
-## [1.0.81] - 2026-07-25
-### GitHub Actions Intel Runner Alignment & Release Automation
-*   **Fix GitHub Actions macOS Intel Runner (`macos-13`)**: Đổi runner label trong `.github/workflows/release.yml` từ `macos-15-intel` sang `macos-13` (runner x86_64 Intel chính thức của GitHub). Giúp toàn bộ quy trình Production Release đóng gói tệp cài đặt cho macOS Intel (x86_64) và Apple Silicon (ARM64) tự động 100% xanh lá.
-
-## [1.0.80] - 2026-07-25
-### Custom Data Directory Persistence & Global Storage Key Sync
-*   **Ghi Nhớ Thư Mục Tùy Chỉnh (`vua:custom-data-path`)**: Tự động lưu và đồng bộ khóa `vua:custom-data-path` vào `localStorage` khi người dùng thay đổi hoặc khôi phục dữ liệu profile. Giúp các module độc lập như `savePhysicalDataFile` (`knowledge.ts`) và `saveSkillToDisk` (`tools.ts`) luôn nhận diện chính xác đường dẫn tùy chỉnh (như `/Volumes/DATA/WORK/VAssistant-Data/uploads`) mà không bị lùi về mặc định `~/.v-assistant/data`.
-
-## [1.0.79] - 2026-07-25
-### Linux CI Runner Build Fix & Standard Cross-Platform Rust Compatibility
-*   **Fix Linux CI Runner Compilation Error (`E0433`)**: Thay thế `tokio::time::sleep` bằng `std::thread::sleep` trong `src-tauri/src/lib.rs`. Giúp mã nguồn Rust biên dịch 100% hoàn hảo trên tất cả các hệ điều hành (Ubuntu Linux, macOS, Windows) mà không bị thiếu crate dependency.
-
-## [1.0.78] - 2026-07-24
-### Async Thread Offloading, 30s CLI Hard Timeout & Gemini 3.6/3.5 Dual Catalog
-*   **Async IPC Thread Offloading (`async fn`)**: Chuyển đổi toàn bộ các hàm Tauri IPC Handler (`execute_cli_command`, `vault_set`, `vault_get`, `vault_delete`) sang `async fn` đẩy việc xử lý ra Tokio Worker Thread Pool. Giải phóng 100% Main Event Loop Thread của macOS, loại bỏ triệt để tình trạng `Not Responding`.
-*   **Smart CLI Hard Timeout (30 Seconds)**: Tích hợp đồng hồ đếm giờ 30s tự động ngắt (`kill child process`) đối với các lệnh CLI bị treo/vòng lặp vô hạn, đảm bảo ứng dụng không bao giờ bị đơ lag.
-*   **Tự Động Nạp Cổng AI Router Sidecar (`kill_stale_port_process`)**: Tự động giải phóng cổng `20128` trước khi khởi chạy AI Router, ngăn chặn lỗi `EADDRINUSE 20128` gây mất danh sách tài khoản Vendor AI.
-*   **Bổ Sung Gemini 3.6 Flash & Gemini 3.5 Flash Catalog**: Hỗ trợ song song cả hai dòng mô hình Gemini 3.6 Flash và Gemini 3.5 Flash (High/Medium/Low) trong AI Router Registry và giao diện chọn mô hình Chat.
-
-## [1.0.77] - 2026-07-24
-### Update Notification Banner & Local macOS Release
-*   **Thanh Thông Báo Cập Nhật Tự Động (`UpdateNotificationBanner`)**: Tự động phát hiện phiên bản mới từ GitHub Releases API và hiển thị thanh thông báo Glassmorphic Emerald ở đầu trang với nút 1-click `Tải Cập Nhật (.dmg)`.
-*   **Cập Nhật Bản Local macOS**: Đóng gói và cập nhật trực tiếp vào `/Applications/V Assistant.app` cho người dùng kiểm thử tính năng CLI Engine & Banner mới.
-
-## [1.0.76] - 2026-07-24
-### MCP & Terminal CLI Execution Engine
-*   **Hỗ trợ Thực thi Lệnh Terminal / CLI (`execute_cli`)**: Đã bổ sung công cụ `execute_cli` vào hệ thống Agent Tools và Rust Backend (`execute_cli_command`). Cho phép AI Agent chạy trực tiếp các lệnh Terminal/Shell (`bash`, `zsh`, `git`, `npm`, `python`, `ls`, `curl`...) trên máy Host.
-*   **Thực thi MCP Tool (`execute_mcp_tool`)**: Hỗ trợ gọi và truyền tham số trực tiếp tới bất kỳ công cụ Model Context Protocol (MCP) Server nào đang hoạt động (`odoo-graph-mcp`, `builtin-tools-mcp`...).
 
 ## [1.0.75] - 2026-07-24
 ### GitHub Actions Production Release Runner Fix
