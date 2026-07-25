@@ -2,6 +2,7 @@ import {
   Blocks,
   Bot,
   CalendarClock,
+  Download,
   Home,
   Image as ImageIcon,
   KeyRound,
@@ -9,6 +10,7 @@ import {
   MessageSquare,
   History,
   Settings,
+  Sparkles,
   Wand2,
   type LucideIcon,
 } from "lucide-react";
@@ -39,6 +41,8 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const { view, setView, user, appUpdate } = useApp();
+  const currentVersion = appUpdate?.currentVersion || (typeof __V_ASSISTANT_VERSION__ !== "undefined" ? __V_ASSISTANT_VERSION__ : "1.1.0");
+
   const go = (v: View) => {
     setView(v);
     onNavigate?.();
@@ -82,8 +86,29 @@ export function Sidebar({
         <SidebarAdBanner />
       </div>
 
-      {/* User cluster: Settings lives here, grouped with the profile. */}
-      <div className="flex flex-col gap-1 px-2 pb-1">
+      {/* User cluster: Settings & Profile */}
+      <div className="flex flex-col gap-1.5 px-2 pb-1">
+        {/* Prominent 1-click update button when new version release is available */}
+        {appUpdate?.hasUpdate && (
+          <button
+            onClick={() => {
+              if (appUpdate.downloadUrl) {
+                window.open(appUpdate.downloadUrl, "_blank");
+              } else {
+                go("settings");
+              }
+            }}
+            className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/90 to-emerald-900/80 px-3 py-2 text-xs font-semibold text-emerald-200 hover:border-emerald-400 hover:text-emerald-100 transition-all shadow-md group animate-in fade-in"
+            title={`Cập nhật lên phiên bản v${appUpdate.latestVersion}`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="size-3.5 text-emerald-400 animate-pulse shrink-0" />
+              <span className="truncate">Cập nhật v{appUpdate.latestVersion}</span>
+            </div>
+            <Download className="size-3.5 shrink-0 text-emerald-400 group-hover:translate-y-0.5 transition-transform" />
+          </button>
+        )}
+
         <button
           onClick={() => go("settings")}
           className={cn(
@@ -119,8 +144,8 @@ export function Sidebar({
             <span className="block truncate text-xs font-medium text-neutral-200">
               {user?.name ?? "V Assistant"}
             </span>
-            <span className="block truncate text-[11px] text-neutral-500">
-              Powered by VuaAI.net
+            <span className="block truncate text-[11px] text-neutral-400 font-mono">
+              v{currentVersion} • <span className="text-neutral-500">Powered by VuaAI.net</span>
             </span>
           </span>
         </button>
