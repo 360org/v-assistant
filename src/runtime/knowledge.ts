@@ -415,6 +415,7 @@ export async function indexKnowledgeFile(
   // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
   void savePhysicalDataFile(file.name, file, "uploads");
 
+  let text = "";
   try {
     text = await extractText(file);
   } catch (e) {
