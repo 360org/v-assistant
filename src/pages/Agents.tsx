@@ -533,7 +533,7 @@ function AgentConfigDialog({
           </div>
 
           {/* Cột 2: Memory & Skills */}
-          <div className={isMaximized ? "flex flex-col gap-5 h-full overflow-y-auto pr-1" : "flex flex-col gap-4"}>
+          <div className={isMaximized ? "flex flex-col gap-5 h-full flex-1 min-h-0 pr-1" : "flex flex-col gap-4"}>
             <div className="text-xs text-neutral-400 flex flex-col shrink-0">
               Memory — what it remembers
               <div className="mt-1 flex flex-col gap-1.5">
@@ -581,7 +581,7 @@ function AgentConfigDialog({
 
             <div className="text-xs text-neutral-400 flex flex-col flex-1 min-h-0">
               Skills — enabled capabilities
-              <div className={`mt-2 grid grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-3 ${isMaximized ? "max-h-[350px] flex-1" : "max-h-48"}`}>
+              <div className={`mt-2 flex flex-col gap-1.5 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-3 flex-1 ${isMaximized ? "min-h-[420px]" : "min-h-[220px]"}`}>
                 {allSkills.map((s) => {
                   const checked = enabledSkills.includes(s.id);
                   return (
