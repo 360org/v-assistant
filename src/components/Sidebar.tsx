@@ -140,12 +140,17 @@ export function Sidebar({
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-sm font-bold text-neutral-950">
             {(user?.name ?? "V").charAt(0).toUpperCase()}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-xs font-medium text-neutral-200">
-              {user?.name ?? "V Assistant"}
-            </span>
-            <span className="block truncate text-[11px] text-neutral-400 font-mono">
-              v{currentVersion} • <span className="text-neutral-500">Powered by VuaAI.net</span>
+          <span className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="truncate text-xs font-medium text-neutral-200">
+                {user?.name ?? "V Assistant"}
+              </span>
+              <span className="shrink-0 font-mono text-[10px] font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-1.5 py-0.5 rounded-md">
+                v{currentVersion}
+              </span>
+            </div>
+            <span className="block truncate text-[11px] text-neutral-500 mt-0.5">
+              Powered by VuaAI.net
             </span>
           </span>
         </button>
