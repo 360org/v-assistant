@@ -286,7 +286,7 @@ async fn execute_cli_command(command: String, cwd: Option<String>) -> Result<Str
                     let _ = child.kill();
                     return Err("Lệnh CLI bị hủy do quá thời gian chờ (Timeout 30s).".to_string());
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                std::thread::sleep(Duration::from_millis(100));
             }
             Err(e) => return Err(format!("Lỗi khi chờ lệnh CLI: {}", e)),
         }

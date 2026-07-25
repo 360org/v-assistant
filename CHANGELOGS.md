@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.79] - 2026-07-25
+### Linux CI Runner Build Fix & Standard Cross-Platform Rust Compatibility
+*   **Fix Linux CI Runner Compilation Error (`E0433`)**: Thay thế `tokio::time::sleep` bằng `std::thread::sleep` trong `src-tauri/src/lib.rs`. Giúp mã nguồn Rust biên dịch 100% hoàn hảo trên tất cả các hệ điều hành (Ubuntu Linux, macOS, Windows) mà không bị thiếu crate dependency.
+
 ## [1.0.78] - 2026-07-24
 ### Async Thread Offloading, 30s CLI Hard Timeout & Gemini 3.6/3.5 Dual Catalog
 *   **Async IPC Thread Offloading (`async fn`)**: Chuyển đổi toàn bộ các hàm Tauri IPC Handler (`execute_cli_command`, `vault_set`, `vault_get`, `vault_delete`) sang `async fn` đẩy việc xử lý ra Tokio Worker Thread Pool. Giải phóng 100% Main Event Loop Thread của macOS, loại bỏ triệt để tình trạng `Not Responding`.
