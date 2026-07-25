@@ -54,6 +54,12 @@ fn runtime_start_engine(app: tauri::AppHandle, state: tauri::State<Runtime>) -> 
     state.spawn_engine(Some(&app))
 }
 
+/// Respawn the AI Router sidecar (Settings → "Thử lại").
+#[tauri::command]
+fn runtime_restart_ai_router(state: tauri::State<Runtime>) -> Result<bool, String> {
+    state.restart_ai_router().map(|()| true)
+}
+
 /// Restart the agent runner with a new agent and provider configuration.
 #[tauri::command]
 fn runtime_restart_runner(
@@ -322,7 +328,16 @@ pub fn run() {
             #[cfg(debug_assertions)]
             if std::env::var("VUA_PROJECT_DIR").is_err() {
                 if let Ok(cwd) = std::env::current_dir() {
-                    std::env::set_var("VUA_PROJECT_DIR", cwd);
+                    // `tauri dev` runs cargo from src-tauri/, but the JS sidecars
+                    // live at the checkout root one level up. Taking cwd verbatim
+                    // pointed the runtime at src-tauri/ai-router (nonexistent), so
+                    // the AI Router never started and every chat turn failed with
+                    // "AI Router unavailable". Walk up to whichever directory
+                    // actually holds the sidecar.
+                    let root = std::iter::successors(Some(cwd.as_path()), |dir| dir.parent())
+                        .find(|dir| dir.join("ai-router/src/sidecar.mjs").exists())
+                        .map(std::path::Path::to_path_buf);
+                    std::env::set_var("VUA_PROJECT_DIR", root.unwrap_or(cwd));
                 }
             }
 
@@ -352,6 +367,7 @@ pub fn run() {
             runtime_sync,
             runtime_start_engine,
             runtime_restart_runner,
+            runtime_restart_ai_router,
             runtime_connector_request,
             auth::oauth_listen,
             auth::open_external,

@@ -423,10 +423,20 @@ async function exchangeCode(
       const text = await response.text();
       throw new Error(`Claude sign-in failed (HTTP ${response.status}): ${text}`);
     }
-    const data = await response.json();
-    const token = data.access_token || data.refresh_token;
-    if (!token) throw new Error("No access_token in Claude OAuth response.");
-    return { provider, apiKey: token };
+    const data = await response.json() as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+    };
+    if (!data.access_token && !data.refresh_token) {
+      throw new Error("No access_token in Claude OAuth response.");
+    }
+    return {
+      provider,
+      apiKey: data.access_token || "",
+      refreshToken: data.refresh_token,
+      expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
+    };
   }
 
   if (provider === "gemini") {

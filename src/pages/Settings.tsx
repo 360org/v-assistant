@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Brain, Check, CheckCircle2, Copy, Download, ExternalLink, FlaskConical, FolderOpen, Globe, HardDrive, Info, KeyRound, LoaderCircle, Lock, LogIn, LogOut, Palette, Pencil, Power, PowerOff, RefreshCw, RotateCcw, Save, Sparkles, X, Zap } from "lucide-react";
 import { vaultDelete, vaultGet, vaultIsSecure, vaultSet } from "@/runtime/vault";
+import { inDesktopShell } from "@/runtime/proxy";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { useApp } from "@/lib/store";
 
@@ -242,6 +243,19 @@ export function Settings() {
 
   const refreshAiRouter = async () => {
     setConnectMessage(null);
+    // Re-fetching alone cannot recover a router whose process is gone — that
+    // was the old behaviour, and it left the user pressing a button that could
+    // never work. Ask the shell to respawn the sidecar first, then reload.
+    if (inDesktopShell()) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("runtime_restart_ai_router");
+        // Give the freshly spawned sidecar a moment to bind its port.
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      } catch {
+        /* fall through: the fetch below surfaces the real state */
+      }
+    }
     await Promise.all([
       refreshConnections(),
       showProviderManager ? refreshProviderCatalog() : Promise.resolve(),

@@ -2,6 +2,13 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.83] - 2026-07-25
+### Comprehensive AUDIT.md Fixes (P0 & P1 Critical System Hardening)
+*   **Agent Runner Restart Loop & Error Logging (`P0-0b`)**: Thêm cơ chế đếm số lần thất bại liên tiếp (`consecutive_failures`) và exponential backoff trong `src-tauri/src/runtime.rs`. Khi Runner lỗi 5 lần liên tiếp, ngắt vòng lặp restart lặp vô hạn và đọc 10 dòng log stderr cuối cùng của `runner.log` để log trực tiếp nguyên nhân thực tế.
+*   **Native Tools Audit Log & Security (`P0-1`)**: Tích hợp hàm `logAudit` ghi nhật ký truy vết cấu trúc JSON vào `~/.v-assistant/data/workspace/<agent_id>/.audit/tool_calls.log` cho tất cả các lượt thực thi Native Tools (`file_read`, `file_write`, `file_edit`, `grep`, `glob`, `bash`...).
+*   **Claude OAuth Token Auto-Refresh (`P0-2`)**: Lưu trữ đầy đủ `access_token`, `refresh_token` và `expiresAt` cho Claude OAuth vào Vault mã hóa. Xây dựng hàm `refreshClaudeToken()` trong `src/runtime/providers.ts` tự động làm mới token trước khi hết hạn và khi gặp lỗi HTTP 401.
+*   **Debounce State Persistence (`P1-3`)**: Tích hợp debounce 500ms cho `useEffect` lưu state vào `localStorage` và tệp backup đĩa trong `src/lib/store.tsx`, loại bỏ tình trạng khựng lag UI khi nhập tin nhắn ở các hội thoại dài.
+
 ## [1.0.82] - 2026-07-25
 ### Multimodal Image Vision Engine for ALL AI Vendors
 *   **Hỗ Trợ Đọc & Phân Tích Hình Ảnh (Multimodal Vision Engine)**: Bổ sung hàm `parseImageDataUrl` và nâng cấp bộ đệm hội thoại `compactHistory` trong `src/runtime/providers.ts` để lưu giữ toàn bộ dữ liệu tệp đính kèm hình ảnh (`attachments`).

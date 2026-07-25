@@ -252,9 +252,11 @@ export async function* streamProvider(
     return;
   }
   switch (provider) {
-    case "claude":
-      yield* streamAnthropic(activeConfig.apiKey!, model, system, messages, activeConfig.oauth);
+    case "claude": {
+      const refreshed = await refreshClaudeToken(activeConfig);
+      yield* streamAnthropic(refreshed.apiKey!, model, system, messages, refreshed.oauth);
       return;
+    }
     case "gemini":
       if (activeConfig.authMode === "antigravity") {
         yield* streamAntigravity(activeConfig, model, system, messages);
@@ -794,6 +796,47 @@ async function* streamAntigravity(
       if (text) yield text;
     } catch { /* ignore */ }
   }
+}
+
+async function refreshClaudeToken(
+  config: ProviderConfig,
+  force = false,
+): Promise<ProviderConfig> {
+  const expiresSoon = config.expiresAt != null && config.expiresAt <= Date.now() + 60_000;
+  if ((!force && !expiresSoon) || !config.refreshToken) return config;
+
+  const response = await fetch(devUrl("https://vuaai.net/api/auth/claude/token"), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: config.refreshToken,
+      client_id: "9d1c2508-bf82-4a7b-a1e6-b63690d79d1a",
+    }),
+  });
+  if (!response.ok) {
+    throw new ProviderHttpError(401, "Claude session could not be refreshed. Reconnect Claude to continue.");
+  }
+  const data = await response.json() as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+  if (!data.access_token) {
+    throw new ProviderHttpError(401, "Claude session refresh returned no access token. Reconnect Claude to continue.");
+  }
+  const refreshToken = data.refresh_token || config.refreshToken;
+  const next = {
+    ...config,
+    apiKey: data.access_token,
+    refreshToken,
+    expiresAt: typeof data.expires_in === "number" ? Date.now() + data.expires_in * 1000 : undefined,
+  };
+  await Promise.all([
+    vaultSet("provider:claude", data.access_token),
+    vaultSet("provider:claude:refresh", refreshToken),
+  ]);
+  return next;
 }
 
 async function refreshAntigravityToken(

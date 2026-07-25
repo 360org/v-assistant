@@ -24,6 +24,7 @@ scripts/.agentimport-*.mjs
 .vua_state_dev.json
 .vua_vault_dev.json
 .vua_ai_router_connections.json
+.vua_ai_router_packs.json
 
 # Editor / OS
 .DS_Store

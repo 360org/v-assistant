@@ -1,6 +1,60 @@
 #!/usr/bin/env node
 
-const baseUrl = process.env.AI_ROUTER_BASE_URL || "http://127.0.0.1:20128/v1";
+// Boots the AI Router sidecar itself instead of assuming one is already
+// listening. Without this the check only passed when an app instance happened
+// to be running, and failed with a raw ECONNREFUSED stack trace otherwise —
+// which is how a sidecar that never started (wrong project dir) and a runner
+// that crash-looped both reached a release with CI green.
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PORT = Number(process.env.AI_ROUTER_PORT || 20128);
+const baseUrl = process.env.AI_ROUTER_BASE_URL || `http://127.0.0.1:${PORT}/v1`;
+
+async function reachable() {
+  try {
+    await fetch(`${baseUrl}/models`, { signal: AbortSignal.timeout(1500) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Start the sidecar unless something already answers on the port. */
+async function ensureRouter() {
+  if (await reachable()) return null;
+
+  const sidecar = path.join(repoRoot, "ai-router/src/sidecar.mjs");
+  if (!existsSync(sidecar)) {
+    throw new Error(`AI Router sidecar not found at ${sidecar}`);
+  }
+
+  const child = spawn(process.execPath, [sidecar], {
+    cwd: path.join(repoRoot, "ai-router"),
+    env: { ...process.env, AI_ROUTER_PORT: String(PORT) },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    if (child.exitCode !== null) {
+      throw new Error(`AI Router sidecar exited early (code ${child.exitCode}):\n${stderr.trim()}`);
+    }
+    if (await reachable()) return child;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  child.kill();
+  throw new Error(`AI Router sidecar did not become ready on port ${PORT}:\n${stderr.trim()}`);
+}
+
+const router = await ensureRouter();
+process.on("exit", () => router?.kill());
 
 async function post(path, body) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -42,4 +96,5 @@ assert(invalidExchange.response.status === 422, "Invalid Antigravity code must b
 assert(typeof invalidExchange.payload.error === "string" && invalidExchange.payload.error.length > 0, "AI Router must return an OAuth error payload.");
 assert(!invalidExchange.payload.error.includes("Load failed"), "OAuth exchange must not leak a WebView Load failed error.");
 
-console.log("desktop OAuth contract passed: Antigravity + Claude authorize, sidecar exchange error path");
+console.log("desktop OAuth contract passed: sidecar boots, Antigravity + Claude authorize, exchange error path");
+router?.kill();

@@ -23,6 +23,10 @@ pub struct Runtime {
     engine: Arc<Mutex<Option<Child>>>,
     ai_router: Arc<Mutex<Option<Child>>>,
     connector_token: String,
+    /// Kept so the AI Router can be respawned on demand (Settings → "Thử lại"),
+    /// not just at boot.
+    project_dir: PathBuf,
+    broker: VaultBroker,
 }
 
 #[derive(Serialize)]
@@ -196,14 +200,30 @@ fn spawn_process(
     cmd.spawn().map_err(err)
 }
 
-fn kill_stale_port_process(_port: u16) {
+/// Free the router port if a previous run left a sidecar behind.
+///
+/// This used to `pkill -f sidecar.mjs` unconditionally, which killed *every*
+/// sidecar on the machine — including the one belonging to another running
+/// V Assistant instance (dev build vs installed app). That instance was then
+/// left with a dead router and no way to recover. Now the port is probed
+/// first, so a free port means nothing is killed, and the kill is announced.
+fn kill_stale_port_process(port: u16) {
+    let occupied = std::net::TcpListener::bind(("127.0.0.1", port)).is_err();
+    if !occupied {
+        return;
+    }
+
+    println!(
+        "[tauri-runtime] Port {port} is busy; clearing the stale AI Router holding it. \
+         If another V Assistant instance is running, its router is being taken over."
+    );
+
     #[cfg(unix)]
     {
         use std::process::Command;
-        let _ = Command::new("pkill")
-            .arg("-f")
-            .arg("sidecar.mjs")
-            .status();
+        let _ = Command::new("pkill").arg("-f").arg("sidecar.mjs").status();
+        // Give the OS a moment to release the socket before we rebind it.
+        std::thread::sleep(std::time::Duration::from_millis(300));
     }
 }
 
@@ -242,6 +262,69 @@ fn spawn_ai_router(
     command.spawn().map_err(err)
 }
 
+/// Restart the AI Router when its process is gone.
+///
+/// Covers both "was never started" (spawn failed at boot, e.g. the port was
+/// still held by another instance) and "died later". Capped like the agent
+/// runner so a permanently broken setup does not respawn forever; the last
+/// lines of `ai-router.log` are printed when giving up.
+const MAX_ROUTER_RESTARTS: u32 = 5;
+
+fn supervise_ai_router(
+    router: &Arc<Mutex<Option<Child>>>,
+    dir: &Path,
+    project_dir: &Path,
+    broker: &VaultBroker,
+    failures: &mut u32,
+) {
+    if *failures >= MAX_ROUTER_RESTARTS {
+        return;
+    }
+
+    let mut guard = match router.lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+
+    let needs_restart = match guard.as_mut() {
+        Some(child) => matches!(child.try_wait(), Ok(Some(_))),
+        None => true,
+    };
+    if !needs_restart {
+        *failures = 0;
+        return;
+    }
+
+    *failures += 1;
+    println!(
+        "[tauri-runtime] AI Router is not running. Restart attempt {}/{}",
+        failures, MAX_ROUTER_RESTARTS
+    );
+
+    match spawn_ai_router(dir, project_dir, broker) {
+        Ok(child) => {
+            *guard = Some(child);
+            println!("[tauri-runtime] AI Router restarted successfully.");
+        }
+        Err(error) => {
+            *guard = None;
+            eprintln!("[tauri-runtime] Failed to restart AI Router: {error}");
+            if *failures >= MAX_ROUTER_RESTARTS {
+                eprintln!(
+                    "[tauri-runtime] AI Router failed {MAX_ROUTER_RESTARTS} times; giving up."
+                );
+                if let Ok(log) = std::fs::read_to_string(dir.join("ai-router.log")) {
+                    let tail: Vec<&str> = log.lines().rev().take(10).collect();
+                    eprintln!(
+                        "[tauri-runtime] Last ai-router.log lines:\n{}",
+                        tail.into_iter().rev().collect::<Vec<&str>>().join("\n")
+                    );
+                }
+            }
+        }
+    }
+}
+
 impl Runtime {
     pub fn new(dir: PathBuf, project_dir: PathBuf, broker: VaultBroker) -> Result<Self, String> {
         std::fs::create_dir_all(dir.join("ipc")).map_err(err)?;
@@ -256,6 +339,8 @@ impl Runtime {
             engine: engine.clone(),
             ai_router: ai_router.clone(),
             connector_token: broker.connector_token.clone(),
+            project_dir: project_dir.clone(),
+            broker: broker.clone(),
         };
 
         match spawn_ai_router(&dir, &project_dir, &broker) {
@@ -281,13 +366,30 @@ impl Runtime {
         // Spawning background process monitor (health check & auto-restart)
         let dir_clone = dir;
         let engine_clone = engine.clone();
+        let router_clone = ai_router.clone();
         let project_dir_val = project_dir;
+        let router_broker = broker.clone();
         let connector_token = broker.connector_token;
 
         std::thread::spawn(move || {
+            let mut consecutive_failures = 0;
+            // The AI Router is the only path to a model ("Chat never calls a
+            // vendor endpoint directly"), so a dead router makes the whole app
+            // unusable. Supervise it exactly like the agent runner: without
+            // this it was spawned once and, if it ever died, stayed dead until
+            // the app restarted while chat showed only "Load failed".
+            let mut router_failures = 0;
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(5));
-                
+
+                supervise_ai_router(
+                    &router_clone,
+                    &dir_clone,
+                    &project_dir_val,
+                    &router_broker,
+                    &mut router_failures,
+                );
+
                 let mut guard = match engine_clone.lock() {
                     Ok(g) => g,
                     Err(_) => continue,
@@ -296,8 +398,19 @@ impl Runtime {
                 if let Some(child) = guard.as_mut() {
                     match child.try_wait() {
                         Ok(Some(status)) => {
-                            println!("[tauri-runtime] Agent runner exited unexpectedly with status: {}. Restarting...", status);
+                            consecutive_failures += 1;
+                            println!("[tauri-runtime] Agent runner exited unexpectedly with status: {}. Failure count: {}/5", status, consecutive_failures);
                             
+                            if consecutive_failures >= 5 {
+                                eprintln!("[tauri-runtime] Agent runner failed 5 consecutive times. Stopping restart loop to prevent crash loop.");
+                                let log_path = dir_clone.join("runner.log");
+                                if let Ok(err_log) = std::fs::read_to_string(&log_path) {
+                                    let last_lines: Vec<&str> = err_log.lines().rev().take(10).collect();
+                                    eprintln!("[tauri-runtime] Last runner.log errors:\n{}", last_lines.into_iter().rev().collect::<Vec<&str>>().join("\n"));
+                                }
+                                break;
+                            }
+
                             let config_path = dir_clone.join("runner.json");
                             match spawn_process(
                                 &dir_clone,
@@ -314,7 +427,9 @@ impl Runtime {
                                 }
                             }
                         }
-                        Ok(None) => {}
+                        Ok(None) => {
+                            consecutive_failures = 0;
+                        }
                         Err(e) => {
                             println!("[tauri-runtime] Error checking agent runner status: {}", e);
                         }
@@ -586,6 +701,27 @@ impl Runtime {
             }
         }
         self.spawn_engine_with_config("default", None, Some("auto"), app)
+    }
+
+    /// Respawn the AI Router now, killing any process still attached.
+    ///
+    /// The supervisor restarts it on its own within seconds, but it gives up
+    /// after a few failures. This is the explicit user-driven path behind
+    /// Settings → "Thử lại", which previously only re-issued the HTTP request
+    /// and so could never recover a router that was not running.
+    pub fn restart_ai_router(&self) -> Result<(), String> {
+        if let Ok(mut guard) = self.ai_router.lock() {
+            if let Some(child) = guard.as_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            *guard = None;
+        }
+        let child = spawn_ai_router(&self.dir, &self.project_dir, &self.broker)?;
+        if let Ok(mut guard) = self.ai_router.lock() {
+            *guard = Some(child);
+        }
+        Ok(())
     }
 
     pub fn status(&self) -> RuntimeStatus {

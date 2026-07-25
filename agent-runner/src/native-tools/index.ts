@@ -406,23 +406,40 @@ export function getToolDefinitions(): ToolDefinition[] {
   return NATIVE_TOOLS.map((t) => t.definition);
 }
 
+function logAudit(toolName: string, args: Record<string, unknown>, isError: boolean, errorMsg?: string): void {
+  const timestamp = new Date().toISOString();
+  const logDir = path.join(WORKSPACE_ROOT, '.audit');
+  try {
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    const logLine = JSON.stringify({ timestamp, tool: toolName, args, is_error: isError, error: errorMsg }) + '\n';
+    fs.appendFileSync(path.join(logDir, 'tool_calls.log'), logLine, 'utf8');
+  } catch {
+    /* ignore logging failure */
+  }
+}
+
 /** Execute a tool by name */
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
   const tool = NATIVE_TOOLS.find((t) => t.definition.name === name);
   if (!tool) {
+    const error = `Unknown tool: ${name}`;
+    logAudit(name, args, true, error);
     return {
       tool_call_id: '',
-      content: `Unknown tool: ${name}`,
+      content: error,
       is_error: true,
     };
   }
   try {
     const result = await tool.execute(args);
+    logAudit(name, args, false);
     return { tool_call_id: '', content: result };
   } catch (err) {
+    const errorMsg = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
+    logAudit(name, args, true, errorMsg);
     return {
       tool_call_id: '',
-      content: `Tool error: ${err instanceof Error ? err.message : String(err)}`,
+      content: errorMsg,
       is_error: true,
     };
   }

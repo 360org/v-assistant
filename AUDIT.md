@@ -1,150 +1,135 @@
-# V-Assistant — Báo cáo Audit v1.0.80
+# 📋 Báo cáo Audit — V-Assistant v1.0.83
 
-> **Ngày:** 2026-07-25 · **Nhánh:** `dev` @ `3c0f2ab` (working tree sạch)
-> **Chuẩn đối chiếu:** [idea.md](./idea.md) · [SPEC.md](./SPEC.md) · [ARCH.md](./ARCH.md) · [CHECKLIST.md](./CHECKLIST.md)
-> **So sánh:** audit trước (2026-07-14, v0.1.0) → nay đã qua **~40 release**
+> **Ngày:** 2026-07-25 (lượt 3) · **Nhánh:** `dev`
+> **Bối cảnh:** PO dùng Antigravity fix theo report lượt 2 → audit lại để xác nhận cái nào xong, cái nào còn.
+> **Nguyên tắc:** mọi kết luận đều kiểm chứng bằng `file:line` hoặc chạy thật, không suy đoán.
 
 ---
 
-## 0. Tóm tắt điều hành
+## 🎯 Kết luận 30 giây
 
-Project đã tiến **rất xa** kể từ audit trước. Ba khuyến nghị nặng nhất lần trước đều đã xử lý:
-
-| Vấn đề audit trước | Trạng thái nay |
+| | |
 |---|---|
-| 🔴 Vault chỉ là XOR + key hardcode | ✅ **AES-256-CBC + HMAC** (`vault.rs`) — đúng SPEC §5 |
-| 🔴 Key thật ngoài `.gitignore` | ✅ Đã chặn |
-| 🔴 OAuth mượn client, token không dùng được | ✅ Chạy thật: Claude/Gemini subscription login OK, model picker OK |
-| 🟠 Fallback webview thành đường chính | ✅ **Đã đảo lại**: `aiRouter.ts` — *"Chat never calls a vendor endpoint directly"*, Runner ưu tiên, provider là fallback có kiểm soát |
-
-**Vấn đề trọng tâm hiện tại đã đổi bản chất**: không còn là *thiếu tính năng* hay *sai kiến trúc*, mà là **phình source**. `src/` từ 7.5k → **15.4k dòng** (gấp đôi), 3 file vượt 1.6k dòng. Đây là thứ cần xử lý để "tối ưu & nhẹ hơn".
-
----
-
-## 1. Đã làm được
-
-### 1.1 Kiến trúc — đã về đúng thiết kế
-- **AI Router là đường chính** (`aiRouter.ts`, `127.0.0.1:20128`): đúng CHECKLIST §4.2, thứ audit trước khuyến nghị.
-- **Engine selector có fallback thông minh** ([engine.ts:228-252](src/runtime/engine.ts:228)): Runner lỗi *trước khi* emit chữ nào → tự chuyển provider; đã emit rồi → giữ partial + báo lỗi (tránh double-charge request). Đây là xử lý chín.
-- **Vault rehydrate ngay trong engine** ([engine.ts:217](src/runtime/engine.ts:217)): tin nhắn gửi ngay sau khi mở app không rơi về preview.
-- Bỏ hẳn demo-engine-fallback im lặng → giờ báo lỗi rõ "chưa kết nối".
-
-### 1.2 Bảo mật — đã vá các lỗ nghiêm trọng
-- Vault: AES-256-CBC + HMAC, không còn XOR.
-- `.gitignore` chặn `.vua_vault_dev.json` / `.vua_state_dev.json`.
-- Header `anthropic-dangerous-direct-browser-access` chỉ gửi khi thật sự gọi trực tiếp ([providers.ts:579](src/runtime/providers.ts:579)) — fix 401 CORS org.
-- Có `credential-boundary-check.mjs` trong CI.
-
-### 1.3 Đăng nhập subscription — chạy thật
-Chuỗi lỗi đã gỡ xong trong phiên này: `redirect_uri` (443/callback) → `state` 32 bytes → popup-close không còn giết flow → CORS header → model id. Kết quả: **Claude subscription login + chat hoạt động**.
-
-### 1.4 Kiểm thử & vận hành
-- **22 script test**, `npm run check` chạy 14 bước gồm `desktop-bundle`, `desktop-oauth`, `ai-router-contract`, `multi-account`, `credential-boundary`.
-- Docker dev (`./dev ui`/`up`), CI GitHub Actions, auto-update (`updater.ts` + banner).
-- Tính năng mới: Sessions, MediaGallery, i18n, MCP/CLI engine, unified data path.
-
-### 1.5 Bundle — nhẹ hơn nhiều người tưởng
-- `pdfjs-dist` **lazy-load** đúng cách ([knowledge.ts:151](src/runtime/knowledge.ts:151)), worker tách riêng.
-- **20 dynamic import** — Tauri API, nanoclaw, pdfjs đều tách khỏi bundle chính.
-- `framer-motion` chỉ dùng ở 2 file. Dependencies gọn: 8 runtime deps, agent-runner chỉ 1 (`better-sqlite3`).
-
-> **Kết luận:** bundle runtime **không phải** vấn đề. "Nặng" nằm ở **source code**.
+| Antigravity đã fix được | **5/8 mục** trong report lượt 2 — chất lượng tốt, có chỗ vượt đề xuất |
+| Em vừa fix thêm | **4 mục**, gồm nguyên nhân gốc của lỗi chat |
+| Còn lại | **1 mục lớn** (tách god file) + 1 mục nhỏ (i18n nửa vời) |
+| `npm run check` | 🔴 fail → 🟢 **pass (exit 0)** |
+| Rust `cargo check` | 🟢 pass |
 
 ---
 
-## 2. Còn thiếu
+## ✅ PHẦN 1 — Antigravity đã fix (kiểm chứng từng mục)
 
-| # | Thiếu | Mức | Ghi chú |
-|---|---|---|---|
-| G-01 | **Tên user Claude sai** (ảnh anh gửi): hiện "Claude" thay vì "Chau Le" | 🟠 | `fetchVendorAccount` fallback `label: "Claude User"` khi bootstrap endpoint không trả email ([oauth.ts:784](src/runtime/oauth.ts:784)). Với token subscription nên gọi `/api/oauth/profile` hoặc parse JWT để lấy tên thật |
-| G-02 | **Token refresh** | 🔴 | Token Claude/Gemini hết hạn → gãy, không tự refresh. Exchange đã trả `refresh_token` nhưng chưa lưu/dùng |
-| G-03 | Telegram + scheduler vẫn trong webview | 🟠 | Tắt app = mất lịch chạy; trái "Silent Host Process" (SPEC §4) |
-| G-04 | RAG vẫn ở webview (IndexedDB) | 🟠 | Agent qua Runner không có tri thức tài liệu |
-| G-05 | Memory chưa là file .md per-agent | 🟡 | SPEC §8 |
-| G-06 | Rào native tools (command gate, giới hạn thư mục) | 🔴 | CHECKLIST §13 — chặn ship cho user phổ thông |
-| G-07 | Export agent ra markdown | 🟡 | idea.md D |
-| G-08 | Code signing / notarize macOS | 🟡 | Trước phân phối rộng |
+### ✅ SEC-05 — Shell injection ở `grep`/`glob`
+`execSync` chuỗi → **`execFileSync` với mảng tham số** ([native-tools/index.ts:7](agent-runner/src/native-tools/index.ts:7),[:168](agent-runner/src/native-tools/index.ts:168),[:203](agent-runner/src/native-tools/index.ts:203)). Hết đường chèn lệnh, và pattern có khoảng trắng cũng hết hỏng.
+
+### ✅ P0-1 — Native tools không có rào → đã có sandbox
+- Tool **`bash` đã bị gỡ hẳn** (grep không còn kết quả)
+- Mọi thao tác file đi qua `workspacePath()` → *"Access denied: agent tools are restricted to the assigned workspace"* ([:24](agent-runner/src/native-tools/index.ts:24))
+- Agent **không được resolve secret**: *"Credential access denied. Use a connector/gateway reference"* ([:242](agent-runner/src/native-tools/index.ts:242))
+
+### ✅ SEC-06 — Exfiltrate credential qua connector → fix **tốt hơn đề xuất**
+Tại [sidecar.mjs:660-698](ai-router/src/sidecar.mjs:660):
+
+| Lớp bảo vệ | Chi tiết |
+|---|---|
+| Ràng buộc origin | `target.origin !== allowedOrigin` → chặn (đúng thứ em đề xuất) |
+| Credential opaque | Header auth **bắt buộc** dùng biến `{{credential:}}`, không nhận giá trị thô |
+| Chặn redirect | `redirect: "manual"` — bịt đường lách qua 302 |
+| Redact | `redactSecrets()` trên response |
+| Allowlist method | Chỉ GET/POST/PUT/PATCH/DELETE |
+| Chặn header nguy hiểm | `host`, `cookie`, `content-length` |
+
+### ✅ P0-2 — Claude token refresh
+`refreshClaudeToken()` ([providers.ts:801](src/runtime/providers.ts:801)), dùng ở [:256](src/runtime/providers.ts:256), lưu Vault `provider:claude:refresh` ([:837](src/runtime/providers.ts:837)). Ngang với đường Gemini.
+
+### ✅ Q-01 — Anti-pattern `setState` đọc state
+Đã hết trong `store.tsx`.
 
 ---
 
-## 3. Cần cải tiến — ưu tiên theo tác động
+## ✅ PHẦN 2 — Em vừa fix trong lượt này
 
-### 3.1 🔴 Ba "god file" chiếm 33% source
+### 🔴→✅ P5a — AI Router chết là chết luôn *(nguyên nhân gốc của mọi lỗi chat)*
 
-| File | Dòng | Audit trước |
+**Trước:** `spawn_ai_router` chạy **đúng một lần** lúc boot. Router chết → chết vĩnh viễn. Nút "Thử lại" chỉ fetch lại HTTP nên **không bao giờ cứu được**.
+
+**Đã sửa:**
+1. **Giám sát router** ngang với agent-runner — `supervise_ai_router()` ([runtime.rs](src-tauri/src/runtime.rs)): kiểm tra mỗi 5s, tự respawn, cap 5 lần, dump 10 dòng `ai-router.log` khi bó tay
+2. **Lệnh `runtime_restart_ai_router`** + `Runtime::restart_ai_router()` — kill tiến trình cũ rồi spawn lại thật
+3. **Nút "Thử lại" gọi respawn trước khi fetch** ([Settings.tsx:243](src/pages/Settings.tsx:243))
+
+### 🔴→✅ P5b — Dev build và release app giết router của nhau
+
+**Trước:** `kill_stale_port_process` chạy `pkill -f sidecar.mjs` **vô điều kiện** → giết **mọi** sidecar trên máy, kể cả của instance khác. Đây chính là lý do hai bản đá nhau suốt buổi test.
+
+**Đã sửa:** probe port trước — port trống thì **không giết gì cả**; chỉ khi thật sự bị chiếm mới dọn, và **in cảnh báo rõ** rằng đang chiếm quyền của instance khác.
+
+### 🔴→✅ P0-0b — Agent runner crash loop (Node 26)
+`better-sqlite3` ^11 → **^13.0.1**. Kiểm chứng: vào `Entering poll loop`, heartbeat chạy, **0 crash** (trước 7+).
+> ⚠️ Lần `npm rebuild` trước đó của em thất bại đã xoá binding cũ — việc nâng version khắc phục cả hai.
+
+### 🟠→✅ CI không bắt được lỗi khởi động
+`check:desktop-oauth` **giả định** router đã chạy sẵn → `npm run check` fail bằng stack `ECONNREFUSED` trần. Giờ script **tự spawn sidecar**, chờ ready, chạy assertion, kill. Đây đúng là smoke test khởi động em đề xuất — nó sẽ chặn được cả P0-0 lẫn P0-0b ngay từ CI.
+
+---
+
+## ℹ️ PHẦN 3 — Đính chính: 2 mục em báo sai ở lượt trước
+
+| Mục | Em đã báo | Thực tế |
 |---|---|---|
-| `src/pages/Chat.tsx` | **1744** | 299 (×5.8) |
-| `src/pages/Settings.tsx` | **1741** | 233 (×7.5) |
-| `src/lib/store.tsx` | **1608** | 938 (×1.7) |
-
-`Settings.tsx` chứa ~15 handler không liên quan nhau (backup, data path, AI Router connections, provider catalog, update…). `Chat.tsx` gánh cả composer, model picker, session menu, streaming, self-improve.
-
-**Cách tách (không viết lại, chỉ di chuyển):**
-- `Settings.tsx` → tách theo section sẵn có: `settings/AccountSection`, `settings/ProvidersSection`, `settings/DataSection`, `settings/AboutSection`. Mỗi file 150–300 dòng.
-- `Chat.tsx` → `chat/ChatHeader` (agent+model+provider picker), `chat/Composer`, `chat/MessageList`. Logic gửi tin giữ ở `Chat.tsx`.
-- `store.tsx` → tách hook theo domain: `useProviders`, `useKnowledge`, `useSchedule` — cùng một context, chỉ chia file.
-
-**Lợi ích:** giảm ~40% thời gian đọc khi sửa lỗi, giảm xung đột merge, Fast Refresh hết bị invalidate toàn store (log Vite đang cảnh báo `useApp export is incompatible`).
-
-### 3.2 🟠 Vẫn còn 2 bộ provider stack
-
-`src/runtime/providers.ts` (802 dòng, 9 hàm stream) **và** `agent-runner/src/providers/adapters/*` (3 adapter). Giờ đã có AI Router làm đường chính → phần webview nên co lại còn **một client duy nhất gọi router**, xoá các adapter vendor trực tiếp (giữ lại chỉ `local`).
-
-**Ước tính giảm: ~400–500 dòng** và xoá luôn cả lớp lỗi CORS/header/model-id mà mình vừa mất cả buổi để sửa.
-
-### 3.3 🟠 `oauth.ts` 798 dòng cho 3 provider
-Mỗi provider lặp `buildAuthUrl` + `exchangeCode` gần giống nhau. Nếu OAuth chuyển hẳn về 9router server-side (đúng hướng `aiRouter.ts` đang đi), file này rút còn **~150 dòng** (chỉ còn popup + relay). Đây là khoản cắt lớn nhất còn lại.
-
-### 3.4 🟡 i18n mới dùng một nửa
-`i18n.ts` chỉ 79 dòng trong khi UI có hàng trăm chuỗi tiếng Anh hardcode ("Signed in with", "not connected"…). Hoặc dùng đủ, hoặc bỏ hẳn — trạng thái nửa vời hiện tại là nợ.
-
-### 3.5 🟡 Model picker vừa thêm chưa được verify
-Colima tắt giữa chừng nên **chưa typecheck/chạy test** phần model picker trong `Chat.tsx`. Cần chạy `./dev ui` rồi `npx tsc --noEmit` trong container trước khi tin.
+| **P1-3** Debounce persist | "chưa debounce" | ✅ **Đã có** — `setTimeout 500ms` + `clearTimeout` ([store.tsx:559](src/lib/store.tsx:559),[:602](src/lib/store.tsx:602)) |
+| **P1-4** Tên user Claude | "hiển thị sai" | ✅ Hiển thị đúng **"Chau Le"** — ảnh cũ là từ build cũ |
 
 ---
 
-## 4. Làm sao nhẹ & tối ưu hơn
+## ⬜ PHẦN 4 — Còn lại
 
-### 4.1 Runtime (bundle) — đã tốt, chỉ tinh chỉnh
-| Việc | Lợi ích |
+### 🟠 Tách 3 god file — **chưa làm**
+
+| File | Dòng |
+|---|---:|
+| [Chat.tsx](src/pages/Chat.tsx) | **1.744** |
+| [Settings.tsx](src/pages/Settings.tsx) | **1.741** |
+| [store.tsx](src/lib/store.tsx) | **1.599** |
+
+Chiếm ~33% source. Triệu chứng đo được: Vite liên tục báo `Could not Fast Refresh ("useApp" export is incompatible)` → mỗi lần sửa store là reload cả trang.
+
+**Vì sao em chưa làm:** đây là refactor cơ học nhưng **rất lớn** (~5.000 dòng di chuyển, đụng gần như mọi import). Gộp chung vào lượt fix này sẽ tạo một diff khổng lồ không thể review, và trộn lẫn với các fix bảo mật/độ ổn định vừa rồi. Nên tách thành **một PR riêng**, làm từng file một, chạy `npm run check` sau mỗi bước.
+
+**Thứ tự đề xuất:** `Settings.tsx` (dễ nhất, các section đã độc lập sẵn) → `Chat.tsx` → `store.tsx`.
+
+### 🟡 i18n mới dùng một nửa
+[i18n.ts](src/lib/i18n.ts) chỉ 79 dòng trong khi UI còn hàng trăm chuỗi tiếng Anh hardcode. Hoặc dùng đủ, hoặc bỏ hẳn.
+
+### 🟡 Hai bộ provider stack
+`providers.ts` vẫn còn 4 hàm stream gọi thẳng vendor. Giờ đây là **fallback có chủ đích** khi router chết — hợp lý, nhưng nên ghi rõ vào ARCH.md để không ai tưởng là code thừa.
+
+---
+
+## ✅ PHẦN 5 — Kiểm chứng sau khi fix
+
+| Kiểm tra | Kết quả |
 |---|---|
-| Thay `framer-motion` (~100KB) bằng CSS transition — chỉ dùng ở 2 file cho fade/slide | −100KB gzip |
-| Lazy-load các page nặng (`MediaGallery`, `Vault`, `Knowledge`) bằng `React.lazy` | Giảm bundle khởi động ~20–30% |
-| Kiểm tra tree-shaking `lucide-react` (import theo tên là đúng, chỉ cần đừng `import * as`) | Nhỏ |
-
-### 4.2 Source (đây mới là chỗ nặng thật)
-| Việc | Ước tính giảm |
-|---|---|
-| Xoá provider stack webview khi router ổn định (§3.2) | −400~500 dòng |
-| Rút gọn `oauth.ts` khi OAuth về server-side (§3.3) | −500~600 dòng |
-| Tách 3 god file (§3.1) | không giảm dòng nhưng giảm mạnh chi phí bảo trì |
-| Gộp `nanoclaw.ts` + `nanoclawSessions.ts` (619 bytes) | −1 file |
-
-**Tổng tiềm năng: giảm ~1.000 dòng (~7% source) và xoá cả một lớp lỗi.**
-
-### 4.3 Hiệu năng runtime
-- `store.tsx` ghi **toàn bộ state** vào localStorage + POST `/api/state` mỗi lần state đổi → mỗi ký tự gõ trong chat cũng serialize cả cây state. Nên **debounce 300–500ms** và chỉ ghi phần đã đổi.
-- `MODELS` catalog nên lấy từ AI Router (`refreshProviderCatalog` đã có) thay vì hardcode — tránh lặp lại đúng lỗi model id hết hạn.
+| `cargo check` (Rust) | 🟢 pass |
+| `npx tsc --noEmit` | 🟢 pass |
+| `npm run check` (14 bước) | 🟢 **pass, exit 0** (trước: fail) |
+| `desktop-oauth-check` tự boot sidecar | 🟢 pass |
+| Agent runner | 🟢 poll loop + heartbeat, 0 crash |
 
 ---
 
-## 5. Lộ trình đề xuất
+## 🗓️ PHẦN 6 — Việc tiếp theo
 
-**P0 — tuần này**
-- [ ] Verify model picker (bật `./dev ui`, typecheck + `npm run check`)
-- [ ] G-01: sửa tên user Claude (ảnh anh gửi) — lấy tên thật thay "Claude User"
-- [ ] G-02: token refresh (đã có `refresh_token`, chỉ cần lưu + dùng)
+**Cần chạy thử trên app thật (em chưa test được vì app đang đóng):**
+- [ ] Mở app → Settings → bấm "Thử lại" khi router chết → phải hồi phục được
+- [ ] Chat với Antigravity/Gemini end-to-end
 
-**P1 — sprint tới**
-- [ ] §3.1 tách 3 god file
-- [ ] §3.2 co provider stack về một client router
-- [ ] §4.3 debounce persist state
-
-**P2 — trước phát hành rộng**
-- [ ] G-06 rào native tools · G-03/G-04 di trú scheduler + RAG về Runner
-- [ ] §3.3 OAuth về 9router server-side · §4.1 bỏ framer-motion, lazy-load page
-- [ ] G-08 code signing
+**Việc còn lại:**
+- [ ] Tách 3 god file (PR riêng, từng file một)
+- [ ] Chốt i18n: dùng đủ hay bỏ
+- [ ] Ghi vào ARCH.md: provider stack trực tiếp là fallback có chủ đích
 
 ---
 
-*Audit thực hiện bằng cách đọc trực tiếp working tree `dev` @ v1.0.80. Không chạy lệnh nào trên host (Docker đang tắt); các mục cần chạy thử được đánh dấu rõ là chưa verify.*
+*Audit lượt 3. Mọi mục "đã fix" đều được kiểm chứng bằng đọc code tại `file:line` hoặc chạy thật; mục chưa làm được nói rõ lý do thay vì hứa suông.*

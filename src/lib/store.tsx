@@ -477,7 +477,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) break;
         const key = await vaultGet(vaultKey(id));
         if (cancelled || !key) continue;
-        const refreshToken = id === "gemini"
+        const refreshToken = (id === "gemini" || id === "claude")
           ? await vaultGet(refreshVaultKey(id))
           : null;
         const legacyGemini = id === "gemini" && !state.providerConfigs.gemini?.projectId;
@@ -555,62 +555,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hasHydratedCredentials) return;
-    // Storage can be unavailable (sandboxed webviews, private mode) — the
-    // app must keep working without persistence. Secrets are never written
-    // here: the API key is stripped from each provider config and kept in
-    // the Vault instead; only "has a key" is persisted.
-    try {
-      const providerConfigs = Object.fromEntries(
-        Object.entries(state.providerConfigs).map(([id, cfg]) => [
-          id,
-          cfg
-            ? { ...cfg, apiKey: cfg.apiKey ? "" : undefined, refreshToken: undefined }
-            : cfg,
-        ]),
-      );
-      const safe = { ...state, providerConfigs };
-      const currentKey = getUserStorageKey(state.user);
-      localStorage.setItem(currentKey, JSON.stringify(safe));
-      if (state.user) {
-        localStorage.setItem("v-assistant-last-active-user-key", currentKey);
-      }
 
-      // Sync state and sessions to data directory (custom or default ~/.v-assistant/data)
-      const dataDir = state.customDataPath || localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
-      if (state.customDataPath) {
-        localStorage.setItem("vua:custom-data-path", state.customDataPath);
-      } else {
-        localStorage.removeItem("vua:custom-data-path");
-      }
-      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-        void import("@tauri-apps/api/core").then(({ invoke }) => {
-          void invoke("save_custom_data_text", {
-            customDir: dataDir,
-            relativePath: "v_assistant_backup.json",
-            content: JSON.stringify(safe, null, 2),
+    const timer = setTimeout(() => {
+      try {
+        const providerConfigs = Object.fromEntries(
+          Object.entries(state.providerConfigs).map(([id, cfg]) => [
+            id,
+            cfg
+              ? { ...cfg, apiKey: cfg.apiKey ? "" : undefined, refreshToken: undefined }
+              : cfg,
+          ]),
+        );
+        const safe = { ...state, providerConfigs };
+        const currentKey = getUserStorageKey(state.user);
+        localStorage.setItem(currentKey, JSON.stringify(safe));
+        if (state.user) {
+          localStorage.setItem("v-assistant-last-active-user-key", currentKey);
+        }
+
+        const dataDir = state.customDataPath || localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
+        if (state.customDataPath) {
+          localStorage.setItem("vua:custom-data-path", state.customDataPath);
+        } else {
+          localStorage.removeItem("vua:custom-data-path");
+        }
+        if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+          void import("@tauri-apps/api/core").then(({ invoke }) => {
+            void invoke("save_custom_data_text", {
+              customDir: dataDir,
+              relativePath: "v_assistant_backup.json",
+              content: JSON.stringify(safe, null, 2),
+            }).catch(() => {});
+
+            void invoke("save_custom_data_text", {
+              customDir: dataDir,
+              relativePath: "chats/sessions.json",
+              content: JSON.stringify(safe.chatSessions, null, 2),
+            }).catch(() => {});
+
+            void syncAllKnowledgeFilesToDisk();
           }).catch(() => {});
-
-          void invoke("save_custom_data_text", {
-            customDir: dataDir,
-            relativePath: "chats/sessions.json",
-            content: JSON.stringify(safe.chatSessions, null, 2),
-          }).catch(() => {});
-
-          void syncAllKnowledgeFilesToDisk();
-        }).catch(() => {});
+        }
+      } catch {
+        /* storage full / blocked */
       }
+    }, 500);
 
-      // Also sync state to host dev server if running in standard browser dev mode
-      if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
-        void fetch("/api/state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(safe),
-        }).catch(() => {});
-      }
-    } catch {
-      /* run without persistence */
-    }
+    return () => clearTimeout(timer);
   }, [state, hasHydratedCredentials]);
 
   // Telegram channel: while it's connected, run the 2-way bridge so the user
