@@ -1148,6 +1148,7 @@ export function Chat() {
                         </div>
                       )}
 
+                      {m.content?.trim() || (m.role === "assistant" && visibleAssistantText(m.content)) ? (
                         <MessageContent
                           content={m.content}
                           assistant={m.role === "assistant"}
@@ -1155,6 +1156,7 @@ export function Chat() {
                             send(`Đã phê duyệt (Approve) quyền truy cập thư mục: ${path}. Hãy tiến hành đọc dữ liệu và thực thi công việc ngay!`);
                           }}
                         />
+                      ) : streaming && idx === filteredMessages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">
                           <span className="relative flex size-2.5 shrink-0">
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75"></span>
