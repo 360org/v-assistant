@@ -2,6 +2,10 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [1.0.80] - 2026-07-25
+### Custom Data Directory Persistence & Global Storage Key Sync
+*   **Ghi Nhớ Thư Mục Tùy Chỉnh (`vua:custom-data-path`)**: Tự động lưu và đồng bộ khóa `vua:custom-data-path` vào `localStorage` khi người dùng thay đổi hoặc khôi phục dữ liệu profile. Giúp các module độc lập như `savePhysicalDataFile` (`knowledge.ts`) và `saveSkillToDisk` (`tools.ts`) luôn nhận diện chính xác đường dẫn tùy chỉnh (như `/Volumes/DATA/WORK/VAssistant-Data/uploads`) mà không bị lùi về mặc định `~/.v-assistant/data`.
+
 ## [1.0.79] - 2026-07-25
 ### Linux CI Runner Build Fix & Standard Cross-Platform Rust Compatibility
 *   **Fix Linux CI Runner Compilation Error (`E0433`)**: Thay thế `tokio::time::sleep` bằng `std::thread::sleep` trong `src-tauri/src/lib.rs`. Giúp mã nguồn Rust biên dịch 100% hoàn hảo trên tất cả các hệ điều hành (Ubuntu Linux, macOS, Windows) mà không bị thiếu crate dependency.

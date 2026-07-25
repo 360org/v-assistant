@@ -287,6 +287,13 @@ function loadStateForUser(key: string): PersistedState {
       merged.activeSessionId = migrated.id;
     }
     const active = merged.chatSessions.find((session) => session.id === merged.activeSessionId) ?? merged.chatSessions[0];
+    if (merged.customDataPath) {
+      try {
+        localStorage.setItem("vua:custom-data-path", merged.customDataPath);
+      } catch {
+        /* storage restricted */
+      }
+    }
     merged.chatSessions = merged.chatSessions.map((session) => ({
       ...session,
       channel: session.channel ?? "desktop",
@@ -570,6 +577,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Sync state and sessions to data directory (custom or default ~/.v-assistant/data)
       const dataDir = state.customDataPath || localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
+      if (state.customDataPath) {
+        localStorage.setItem("vua:custom-data-path", state.customDataPath);
+      } else {
+        localStorage.removeItem("vua:custom-data-path");
+      }
       if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
         void import("@tauri-apps/api/core").then(({ invoke }) => {
           void invoke("save_custom_data_text", {
@@ -1133,6 +1145,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setCustomDataPath = useCallback((path: string) => {
+    try {
+      if (path) {
+        localStorage.setItem("vua:custom-data-path", path);
+      } else {
+        localStorage.removeItem("vua:custom-data-path");
+      }
+    } catch {
+      /* storage restricted */
+    }
     setState((s) => ({ ...s, customDataPath: path }));
   }, []);
 
