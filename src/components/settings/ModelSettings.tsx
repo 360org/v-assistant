@@ -112,12 +112,18 @@ export function ModelSettings() {
       }
     }
 
-    const matched = catalog.find((p) =>
+    const matchedRaw = catalog.find((p) =>
       LOCAL_ACCOUNT_PROVIDER_IDS[accProviderId]?.includes(p.id.toLowerCase())
-    ) || {
+    );
+
+    const matched: AiRouterProvider = matchedRaw ? {
+      ...matchedRaw,
+      oauth: matchedRaw.oauth || accProviderId === "antigravity" || accProviderId === "claude" || accProviderId === "codex" || accProviderId === "openai",
+      apiKey: matchedRaw.apiKey !== false,
+    } : {
       id: accProviderId,
-      name: accProviderId === "antigravity" ? "Gemini" : accProviderId === "codex" ? "GPT" : accProviderId === "claude" ? "Claude" : accProviderId === "grok-cli" ? "Grok" : accProviderId,
-      oauth: accProviderId === "antigravity" || accProviderId === "claude",
+      name: accProviderId === "antigravity" ? "Gemini" : accProviderId === "codex" ? "GPT / OpenAI" : accProviderId === "claude" ? "Claude" : accProviderId === "grok-cli" ? "Grok" : accProviderId,
+      oauth: accProviderId === "antigravity" || accProviderId === "claude" || accProviderId === "codex",
       apiKey: true,
     };
 
@@ -541,7 +547,7 @@ export function ModelSettings() {
                   </div>
 
                   {/* OAuth Flow option */}
-                  {selectedProvider.oauth && (
+                  {(selectedProvider.oauth || ["antigravity", "gemini", "claude", "codex", "openai"].includes(selectedProvider.id.toLowerCase())) && (
                     <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
                       <div className="text-xs font-semibold text-neutral-200">Đăng nhập Nhanh via OAuth (Subscription)</div>
                       <p className="text-[11px] text-neutral-400 leading-relaxed">
@@ -616,8 +622,8 @@ export function ModelSettings() {
                     </div>
                   )}
 
-                  {/* API Key option */}
-                  {selectedProvider.apiKey && (
+                  {/* API Key option - ALWAYS rendered as fallback */}
+                  {(selectedProvider.apiKey || true) && (
                     <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
                       <div className="text-xs font-semibold text-neutral-200">Cấu hình qua API Key</div>
                       <div className="flex gap-2">
