@@ -82,7 +82,10 @@ function buildSystemPrompt(assistantName: string, agentName: string, agentDir: s
   parts.push('- web_search: Search the public web, then use http_request to read a result');
   parts.push('- connector_request: Use an opaque connector reference through the trusted gateway');
   parts.push('');
-  parts.push('Always use tools when they would help accomplish the task.');
+  parts.push('=== MANDATORY WORKSPACE & FILE STORAGE RULE ===');
+  parts.push('- All created or generated files MUST be saved inside your active workspace directory.');
+  parts.push('- NEVER write or save files to Desktop (/Users/*/Desktop), Downloads, /tmp or outside the workspace unless the user explicitly specified that exact full absolute path in their current message.');
+  parts.push('- Always use tools when they would help accomplish the task.');
   parts.push('Be concise and helpful.');
 
   // Load Instructions

@@ -3,6 +3,17 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+*   **Mandatory Workspace File Storage Rule (`agent-runner/src/index.ts`)**:
+    - Bổ sung quy định nghiêm ngặt trong System Prompt của Agent Runner: Tất cả các tệp tài liệu, kế hoạch, bài viết tạo ra từ công cụ (`file_write`,...) **BẮT BUỘC phải được lưu trữ bên trong thư mục Workspace active của hệ thống**. Tuyệt đối không lưu tệp ra `~/Desktop` hay các đường dẫn bên ngoài trừ khi người dùng yêu cầu đích danh đường dẫn tuyệt đối.
+*   **Fix Reset & Delete Account Card Button in Desktop Webview (`ModelSettings.tsx`)**:
+    - Gỡ bỏ hoàn toàn `window.confirm()` vốn bị môi trường desktop webview Tauri chặn im lặng. Nút **Delete** trên các thẻ kết nối AI Vendor (OpenRouter, Gemini, ChatGPT, Claude...) giờ đây nhận lệnh click 100% lập tức, xóa kết nối khỏi AI Router và reset danh sách hiển thị ngay trên giao diện.
+*   **Full Markdown Output Rendering Engine (`MessageContent.tsx`)**:
+    - Nâng cấp toàn diện bộ dựng hình Markdown cho khung Chat: Khắc phục triệt để lỗi tiêu đề `####` hiển thị dạng plain text bằng việc hỗ trợ đầy đủ tiêu đề H1 -> H6.
+    - Bổ sung khối hiển thị Code Block với giao diện Dark Mode chuẩn kèm nút **Sao chép (Copy)** 1-click, Bảng biểu Markdown (`| header |`), Trích dẫn (`> quote`), Đường kẻ ngang (`---`), In đậm, In nghiêng, Strikethrough, Hình ảnh và Đường liên kết.
+*   **Multimodal Image Vision & Automatic Excel Parsing (`nanoclaw.ts`, `native-tools/index.ts`)**:
+    - Sửa lỗi Agent không đọc được ảnh: Ghép và truyền đầy đủ dữ liệu đính kèm Base64/URL từ `lastUser.attachments` sang Agent Runner để các mô hình Multimodal Vision (Gemini, GPT-4o, Claude) đọc ảnh trực tiếp.
+    - Sửa lỗi không đọc được file Excel: Nâng cấp công cụ `file_read` tự động trích xuất các sheet trong tệp Excel nhị phân (`.xlsx`, `.xls`) thành dạng bảng Markdown/CSV chuẩn xác thông qua bộ giải mã Python stdlib (`zipfile` + `xml.etree.ElementTree`).
+
 ### Refactoring & Workflow Improvements (Items 1-3)
 *   **Item 1 - Automated Sidecar Build Guard (`package.json`)**:
     - Chuẩn hóa script `"build:runner": "npx tsc --project agent-runner/tsconfig.json"` và tích hợp trực tiếp vào `"build": "npm run build:runner && node scripts/validate-skills.mjs && tsc && vite build"`.

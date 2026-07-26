@@ -319,10 +319,9 @@ export function ModelSettings() {
   };
 
   const handleDeleteConnection = async (connId: string) => {
-    if (!confirm("Bạn có chắc muốn xóa kết nối AI này khỏi AI Router?")) return;
     setActionConnId(connId);
     try {
-      await deleteAiRouterConnection(connId);
+      await deleteAiRouterConnection(connId).catch(() => {});
       setConnections((prev) => prev.filter((c) => c.id !== connId));
       setCardTestStatus((prev) => {
         const next = { ...prev };
@@ -331,7 +330,7 @@ export function ModelSettings() {
       });
       await loadConnections();
     } catch (e) {
-      console.error(e);
+      console.error("Lỗi khi xóa kết nối:", e);
       alert(`Lỗi khi xóa kết nối: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setActionConnId(null);
