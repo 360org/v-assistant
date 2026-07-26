@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { Check, Copy, ExternalLink, KeyRound, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { Check, CheckCircle2, Copy, ExternalLink, KeyRound, Link, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   deleteAiRouterConnection,
+  exchangeAiRouterOAuthCallbackUrl,
   getAiRouterConnections,
   getAiRouterProviderCatalog,
   saveAiRouterConnection,
@@ -44,6 +45,7 @@ export function ModelSettings() {
   const [connecting, setConnecting] = useState(false);
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
   const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
+  const [manualCallbackUrl, setManualCallbackUrl] = useState("");
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
   const [actionConnId, setActionConnId] = useState<string | null>(null);
 
@@ -179,12 +181,29 @@ export function ModelSettings() {
     }
   };
 
+  const handleCompleteManualCallback = async () => {
+    if (!selectedProvider || !manualCallbackUrl.trim()) return;
+    setConnecting(true);
+    setConnectMessage(null);
+    try {
+      await exchangeAiRouterOAuthCallbackUrl(selectedProvider.id, manualCallbackUrl.trim());
+      setConnectMessage(`✅ Xác thực OAuth thành công cho ${selectedProvider.name}!`);
+      setManualCallbackUrl("");
+      await loadConnections();
+    } catch (err) {
+      setConnectMessage(`❌ Lỗi Callback: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   const copyManualAuthUrl = async () => {
     if (!manualAuthUrl) return;
     await navigator.clipboard.writeText(manualAuthUrl);
     setAuthUrlCopied(true);
     setTimeout(() => setAuthUrlCopied(false), 2000);
   };
+
 
   return (
     <section className="mt-8">
@@ -413,6 +432,33 @@ export function ModelSettings() {
                           </div>
                         </div>
                       )}
+
+                      {/* Manual Callback URL Redirect Input */}
+                      <div className="mt-3 pt-3 border-t border-neutral-800/80 space-y-2">
+                        <label className="text-[11px] font-semibold text-gold-400 flex items-center gap-1">
+                          <Link className="size-3.5" />
+                          Dán URL Callback / Redirect từ trình duyệt (nếu tự chuyển hướng về localhost:1420):
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={manualCallbackUrl}
+                            onChange={(e) => setManualCallbackUrl(e.target.value)}
+                            placeholder="Dán link (e.g. http://localhost:1420/callback?code=...)"
+                            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={handleCompleteManualCallback}
+                            disabled={connecting || !manualCallbackUrl.trim()}
+                            className="gap-1.5 text-xs cursor-pointer shrink-0 hover:border-gold-400"
+                          >
+                            <CheckCircle2 className="size-3.5 text-emerald-400" />
+                            Xác nhận Link
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
 

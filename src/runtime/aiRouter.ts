@@ -386,6 +386,46 @@ export async function signInWithAiRouterCore(
   return exchange.tokens;
 }
 
+export async function exchangeAiRouterOAuthCallbackUrl(
+  provider: string,
+  fullCallbackUrl: string
+): Promise<AiRouterOAuthTokens> {
+  let urlObj: URL;
+  try {
+    urlObj = new URL(fullCallbackUrl.trim());
+  } catch {
+    throw new Error("URL Callback không hợp lệ. Vui lòng dán toàn bộ đường dẫn redirect (http://localhost:1420/callback?...).");
+  }
+
+  const code = urlObj.searchParams.get("code") || urlObj.searchParams.get("token");
+  const state = urlObj.searchParams.get("state") || "";
+
+  if (!code) {
+    throw new Error("Không tìm thấy tham số 'code' hoặc 'token' trong URL callback.");
+  }
+
+  const redirectUri = provider === "antigravity"
+    ? "http://localhost:1420/callback"
+    : `${window.location.origin}/callback`;
+
+  const exchangeResponse = await fetch(`${AI_ROUTER_BASE_URL}/oauth/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider,
+      code,
+      redirectUri,
+      state,
+    }),
+  });
+
+  const exchange = (await exchangeResponse.json()) as { tokens?: AiRouterOAuthTokens; error?: string };
+  if (!exchangeResponse.ok || !exchange.tokens) {
+    throw new Error(exchange.error || `Xác thực OAuth thất bại (${exchangeResponse.status})`);
+  }
+  return exchange.tokens;
+}
+
 export async function captureGrokWebSsoCookie(): Promise<string> {
   if (!inDesktopShell()) {
     window.open("https://grok.com", "v_assistant_grok_web", "width=980,height=760");
