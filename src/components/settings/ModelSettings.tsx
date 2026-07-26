@@ -17,6 +17,9 @@ import {
 } from "@/runtime/aiRouter";
 import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
+import { useApp } from "@/lib/store";
+import { beginManualSignIn, completeManualSignIn, type ManualSignInAttempt } from "@/runtime/oauth";
+import type { ProviderId } from "@/lib/catalog";
 
 const LOCAL_AI_ACCOUNTS = [
   { id: "antigravity", name: "Gemini", providerId: "antigravity" },
@@ -33,6 +36,7 @@ const LOCAL_ACCOUNT_PROVIDER_IDS: Record<string, readonly string[]> = {
 };
 
 export function ModelSettings() {
+  const { connectProvider } = useApp();
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [loadingConnections, setLoadingConnections] = useState(true);
@@ -46,6 +50,7 @@ export function ModelSettings() {
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
   const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
   const [manualCallbackUrl, setManualCallbackUrl] = useState("");
+  const [manualAttempt, setManualAttempt] = useState<ManualSignInAttempt | null>(null);
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
   const [actionConnId, setActionConnId] = useState<string | null>(null);
 
@@ -101,6 +106,34 @@ export function ModelSettings() {
     }
   };
 
+  const connectApiKey = async () => {
+    if (!selectedProvider || !apiKey.trim()) return;
+    setConnecting(true);
+    setConnectMessage(null);
+    try {
+      const providerId = selectedProvider.id as ProviderId;
+      await connectProvider(providerId, {
+        apiKey: apiKey.trim(),
+        connectionStatus: "connected",
+      });
+      await saveAiRouterConnection({
+        id: `${selectedProvider.id}_${Date.now()}`,
+        provider: selectedProvider.id,
+        name: selectedProvider.name,
+        authType: "api-key",
+        credentialRef: apiKey.trim(),
+      }).catch(() => {});
+      setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
+      setApiKey("");
+      await loadConnections();
+    } catch (err) {
+      setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+
   const handleTestConnection = async (connId: string) => {
     setActionConnId(connId);
     try {
@@ -138,41 +171,36 @@ export function ModelSettings() {
     }
   };
 
-  const connectApiKey = async () => {
-    if (!selectedProvider || !apiKey.trim()) return;
-    setConnecting(true);
-    setConnectMessage(null);
-    try {
-      await saveAiRouterConnection({
-        id: `${selectedProvider.id}_${Date.now()}`,
-        provider: selectedProvider.id,
-        name: selectedProvider.name,
-        authType: "api-key",
-        credentialRef: apiKey.trim(),
-      });
-      setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
-      setApiKey("");
-      await loadConnections();
-    } catch (err) {
-      setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setConnecting(false);
-    }
-  };
-
   const handleOAuthSignIn = async () => {
     if (!selectedProvider) return;
     setConnecting(true);
     setConnectMessage(null);
     setManualAuthUrl(null);
+    setManualAttempt(null);
     try {
-      const tokens = await signInWithAiRouterCore(selectedProvider.id, (url) => {
-        setManualAuthUrl(url);
-        void openExternalUrl(url);
-      });
-      if (tokens) {
-        setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
-        await loadConnections();
+      const attempt = await beginManualSignIn(selectedProvider.id as ProviderId).catch(() => null);
+      if (attempt) {
+        setManualAttempt(attempt);
+        setManualAuthUrl(attempt.authUrl);
+      } else {
+        const tokens = await signInWithAiRouterCore(selectedProvider.id, (url) => {
+          setManualAuthUrl(url);
+          void openExternalUrl(url);
+        });
+        if (tokens) {
+          const key = tokens.apiKey || tokens.accessToken || "";
+          if (key) {
+            await connectProvider(selectedProvider.id as ProviderId, {
+              apiKey: key,
+              refreshToken: tokens.refreshToken,
+              projectId: tokens.projectId,
+              expiresAt: tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined,
+              connectionStatus: "connected",
+            });
+          }
+          setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
+          await loadConnections();
+        }
       }
     } catch (err) {
       setConnectMessage(`❌ Lỗi OAuth: ${err instanceof Error ? err.message : String(err)}`);
@@ -186,10 +214,48 @@ export function ModelSettings() {
     setConnecting(true);
     setConnectMessage(null);
     try {
-      await exchangeAiRouterOAuthCallbackUrl(selectedProvider.id, manualCallbackUrl.trim());
-      setConnectMessage(`✅ Xác thực OAuth thành công cho ${selectedProvider.name}!`);
-      setManualCallbackUrl("");
-      await loadConnections();
+      let key = "";
+      let refreshToken: string | undefined;
+      let projectId: string | undefined;
+      let expiresAt: number | undefined;
+
+      if (manualAttempt) {
+        const res = await completeManualSignIn(manualAttempt, manualCallbackUrl.trim());
+        key = res.apiKey;
+        refreshToken = res.refreshToken;
+        projectId = res.projectId;
+        expiresAt = res.expiresAt;
+      } else {
+        const tokens = await exchangeAiRouterOAuthCallbackUrl(selectedProvider.id, manualCallbackUrl.trim());
+        key = tokens.apiKey || tokens.accessToken || "";
+        refreshToken = tokens.refreshToken;
+        projectId = tokens.projectId;
+        expiresAt = tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined;
+      }
+
+      if (key) {
+        const providerId = selectedProvider.id as ProviderId;
+        await connectProvider(providerId, {
+          apiKey: key,
+          refreshToken,
+          projectId,
+          expiresAt,
+          connectionStatus: "connected",
+        });
+        await saveAiRouterConnection({
+          id: `${selectedProvider.id}_${Date.now()}`,
+          provider: selectedProvider.id,
+          name: selectedProvider.name,
+          authType: "subscription",
+          credentialRef: key,
+        }).catch(() => {});
+        setConnectMessage(`✅ Xác thực & lưu kết nối thành công tài khoản OAuth ${selectedProvider.name}!`);
+        setManualCallbackUrl("");
+        setManualAttempt(null);
+        await loadConnections();
+      } else {
+        throw new Error("Không nhận được token xác thực từ URL callback.");
+      }
     } catch (err) {
       setConnectMessage(`❌ Lỗi Callback: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
