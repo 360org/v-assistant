@@ -415,6 +415,11 @@ export function ModelSettings() {
           key = res.apiKey;
           refreshToken = res.refreshToken;
           expiresAt = res.expiresAt;
+        } else if (selectedProvider.id === "codex" || selectedProvider.id === "openai" || selectedProvider.id === "chatgpt") {
+          const res = await exchangeAiRouterOAuthCallbackUrl(selectedProvider.id, manualCallbackUrl.trim());
+          key = res.apiKey || res.accessToken || "";
+          refreshToken = res.refreshToken;
+          expiresAt = res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined;
         } else {
           throw routerErr;
         }

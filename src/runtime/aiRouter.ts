@@ -405,8 +405,10 @@ export async function exchangeAiRouterOAuthCallbackUrl(
     throw new Error("Không tìm thấy tham số 'code' hoặc 'token' trong URL callback.");
   }
 
-  const redirectUri = provider === "antigravity"
+  const redirectUri = (provider === "antigravity" || provider === "gemini")
     ? "http://localhost:1420/callback"
+    : (provider === "codex" || provider === "chatgpt" || provider === "openai")
+    ? "http://localhost:1455/auth/callback"
     : `${window.location.origin}/callback`;
 
   const exchangeResponse = await fetch(`${AI_ROUTER_BASE_URL}/oauth/exchange`, {
