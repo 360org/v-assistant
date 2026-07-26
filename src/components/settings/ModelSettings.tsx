@@ -56,6 +56,7 @@ export function ModelSettings() {
   const [manualAttempt, setManualAttempt] = useState<ManualSignInAttempt | null>(null);
   const [authUrlCopied, setAuthUrlCopied] = useState(false);
   const [actionConnId, setActionConnId] = useState<string | null>(null);
+  const [cardTestStatus, setCardTestStatus] = useState<Record<string, { loading?: boolean; success?: boolean; message?: string } | undefined>>({});
 
   const loadConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -280,11 +281,26 @@ export function ModelSettings() {
 
   const handleTestConnection = async (connId: string) => {
     setActionConnId(connId);
+    setCardTestStatus((prev) => ({ ...prev, [connId]: { loading: true } }));
     try {
-      await testAiRouterConnection(connId);
+      const res = await testAiRouterConnection(connId);
+      if (res.valid) {
+        setCardTestStatus((prev) => ({
+          ...prev,
+          [connId]: { loading: false, success: true, message: "✅ Xắc thực kết nối API thành công! Tài khoản đang hoạt động tốt." },
+        }));
+      } else {
+        setCardTestStatus((prev) => ({
+          ...prev,
+          [connId]: { loading: false, success: false, message: `❌ Xắc thực thất bại: ${res.error || "Không thể kết nối API"}` },
+        }));
+      }
       await loadConnections();
     } catch (e) {
-      console.error(e);
+      setCardTestStatus((prev) => ({
+        ...prev,
+        [connId]: { loading: false, success: false, message: `❌ Lỗi kiểm tra: ${e instanceof Error ? e.message : String(e)}` },
+      }));
     } finally {
       setActionConnId(null);
     }
@@ -307,9 +323,16 @@ export function ModelSettings() {
     setActionConnId(connId);
     try {
       await deleteAiRouterConnection(connId);
+      setConnections((prev) => prev.filter((c) => c.id !== connId));
+      setCardTestStatus((prev) => {
+        const next = { ...prev };
+        delete next[connId];
+        return next;
+      });
       await loadConnections();
     } catch (e) {
       console.error(e);
+      alert(`Lỗi khi xóa kết nối: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setActionConnId(null);
     }
@@ -583,18 +606,11 @@ export function ModelSettings() {
               });
             });
 
-            // 2. Add fallback card for core accounts if NOT yet represented in renderCards
-            LOCAL_AI_ACCOUNTS.forEach((coreAcc) => {
-              const hasConn = renderCards.some(
-                (card) =>
-                  LOCAL_ACCOUNT_PROVIDER_IDS[coreAcc.id]?.includes(card.providerId.toLowerCase()) ||
-                  card.providerId.toLowerCase() === coreAcc.providerId.toLowerCase()
-              );
-
-              const storeCfg = providerConfigs[coreAcc.providerId as ProviderId] || providerConfigs[coreAcc.id as ProviderId];
-              const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
-
-              if (!hasConn) {
+            // 2. Add fallback card ONLY if NO connections exist at all
+            if (connections.length === 0) {
+              LOCAL_AI_ACCOUNTS.forEach((coreAcc) => {
+                const storeCfg = providerConfigs[coreAcc.providerId as ProviderId] || providerConfigs[coreAcc.id as ProviderId];
+                const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
                 renderCards.push({
                   key: coreAcc.id,
                   id: coreAcc.id,
@@ -607,29 +623,8 @@ export function ModelSettings() {
                   defaultModel: "Standard",
                   connId: isStoreConnected ? coreAcc.id : undefined,
                 });
-              }
-            });
-
-            // 3. Add fallback card for any providerConfigs from Store not yet in renderCards
-            Object.entries(providerConfigs).forEach(([provId, cfg]) => {
-              if (cfg && (cfg.apiKey || cfg.connectionStatus === "connected")) {
-                const hasCard = renderCards.some(
-                  (card) => card.providerId.toLowerCase() === provId.toLowerCase()
-                );
-                if (!hasCard) {
-                  renderCards.push({
-                    key: provId,
-                    id: provId,
-                    providerId: provId,
-                    name: provId.toUpperCase(),
-                    accountLabel: user?.detail || user?.name || `${provId.toUpperCase()} Connected`,
-                    isActive: true,
-                    defaultModel: "Standard",
-                    connId: provId,
-                  });
-                }
-              }
-            });
+              });
+            }
 
             return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -664,38 +659,69 @@ export function ModelSettings() {
                       </div>
 
                       {card.connId && (
-                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-neutral-800/80 text-[11px]">
-                          <div className="flex items-center gap-2 text-neutral-500">
-                            <span>Model: {card.defaultModel}</span>
+                        <div className="mt-3 flex flex-col gap-1.5 pt-2 border-t border-neutral-800/80 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-neutral-500">
+                              <span>Model: {card.defaultModel}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void handleTestConnection(card.connId!)}
+                                disabled={actionConnId === card.connId || cardTestStatus[card.connId!]?.loading}
+                                className="text-gold-300 hover:underline cursor-pointer flex items-center gap-1 font-medium"
+                              >
+                                {cardTestStatus[card.connId!]?.loading && <RefreshCw className="size-3 animate-spin text-gold-400" />}
+                                {cardTestStatus[card.connId!]?.loading ? "Đang test..." : t("test_api", language)}
+                              </button>
+                              <span>•</span>
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleConnection(card.connId!, Boolean(card.isActive))}
+                                disabled={actionConnId === card.connId}
+                                className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
+                              >
+                                {card.isActive ? t("toggle_off", language) : t("toggle_on", language)}
+                              </button>
+                              <span>•</span>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteConnection(card.connId!)}
+                                disabled={actionConnId === card.connId}
+                                className="text-red-400 hover:underline cursor-pointer font-medium"
+                              >
+                                {t("delete", language)}
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleTestConnection(card.connId!)}
-                              disabled={actionConnId === card.connId}
-                              className="text-gold-300 hover:underline cursor-pointer"
+
+                          {cardTestStatus[card.connId!]?.loading && (
+                            <div className="mt-1 p-2 rounded-lg bg-gold-500/10 border border-gold-500/30 text-xs text-gold-300 flex items-center gap-2 font-medium animate-pulse">
+                              <RefreshCw className="size-3.5 animate-spin" />
+                              Đang gửi gói tin kiểm tra kết nối API...
+                            </div>
+                          )}
+
+                          {cardTestStatus[card.connId!]?.message && !cardTestStatus[card.connId!]?.loading && (
+                            <div
+                              className={cn(
+                                "mt-1 p-2 rounded-lg text-xs font-medium flex items-center justify-between border animate-fadeIn",
+                                cardTestStatus[card.connId!]?.success
+                                  ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-300"
+                                  : "bg-red-950/80 border-red-500/40 text-red-300"
+                              )}
                             >
-                              {t("test_api", language)}
-                            </button>
-                            <span>•</span>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleConnection(card.connId!, Boolean(card.isActive))}
-                              disabled={actionConnId === card.connId}
-                              className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
-                            >
-                              {card.isActive ? t("toggle_off", language) : t("toggle_on", language)}
-                            </button>
-                            <span>•</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteConnection(card.connId!)}
-                              disabled={actionConnId === card.connId}
-                              className="text-red-400 hover:underline cursor-pointer"
-                            >
-                              {t("delete", language)}
-                            </button>
-                          </div>
+                              <span>{cardTestStatus[card.connId!]?.message}</span>
+                              <button
+                                type="button"
+                                onClick={() => setCardTestStatus((prev) => ({ ...prev, [card.connId!]: undefined }))}
+                                className="text-neutral-400 hover:text-neutral-200 cursor-pointer ml-2 text-[11px]"
+                                title="Đóng"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

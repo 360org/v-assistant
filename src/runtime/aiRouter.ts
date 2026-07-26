@@ -238,15 +238,15 @@ export async function saveAiRouterConnection(connection: CreateAiRouterConnectio
   return payload.connection;
 }
 
-export async function testAiRouterConnection(id: string): Promise<AiRouterConnection> {
+export async function testAiRouterConnection(id: string): Promise<{ valid: boolean; connection?: AiRouterConnection; error?: string }> {
   const response = await fetch(`${AI_ROUTER_BASE_URL}/providers/${encodeURIComponent(id)}/test`, {
     method: "POST",
   });
-  const payload = (await response.json()) as { connection?: AiRouterConnection; error?: string };
-  if (!response.ok || !payload.connection) {
-    throw new Error(payload.error || `AI Router connection test failed (${response.status})`);
+  const payload = (await response.json()) as { connection?: AiRouterConnection; valid?: boolean; error?: string };
+  if (!response.ok || payload.valid === false) {
+    return { valid: false, error: payload.error || `Kiểm tra kết nối thất bại (HTTP ${response.status})` };
   }
-  return payload.connection;
+  return { valid: true, connection: payload.connection };
 }
 
 export async function deleteAiRouterConnection(id: string): Promise<void> {
