@@ -5,7 +5,7 @@
 
 export type Language = "vi" | "en";
 
-export type Theme = "dark" | "gold" | "midnight";
+export type Theme = "system" | "light" | "dark" | "gold" | "midnight";
 
 export const translations = {
   vi: {

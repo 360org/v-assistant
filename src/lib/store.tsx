@@ -16,6 +16,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ProviderId } from "@/lib/catalog";
+import type { Theme } from "@/lib/i18n";
 import type { ChatMessage, ChatOptions } from "@/runtime/engine";
 import type { ProviderConfig } from "@/runtime/providers";
 import {
@@ -214,8 +215,8 @@ interface PersistedState {
   customDataPath?: string;
   /** Ngôn ngữ giao diện hệ thống: "vi" | "en" */
   language?: "vi" | "en";
-  /** Chủ đề giao diện: "dark" | "gold" | "midnight" */
-  theme?: "dark" | "gold" | "midnight";
+  /** Chủ đề giao diện: "system" | "light" | "dark" | "gold" | "midnight" */
+  theme?: Theme;
 }
 
 export interface ActiveBackgroundTask {
@@ -361,8 +362,8 @@ interface AppStore extends PersistedState {
   setCustomDataPath: (path: string) => void;
   language: "vi" | "en";
   setLanguage: (lang: "vi" | "en") => void;
-  theme: "dark" | "gold" | "midnight";
-  setTheme: (theme: "dark" | "gold" | "midnight") => void;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
   exportFullBackupData: () => string;
   importFullBackupData: (jsonStr: string) => boolean;
   activeBackgroundTasks: ActiveBackgroundTask[];
@@ -1156,23 +1157,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, language: lang }));
   }, []);
 
-  const setTheme = useCallback((theme: "dark" | "gold" | "midnight") => {
+  const setTheme = useCallback((theme: Theme) => {
     try {
       localStorage.setItem("vua:theme", theme);
     } catch {
       /* ignore storage error */
     }
-    document.documentElement.classList.remove("theme-dark", "theme-gold", "theme-midnight", "dark");
-    document.documentElement.classList.add("dark", `theme-${theme}`);
-    document.documentElement.setAttribute("data-theme", theme);
     setState((s) => ({ ...s, theme }));
   }, []);
 
   useEffect(() => {
-    const currentTheme = state.theme || "gold";
-    document.documentElement.classList.remove("theme-dark", "theme-gold", "theme-midnight", "dark");
-    document.documentElement.classList.add("dark", `theme-${currentTheme}`);
-    document.documentElement.setAttribute("data-theme", currentTheme);
+    const currentTheme = state.theme || "system";
+
+    const applyThemeToDOM = (resolvedTheme: "light" | "dark" | "gold" | "midnight") => {
+      document.documentElement.classList.remove(
+        "theme-system",
+        "theme-light",
+        "theme-dark",
+        "theme-gold",
+        "theme-midnight",
+        "dark",
+        "light"
+      );
+      if (resolvedTheme === "light") {
+        document.documentElement.classList.add("light", "theme-light");
+      } else {
+        document.documentElement.classList.add("dark", `theme-${resolvedTheme}`);
+      }
+      document.documentElement.setAttribute("data-theme", resolvedTheme);
+    };
+
+    if (currentTheme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleSystemThemeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+        applyThemeToDOM(e.matches ? "dark" : "light");
+      };
+      handleSystemThemeChange(mediaQuery);
+      mediaQuery.addEventListener("change", handleSystemThemeChange);
+      return () => mediaQuery.removeEventListener("change", handleSystemThemeChange);
+    } else {
+      applyThemeToDOM(currentTheme);
+    }
   }, [state.theme]);
 
   useEffect(() => {

@@ -80,7 +80,23 @@ export function GeneralSettings() {
               <div className="text-sm font-medium text-neutral-100">Chủ đề giao diện (Theme)</div>
               <div className="text-xs text-neutral-400">Tùy chỉnh chế độ hiển thị Sáng / Tối</div>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                variant={theme === "system" ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setTheme("system")}
+                className="text-xs cursor-pointer"
+              >
+                💻 Theo Hệ thống
+              </Button>
+              <Button
+                variant={theme === "light" ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setTheme("light")}
+                className="text-xs cursor-pointer"
+              >
+                ☀️ Light Mode
+              </Button>
               <Button
                 variant={theme === "dark" ? "primary" : "outline"}
                 size="sm"

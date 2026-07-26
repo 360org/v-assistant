@@ -78,3 +78,53 @@ html.theme-gold {
   --color-gold-500: #dd9422;
   --color-gold-300: #ecc25e;
 }
+
+/* Light Theme Overrides */
+html.theme-light body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.theme-light {
+  --color-gold-400: #2563eb;
+  --color-gold-500: #1d4ed8;
+  --color-gold-300: #3b82f6;
+  color-scheme: light;
+}
+
+html.theme-light .bg-neutral-950,
+html.theme-light .bg-neutral-900,
+html.theme-light .bg-neutral-800\/50,
+html.theme-light .bg-neutral-900\/50,
+html.theme-light .bg-neutral-900\/80 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light .text-neutral-100,
+html.theme-light .text-neutral-200,
+html.theme-light .text-neutral-300 {
+  color: #0f172a !important;
+}
+
+html.theme-light .text-neutral-400,
+html.theme-light .text-neutral-500 {
+  color: #475569 !important;
+}
+
+html.theme-light .border-neutral-800,
+html.theme-light .border-neutral-700\/50,
+html.theme-light .border-neutral-800\/50,
+html.theme-light .border-neutral-800\/80 {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light input,
+html.theme-light textarea,
+html.theme-light select {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
