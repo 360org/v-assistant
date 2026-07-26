@@ -10,9 +10,11 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 *   **Item 2 - UX-First Permission & 1-Click Error Recovery (`Chat.tsx`)**:
     - Giữ cơ chế **Thẻ Xin Quyền Cấp Truy Cập 1-Click (Permission Approval Card)** cho thư mục host.
     - Bổ sung nút **[ ⚡ Thử lại / Retry ]** 1-Click ngay trong bong bóng tin nhắn phản hồi báo lỗi, cho phép gửi lại câu hỏi lập tức mà không cần tải lại toàn bộ trang.
-*   **Item 3 - God Files Breakdown (`AppUpdateSection.tsx`)**:
-    - Khởi động đợt tách 3 god files (`Settings.tsx`, `Chat.tsx`, `store.tsx`).
-    - Tách khối cập nhật phần mềm thành component độc lập `src/components/settings/AppUpdateSection.tsx`, giảm dung lượng `Settings.tsx` và tăng tốc độ Vite Fast Refresh (HMR).
+*   **Item 3 - God Files Breakdown & Vite Fast Refresh (HMR) Optimization**:
+    - Hoàn thành đợt tái cấu trúc 3 god files khổng lồ (`Settings.tsx`, `Chat.tsx`, `store.tsx`).
+    - Tách `Settings.tsx` thành các sub-components độc lập: `AppUpdateSection.tsx`, `WorkspaceSettingsSection.tsx` tại `src/components/settings/`.
+    - Tách `Chat.tsx` thành `InlineAttachmentPreview.tsx` tại `src/components/chat/`.
+    - Tách kiểu dữ liệu `store.tsx` sang `src/lib/store/types.ts`, giải quyết triệt để cảnh báo `Could not Fast Refresh ("useApp" export is incompatible)` giúp HMR của Vite hoạt động siêu nhanh.
 
 ## [1.1.0] - 2026-07-25
 ### Comprehensive System Hardening, Multimodal Vision & Production Release
