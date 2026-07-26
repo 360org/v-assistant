@@ -1147,12 +1147,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setLanguage = useCallback((lang: "vi" | "en") => {
+    try {
+      localStorage.setItem("vua:language", lang);
+    } catch {
+      /* ignore storage error */
+    }
+    document.documentElement.setAttribute("lang", lang);
     setState((s) => ({ ...s, language: lang }));
   }, []);
 
   const setTheme = useCallback((theme: "dark" | "gold" | "midnight") => {
+    try {
+      localStorage.setItem("vua:theme", theme);
+    } catch {
+      /* ignore storage error */
+    }
+    document.documentElement.classList.remove("theme-dark", "theme-gold", "theme-midnight", "dark");
+    document.documentElement.classList.add("dark", `theme-${theme}`);
+    document.documentElement.setAttribute("data-theme", theme);
     setState((s) => ({ ...s, theme }));
   }, []);
+
+  useEffect(() => {
+    const currentTheme = state.theme || "gold";
+    document.documentElement.classList.remove("theme-dark", "theme-gold", "theme-midnight", "dark");
+    document.documentElement.classList.add("dark", `theme-${currentTheme}`);
+    document.documentElement.setAttribute("data-theme", currentTheme);
+  }, [state.theme]);
+
+  useEffect(() => {
+    const currentLang = state.language || "vi";
+    document.documentElement.setAttribute("lang", currentLang);
+  }, [state.language]);
 
   const exportFullBackupData = useCallback((): string => {
     const backupObj = {

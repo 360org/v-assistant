@@ -50,3 +50,31 @@ textarea,
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Theme Overrides for Gold, Dark, and Midnight themes */
+html.theme-midnight body {
+  background-color: #0b0f19 !important;
+}
+html.theme-midnight {
+  --color-gold-400: #818cf8;
+  --color-gold-500: #6366f1;
+  --color-gold-300: #a5b4fc;
+}
+
+html.theme-dark body {
+  background-color: #0d0d0d !important;
+}
+html.theme-dark {
+  --color-gold-400: #3b82f6;
+  --color-gold-500: #2563eb;
+  --color-gold-300: #60a5fa;
+}
+
+html.theme-gold body {
+  background-color: #0a0a0a !important;
+}
+html.theme-gold {
+  --color-gold-400: #e6ad39;
+  --color-gold-500: #dd9422;
+  --color-gold-300: #ecc25e;
+}
