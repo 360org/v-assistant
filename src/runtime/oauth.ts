@@ -16,7 +16,7 @@
  * Desktop Tauri shell still uses the native loopback listener (unchanged).
  */
 
-import { getProvider, type ProviderId } from "@/lib/catalog";
+import type { ProviderId } from "@/lib/catalog";
 import { devUrl, inDesktopShell } from "./proxy";
 
 const PENDING_KEY = "v-assistant-oauth-pending";
@@ -758,14 +758,15 @@ export interface VendorAccount {
 }
 
 export async function fetchVendorAccount(
-  provider: ProviderId,
+  provider: ProviderId | string,
   apiKey: string,
 ): Promise<VendorAccount | null> {
   if (DEMO_MODE) {
-    return { label: `Demo user · ${getProvider(provider).name}`, detail: "Preview account" };
+    return { label: `Demo user · ${provider}`, detail: "Preview account" };
   }
+  const pLower = provider.toLowerCase();
   try {
-    if (provider === "openrouter") {
+    if (pLower === "openrouter") {
       const res = await fetch(devUrl("https://openrouter.ai/api/v1/key"), {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
@@ -777,12 +778,14 @@ export async function fetchVendorAccount(
         : undefined;
       return { label, detail };
     }
-    if (provider === "chatgpt") {
+    if (pLower === "chatgpt" || pLower === "codex" || pLower === "openai") {
       const payload = parseJwt(apiKey);
       const profile = payload?.["https://api.openai.com/profile"];
-      return { label: profile?.email || payload?.email || "OpenAI User", detail: "Connected via ChatGPT" };
+      const email = profile?.email || payload?.email;
+      if (email) return { label: email, detail: "Connected via OpenAI" };
+      return { label: "OpenAI User", detail: "Connected via OpenAI" };
     }
-    if (provider === "claude") {
+    if (pLower === "claude") {
       const res = await fetch(devUrl("https://api.anthropic.com/api/claude_cli/bootstrap"), {
         headers: { Authorization: `Bearer ${apiKey}`, "anthropic-beta": "oauth-2025-04-20" },
       });
@@ -791,17 +794,25 @@ export async function fetchVendorAccount(
         const email = data?.oauth_account?.account_email;
         if (email) return { label: email, detail: "Connected via Claude" };
       }
+      const payload = parseJwt(apiKey);
+      if (payload?.email) return { label: payload.email, detail: "Connected via Claude" };
       return { label: "Claude User", detail: "Connected via Claude" };
     }
-    if (provider === "gemini") {
+    if (pLower === "gemini" || pLower === "antigravity") {
       const res = await fetch(devUrl("https://www.googleapis.com/oauth2/v1/userinfo"), {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data.email) return { label: data.email, detail: data.name || "Connected via Gemini" };
+        const data = (await res.json()) as { email?: string; name?: string };
+        if (data.email) return { label: data.email, detail: data.name || "Connected via Google" };
       }
-      return { label: "Gemini User", detail: "Connected via Gemini" };
+      const payload = parseJwt(apiKey);
+      if (payload?.email) return { label: payload.email, detail: "Connected via Google" };
+      return { label: "Google User", detail: "Connected via Google" };
+    }
+    if (pLower === "grok-cli" || pLower === "grok" || pLower === "xai") {
+      const payload = parseJwt(apiKey);
+      if (payload?.email) return { label: payload.email, detail: "Connected via Grok" };
     }
   } catch { /* fall through */ }
   return null;
