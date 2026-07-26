@@ -18,7 +18,7 @@ import { Integrations } from "@/pages/Integrations";
 import { Settings } from "@/pages/Settings";
 import { UpdateNotificationBanner } from "@/components/UpdateNotificationBanner";
 
-const pages: Record<View, () => JSX.Element> = {
+const pages: Record<View, React.ComponentType<any>> = {
   home: Home,
   chat: Chat,
   sessions: Sessions,
@@ -40,7 +40,7 @@ export default function App() {
     return <Onboarding />;
   }
 
-  const Page = pages[view];
+  const Page = pages[view] || Home;
 
   return (
     <div className="flex h-full flex-col md:flex-row">

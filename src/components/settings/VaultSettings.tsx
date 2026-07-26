@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Lock, KeyRound, ShieldCheck } from "lucide-react";
+import { Lock, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { vaultIsSecure } from "@/runtime/vault";
@@ -8,7 +8,11 @@ export function VaultSettings() {
   const [isSecure, setIsSecure] = useState(false);
 
   useEffect(() => {
-    vaultIsSecure().then(setIsSecure).catch(() => {});
+    try {
+      setIsSecure(Boolean(vaultIsSecure()));
+    } catch {
+      setIsSecure(false);
+    }
   }, []);
 
   return (

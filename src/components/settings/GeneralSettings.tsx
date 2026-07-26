@@ -90,12 +90,20 @@ export function GeneralSettings() {
                 🌙 Dark Mode
               </Button>
               <Button
-                variant={theme === "light" ? "primary" : "outline"}
+                variant={theme === "gold" ? "primary" : "outline"}
                 size="sm"
-                onClick={() => setTheme("light")}
+                onClick={() => setTheme("gold")}
                 className="text-xs cursor-pointer"
               >
-                ☀️ Light Mode
+                ✨ Gold Dark
+              </Button>
+              <Button
+                variant={theme === "midnight" ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setTheme("midnight")}
+                className="text-xs cursor-pointer"
+              >
+                🌌 Midnight
               </Button>
             </div>
           </div>

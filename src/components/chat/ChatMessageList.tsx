@@ -1,4 +1,3 @@
-import { type ReactNode } from "react";
 import { Bot, RotateCcw, User } from "lucide-react";
 import { type ChatMessage } from "@/runtime/engine";
 import { MessageContent } from "@/components/MessageContent";
@@ -58,6 +57,7 @@ export function ChatMessageList({
               {/* Message Content */}
               <MessageContent
                 content={m.content}
+                assistant={!isUser}
                 onApprovePermission={onApprovePermission}
               />
 
@@ -107,7 +107,7 @@ export function ChatMessageList({
             </div>
             {streamingContent && (
               <div className="mt-2">
-                <MessageContent content={streamingContent} />
+                <MessageContent content={streamingContent} assistant={true} />
               </div>
             )}
           </div>

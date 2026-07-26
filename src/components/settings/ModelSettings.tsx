@@ -1,22 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Check, Copy, ExternalLink, KeyRound, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  AI_ROUTER_BASE_URL,
-  deleteAiRouterConnection,
   getAiRouterConnections,
   getAiRouterProviderCatalog,
-  saveAiRouterConnection,
-  signInWithAiRouterCore,
-  testAiRouterConnection,
-  toggleAiRouterConnection,
   type AiRouterConnection,
   type AiRouterProvider,
 } from "@/runtime/aiRouter";
-import { openExternalUrl } from "@/components/MessageContent";
-import { cn } from "@/lib/utils";
 
 const LOCAL_AI_ACCOUNTS = [
   { id: "antigravity", name: "Gemini" },
@@ -38,16 +30,6 @@ export function ModelSettings() {
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [showProviderManager, setShowProviderManager] = useState(false);
   const [providerCatalog, setProviderCatalog] = useState<AiRouterProvider[]>([]);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [providerQuery, setProviderQuery] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<AiRouterProvider | null>(null);
-  const [apiKey, setApiKey] = useState("");
-  const [connecting, setConnecting] = useState(false);
-  const [connectMessage, setConnectMessage] = useState<string | null>(null);
-  const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
-  const [manualCallbackUrl, setManualCallbackUrl] = useState("");
-  const [authUrlCopied, setAuthUrlCopied] = useState(false);
-  const [connectionActionKey, setConnectionActionKey] = useState<string | null>(null);
 
   const loadConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -68,28 +50,18 @@ export function ModelSettings() {
 
   const refreshProviderCatalog = useCallback(async () => {
     try {
-      setCatalogError(null);
       const catalog = await getAiRouterProviderCatalog();
       setProviderCatalog(catalog);
-      if (catalog.length > 0 && !selectedProvider) {
-        setSelectedProvider(catalog[0]);
-      }
-    } catch (err) {
-      setCatalogError(err instanceof Error ? err.message : "Failed to load provider catalog.");
+    } catch {
+      // Ignore catalog fetch error in fallback mode
     }
-  }, [selectedProvider]);
+  }, []);
 
   useEffect(() => {
     if (showProviderManager && providerCatalog.length === 0) {
       void refreshProviderCatalog();
     }
   }, [showProviderManager, providerCatalog.length, refreshProviderCatalog]);
-
-  const filteredProviders = providerCatalog.filter(
-    (item) =>
-      item.name.toLowerCase().includes(providerQuery.toLowerCase()) ||
-      item.id.toLowerCase().includes(providerQuery.toLowerCase())
-  );
 
   return (
     <section className="mt-8">
@@ -123,21 +95,21 @@ export function ModelSettings() {
               const matchedConns = connections.filter((c) =>
                 LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider)
               );
-              const activeConn = matchedConns.find((c) => c.enabled && c.status === "ready") || matchedConns[0];
+              const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0];
 
               return (
                 <div key={acc.id} className="flex items-center justify-between p-3 rounded-xl border border-neutral-800 bg-neutral-950/60">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-neutral-100">{acc.name}</span>
-                      {activeConn?.status === "ready" ? (
+                      {activeConn?.isActive ? (
                         <Badge tone="green" className="text-[10px]">Ready</Badge>
                       ) : (
                         <Badge tone="neutral" className="text-[10px]">Chưa kết nối</Badge>
                       )}
                     </div>
                     <div className="mt-1 text-[11px] text-neutral-400">
-                      {activeConn?.accountName || "Chưa có tài khoản liên kết"}
+                      {activeConn?.accountLabel || activeConn?.email || activeConn?.name || "Chưa có tài khoản liên kết"}
                     </div>
                   </div>
                   <Button

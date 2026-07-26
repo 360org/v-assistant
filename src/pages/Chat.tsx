@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eraser, FileText, FolderOpen, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
 } from "@/runtime/aiRouter";
 import { Logo } from "@/components/Logo";
 import { ChatSessionMenu } from "@/components/ChatSessionMenu";
-import { MessageContent, openExternalUrl, visibleAssistantText } from "@/components/MessageContent";
+import { MessageContent, visibleAssistantText } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 
 const engine = createEngine();
