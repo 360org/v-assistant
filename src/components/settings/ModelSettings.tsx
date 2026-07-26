@@ -19,6 +19,7 @@ import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 import { beginManualSignIn, completeManualSignIn, exchangeCode, type ManualSignInAttempt } from "@/runtime/oauth";
+import { vaultGet } from "@/runtime/vault";
 import type { ProviderId } from "@/lib/catalog";
 
 const LOCAL_AI_ACCOUNTS = [
@@ -36,7 +37,7 @@ const LOCAL_ACCOUNT_PROVIDER_IDS: Record<string, readonly string[]> = {
 };
 
 export function ModelSettings() {
-  const { connectProvider } = useApp();
+  const { providerConfigs, connectProvider, user } = useApp();
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [loadingConnections, setLoadingConnections] = useState(true);
@@ -97,13 +98,38 @@ export function ModelSettings() {
       item.id.toLowerCase().includes(providerQuery.toLowerCase())
   );
 
-  const openConfigureModalForAccount = (accProviderId: string) => {
+  const openConfigureModalForAccount = async (accProviderId: string) => {
     setShowProviderManager(true);
-    const matched = providerCatalog.find((p) =>
+    setConnectMessage(null);
+
+    let catalog = providerCatalog;
+    if (catalog.length === 0) {
+      try {
+        catalog = await getAiRouterProviderCatalog();
+        setProviderCatalog(catalog);
+      } catch {
+        /* fallback */
+      }
+    }
+
+    const matched = catalog.find((p) =>
       LOCAL_ACCOUNT_PROVIDER_IDS[accProviderId]?.includes(p.id.toLowerCase())
-    );
-    if (matched) {
-      setSelectedProvider(matched);
+    ) || {
+      id: accProviderId,
+      name: accProviderId === "antigravity" ? "Gemini" : accProviderId === "codex" ? "GPT" : accProviderId === "claude" ? "Claude" : accProviderId === "grok-cli" ? "Grok" : accProviderId,
+      oauth: accProviderId === "antigravity" || accProviderId === "claude",
+      apiKey: true,
+    };
+
+    setSelectedProvider(matched);
+
+    // Pre-fill existing API Key from store / Vault
+    const storeCfg = providerConfigs[matched.id as ProviderId] || providerConfigs[accProviderId as ProviderId];
+    const savedKey = storeCfg?.apiKey || (await vaultGet(`provider_api_key:${matched.id}`).catch(() => null));
+    if (savedKey) {
+      setApiKey(savedKey);
+    } else {
+      setApiKey("");
     }
   };
 
@@ -125,8 +151,10 @@ export function ModelSettings() {
         credentialRef: apiKey.trim(),
       }).catch(() => {});
       setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
-      setApiKey("");
       await loadConnections();
+      setTimeout(() => {
+        setShowProviderManager(false);
+      }, 1200);
     } catch (err) {
       setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -287,6 +315,9 @@ export function ModelSettings() {
         setManualAttempt(null);
         setConnecting(false);
         await loadConnections();
+        setTimeout(() => {
+          setShowProviderManager(false);
+        }, 1200);
       } else {
         throw new Error("Không nhận được token xác thực từ URL callback.");
       }
@@ -343,7 +374,17 @@ export function ModelSettings() {
               const matchedConns = connections.filter((c) =>
                 LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider.toLowerCase())
               );
-              const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0];
+              const storeCfg = providerConfigs[acc.providerId as ProviderId] || providerConfigs[acc.id as ProviderId];
+              const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
+
+              const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0] || (isStoreConnected ? {
+                id: acc.id,
+                provider: acc.providerId,
+                name: acc.name,
+                accountLabel: user?.detail || user?.name || `${acc.name} Connected`,
+                isActive: true,
+                defaultModel: "Standard",
+              } : undefined);
 
               return (
                 <div key={acc.id} className="flex flex-col justify-between p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:border-neutral-700 transition-all">
