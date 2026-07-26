@@ -49,6 +49,71 @@ const fileReadTool: NativeTool = {
   async execute(args): Promise<string> {
     const filePath = workspacePath(args.path as string);
     try {
+      const ext = path.extname(filePath).toLowerCase();
+
+      // 1. Handle Excel files (.xlsx, .xls)
+      if (ext === '.xlsx' || ext === '.xls') {
+        const pyScript = `
+import sys, zipfile, xml.etree.ElementTree as ET
+
+def read_xlsx(p):
+    try:
+        with zipfile.ZipFile(p, 'r') as z:
+            strings = []
+            if 'xl/sharedStrings.xml' in z.namelist():
+                tree = ET.fromstring(z.read('xl/sharedStrings.xml'))
+                for el in tree.iter():
+                    if el.tag.endswith('t') and el.text:
+                        strings.append(el.text)
+            
+            output = []
+            sheet_files = [f for f in z.namelist() if f.startswith('xl/worksheets/sheet')]
+            for sf in sheet_files:
+                tree = ET.fromstring(z.read(sf))
+                rows = []
+                for row_el in tree.iter('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}row'):
+                    row = []
+                    for c_el in row_el.iter('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}c'):
+                        val = ''
+                        t = c_el.attrib.get('t')
+                        v_el = c_el.find('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}v')
+                        if v_el is not None and v_el.text:
+                            v = v_el.text
+                            if t == 's' and int(v) < len(strings):
+                                val = strings[int(v)]
+                            else:
+                                val = v
+                        row.append(val)
+                    if any(row):
+                        rows.append(" | ".join(row))
+                if rows:
+                    output.append(f"=== Sheet: {sf.split('/')[-1]} ===\\n" + "\\n".join(rows))
+            return "\\n\\n".join(output) if output else "Tệp Excel trống."
+    except Exception as e:
+        return f"Lỗi đọc file Excel: {e}"
+
+print(read_xlsx(sys.argv[1]))
+`.trim();
+        const res = execFileSync('python3', ['-c', pyScript, filePath], { encoding: 'utf8' });
+        return res || 'Tệp Excel không có dữ liệu.';
+      }
+
+      // 2. Handle Image files (.jpg, .jpeg, .png, .webp, .gif)
+      if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+        const mimeMap: Record<string, string> = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.gif': 'image/gif',
+        };
+        const mime = mimeMap[ext] || 'image/png';
+        const buffer = fs.readFileSync(filePath);
+        const b64 = buffer.toString('base64');
+        return `![${path.basename(filePath)}](data:${mime};base64,${b64})`;
+      }
+
+      // 3. Handle standard text/code files
       const content = fs.readFileSync(filePath, 'utf8');
       const startLine = args.start_line as number | undefined;
       const endLine = args.end_line as number | undefined;

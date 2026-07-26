@@ -51,10 +51,21 @@ export const nanoclawEngine: Engine = {
     // Each installed agent maps to a NanoClaw group; plain chat is "main".
     const groupId = options.agentId ?? "main";
 
+    let fullContent = lastUser.content || "";
+    if (lastUser.attachments && lastUser.attachments.length > 0) {
+      const attLines = lastUser.attachments.map((att) => {
+        if (att.dataUrl && att.dataUrl.startsWith("data:image/")) {
+          return `![${att.name}](${att.dataUrl})`;
+        }
+        return `[Tệp đính kèm: ${att.name}${att.dataUrl ? ` (${att.dataUrl.slice(0, 100)}...)` : ""}]`;
+      });
+      fullContent = `${fullContent}\n\n${attLines.join("\n")}`.trim();
+    }
+
     const lastSeen = await latestOutboundId(groupId);
     await invoke<number>("runtime_send", {
       groupId,
-      content: lastUser.content,
+      content: fullContent,
       meta: JSON.stringify({
         provider: options.provider,
         agent: options.agentName ?? null,
