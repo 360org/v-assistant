@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { beginManualSignIn, completeManualSignIn, exchangeCode, fetchVendorAccount, type ManualSignInAttempt } from "@/runtime/oauth";
-import { vaultGet } from "@/runtime/vault";
+import { vaultGet, vaultSet } from "@/runtime/vault";
 import type { ProviderId } from "@/lib/catalog";
 
 const LOCAL_AI_ACCOUNTS = [
@@ -174,7 +174,7 @@ export function ModelSettings() {
     providerName: string,
     key: string,
     authType: "subscription" | "api-key",
-    tokenData?: { email?: string; idToken?: string } | null,
+    tokenData?: { email?: string; idToken?: string; refreshToken?: string; projectId?: string; expiresIn?: number } | null,
     callbackUrlStr?: string
   ) => {
     const vendorAcc = await fetchVendorAccount(providerId as ProviderId, key).catch(() => null);
@@ -198,6 +198,7 @@ export function ModelSettings() {
     );
 
     const connId = existingConn ? existingConn.id : `${providerId}_${Date.now()}`;
+    const credentialRef = `ai-router:credential:${connId}`;
     const countForProv = connections.filter((c) =>
       matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p))
     ).length + 1;
@@ -209,6 +210,18 @@ export function ModelSettings() {
       vendorAcc?.label ||
       (authType === "api-key" ? maskedKey : `${providerName} Account #${countForProv}`);
 
+    await vaultSet(
+      credentialRef,
+      JSON.stringify({
+        accessToken: authType === "subscription" ? key : undefined,
+        apiKey: authType === "api-key" ? key : undefined,
+        refreshToken: tokenData?.refreshToken,
+        projectId: tokenData?.projectId,
+        expiresAt: tokenData?.expiresIn ? Date.now() + tokenData.expiresIn * 1000 : undefined,
+        email: targetEmail,
+      })
+    ).catch(() => {});
+
     await saveAiRouterConnection({
       id: connId,
       provider: providerId,
@@ -216,7 +229,7 @@ export function ModelSettings() {
       accountLabel,
       email: targetEmail || existingConn?.email,
       authType,
-      credentialRef: key,
+      credentialRef,
       isActive: true,
     });
 
@@ -227,7 +240,7 @@ export function ModelSettings() {
         ((targetEmail &&
           targetEmail.includes("@") &&
           (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
-          c.credentialRef === key)
+          c.credentialRef === credentialRef)
       ) {
         await deleteAiRouterConnection(c.id).catch(() => {});
       }
