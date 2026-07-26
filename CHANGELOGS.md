@@ -10,11 +10,11 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 *   **Item 2 - UX-First Permission & 1-Click Error Recovery (`Chat.tsx`)**:
     - Giữ cơ chế **Thẻ Xin Quyền Cấp Truy Cập 1-Click (Permission Approval Card)** cho thư mục host.
     - Bổ sung nút **[ ⚡ Thử lại / Retry ]** 1-Click ngay trong bong bóng tin nhắn phản hồi báo lỗi, cho phép gửi lại câu hỏi lập tức mà không cần tải lại toàn bộ trang.
-*   **Item 3 - God Files Breakdown & Vite Fast Refresh (HMR) Optimization**:
-    - Hoàn thành đợt tái cấu trúc 3 god files khổng lồ (`Settings.tsx`, `Chat.tsx`, `store.tsx`).
-    - Tách `Settings.tsx` thành các sub-components độc lập: `AppUpdateSection.tsx`, `WorkspaceSettingsSection.tsx` tại `src/components/settings/`.
-    - Tách `Chat.tsx` thành `InlineAttachmentPreview.tsx` tại `src/components/chat/`.
-    - Tách kiểu dữ liệu `store.tsx` sang `src/lib/store/types.ts`, giải quyết triệt để cảnh báo `Could not Fast Refresh ("useApp" export is incompatible)` giúp HMR của Vite hoạt động siêu nhanh.
+*   **Hoàn Thành 100% Tái Cấu Trúc 3 "God Files" Theo Đúng Cấu Trúc Yêu Cầu**:
+    - **`Settings.tsx`**: Tách thành 4 components độc lập: `GeneralSettings.tsx`, `ModelSettings.tsx`, `VaultSettings.tsx`, `WorkspaceSettings.tsx` tại `src/components/settings/`.
+    - **`Chat.tsx`**: Tách thành 3 components chuyên biệt: `ChatComposer.tsx`, `ChatMessageList.tsx`, `KnowledgeManagerDrawer.tsx` tại `src/components/chat/`.
+    - **`store.tsx`**: Tách thành 3 context modules: `AgentStateContext.tsx`, `KnowledgeContext.tsx`, `VaultContext.tsx` tại `src/lib/store/`.
+    - Giải quyết triệt để cảnh báo `Could not Fast Refresh ("useApp" export is incompatible)`, giúp tính năng HMR của Vite hoạt động cực kỳ mượt mà.
 
 ## [1.1.0] - 2026-07-25
 ### Comprehensive System Hardening, Multimodal Vision & Production Release

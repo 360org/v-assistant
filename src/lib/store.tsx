@@ -59,18 +59,7 @@ function refreshVaultKey(provider: ProviderId): string {
   return `provider:${provider}:refresh`;
 }
 
-export type View =
-  | "home"
-  | "chat"
-  | "sessions"
-  | "agents"
-  | "skills"
-  | "knowledge"
-  | "media"
-  | "vault"
-  | "scheduled"
-  | "integrations"
-  | "settings";
+export type { View, KnowledgeStatus, KnowledgeFile, LocalUser, ChatSession, AppState } from "@/lib/store/types";
 
 export type KnowledgeStatus = "processing" | "ready" | "error";
 
