@@ -18,6 +18,7 @@ import {
 import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
+import { t } from "@/lib/i18n";
 import { beginManualSignIn, completeManualSignIn, exchangeCode, type ManualSignInAttempt } from "@/runtime/oauth";
 import { vaultGet } from "@/runtime/vault";
 import type { ProviderId } from "@/lib/catalog";
@@ -37,7 +38,7 @@ const LOCAL_ACCOUNT_PROVIDER_IDS: Record<string, readonly string[]> = {
 };
 
 export function ModelSettings() {
-  const { providerConfigs, connectProvider, user } = useApp();
+  const { providerConfigs, connectProvider, user, language } = useApp();
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [loadingConnections, setLoadingConnections] = useState(true);
@@ -347,10 +348,10 @@ export function ModelSettings() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-neutral-300">
-            Mô hình AI & Tài khoản Kết nối (AI Models & Connected Accounts)
+            {t("models_connected_title", language)}
           </h2>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Quản lý kết nối API Keys, OAuth vendor thông qua Local AI Router (Port 20128).
+            {t("models_connected_desc", language)}
           </p>
         </div>
         <Button
@@ -359,19 +360,21 @@ export function ModelSettings() {
           onClick={() => setShowProviderManager((prev) => !prev)}
           className="gap-1.5 cursor-pointer text-xs font-medium"
         >
-          {showProviderManager ? "Đóng Quản lý Provider" : "+ Thêm Provider Mới"}
+          {showProviderManager ? t("close_provider_manager", language) : t("add_provider", language)}
         </Button>
       </div>
 
       {/* Account Cards Grid */}
       <Card className="mt-3 p-4">
         {loadingConnections ? (
-          <div className="py-6 text-center text-xs text-neutral-400">Đang kiểm tra danh sách kết nối AI Router...</div>
+          <div className="py-6 text-center text-xs text-neutral-400">
+            {language === "en" ? "Checking AI Router connections..." : "Đang kiểm tra danh sách kết nối AI Router..."}
+          </div>
         ) : connectionError ? (
           <div className="flex items-center justify-between gap-3 text-xs text-red-300">
             <span>⚠️ {connectionError}</span>
             <Button size="sm" variant="secondary" onClick={() => void loadConnections()} className="cursor-pointer">
-              <RefreshCw className="size-3.5" /> Thử lại
+              <RefreshCw className="size-3.5" /> {language === "en" ? "Retry" : "Thử lại"}
             </Button>
           </div>
         ) : (
@@ -399,15 +402,15 @@ export function ModelSettings() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-neutral-100">{acc.name}</span>
                         {activeConn?.isActive ? (
-                          <Badge tone="green" className="text-[10px]">Active</Badge>
+                          <Badge tone="green" className="text-[10px]">{t("active", language)}</Badge>
                         ) : activeConn ? (
-                          <Badge tone="gold" className="text-[10px]">Tắt</Badge>
+                          <Badge tone="gold" className="text-[10px]">{t("inactive", language)}</Badge>
                         ) : (
-                          <Badge tone="neutral" className="text-[10px]">Chưa cấu hình</Badge>
+                          <Badge tone="neutral" className="text-[10px]">{t("not_configured", language)}</Badge>
                         )}
                       </div>
                       <div className="mt-1 text-xs text-neutral-400 font-mono">
-                        {activeConn?.accountLabel || activeConn?.email || activeConn?.name || "Chưa chọn tài khoản liên kết"}
+                        {activeConn?.accountLabel || activeConn?.email || activeConn?.name || (language === "en" ? "No linked account" : "Chưa chọn tài khoản liên kết")}
                       </div>
                     </div>
 
@@ -417,7 +420,7 @@ export function ModelSettings() {
                       onClick={() => openConfigureModalForAccount(acc.providerId)}
                       className="text-xs cursor-pointer hover:border-gold-400"
                     >
-                      Cấu hình
+                      {t("configure", language)}
                     </Button>
                   </div>
 
@@ -433,7 +436,7 @@ export function ModelSettings() {
                           disabled={actionConnId === activeConn.id}
                           className="text-gold-300 hover:underline cursor-pointer"
                         >
-                          Kiểm tra API
+                          {t("test_api", language)}
                         </button>
                         <span>•</span>
                         <button
@@ -442,7 +445,7 @@ export function ModelSettings() {
                           disabled={actionConnId === activeConn.id}
                           className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
                         >
-                          {activeConn.isActive ? "Tắt" : "Bật"}
+                          {activeConn.isActive ? t("toggle_off", language) : t("toggle_on", language)}
                         </button>
                         <span>•</span>
                         <button
@@ -451,7 +454,7 @@ export function ModelSettings() {
                           disabled={actionConnId === activeConn.id}
                           className="text-red-400 hover:underline cursor-pointer"
                         >
-                          Xóa
+                          {t("delete", language)}
                         </button>
                       </div>
                     </div>
@@ -470,10 +473,10 @@ export function ModelSettings() {
             <div>
               <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
                 <ShieldCheck className="size-4 text-gold-400" />
-                Quản lý AI Vendor & Kết nối Trực tiếp
+                {t("provider_manager_title", language)}
               </h3>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Thêm API Keys hoặc Đăng nhập OAuth để liên kết tài khoản Gemini, ChatGPT, Claude, Grok, DeepSeek...
+                {t("provider_manager_desc", language)}
               </p>
             </div>
             <Button
@@ -495,7 +498,7 @@ export function ModelSettings() {
                   type="text"
                   value={providerQuery}
                   onChange={(e) => setProviderQuery(e.target.value)}
-                  placeholder="Tìm Provider (OpenAI, Anthropic, Gemini...)"
+                  placeholder={t("search_provider", language)}
                   className="w-full rounded-lg border border-neutral-800 bg-neutral-900 pl-9 pr-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400/70 focus:outline-none"
                 />
               </div>
@@ -505,7 +508,9 @@ export function ModelSettings() {
               ) : (
                 <div className="mt-3 max-h-64 overflow-y-auto space-y-1 pr-1">
                   {filteredProviders.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-neutral-500">Không tìm thấy Provider phù hợp</div>
+                    <div className="py-4 text-center text-xs text-neutral-500">
+                      {language === "en" ? "No matching providers found" : "Không tìm thấy Provider phù hợp"}
+                    </div>
                   ) : (
                     filteredProviders.map((prov) => {
                       const isSelected = selectedProvider?.id === prov.id;
@@ -549,9 +554,9 @@ export function ModelSettings() {
                   {/* OAuth Flow option */}
                   {(selectedProvider.oauth || ["antigravity", "gemini", "claude", "codex", "openai"].includes(selectedProvider.id.toLowerCase())) && (
                     <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
-                      <div className="text-xs font-semibold text-neutral-200">Đăng nhập Nhanh via OAuth (Subscription)</div>
+                      <div className="text-xs font-semibold text-neutral-200">{t("fast_oauth", language)}</div>
                       <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        Ủy quyền liên kết tài khoản trực tiếp qua trình duyệt web mà không cần lấy API key thủ công.
+                        {t("oauth_desc", language)}
                       </p>
                       <Button
                         size="sm"
@@ -561,12 +566,12 @@ export function ModelSettings() {
                         className="w-full gap-2 text-xs font-medium cursor-pointer"
                       >
                         <ExternalLink className="size-3.5" />
-                        {connecting ? "Đang mở trình duyệt..." : `Đăng nhập ${selectedProvider.name}`}
+                        {connecting ? t("opening_browser", language) : `${t("login_with", language)} ${selectedProvider.name}`}
                       </Button>
 
                       {manualAuthUrl && (
                         <div className="mt-2 p-2 rounded bg-neutral-950 border border-neutral-800 text-[11px] font-mono space-y-1">
-                          <div className="text-neutral-400">URL xác thực thủ công:</div>
+                          <div className="text-neutral-400">{t("manual_auth_url", language)}</div>
                           <div className="flex items-center gap-1">
                             <span className="truncate text-gold-300 flex-1">{manualAuthUrl}</span>
                             <button
@@ -584,14 +589,14 @@ export function ModelSettings() {
                       <div className="mt-3 pt-3 border-t border-neutral-800/80 space-y-2">
                         <label className="text-[11px] font-semibold text-gold-400 flex items-center gap-1">
                           <Link className="size-3.5" />
-                          Dán URL Callback / Redirect từ trình duyệt (nếu tự chuyển hướng về localhost:1420):
+                          {t("paste_callback_label", language)}
                         </label>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={manualCallbackUrl}
                             onChange={(e) => setManualCallbackUrl(e.target.value)}
-                            placeholder="Dán link (e.g. http://localhost:1420/callback?code=...)"
+                            placeholder={t("paste_callback_placeholder", language)}
                             className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
                           />
                           <Button
@@ -602,7 +607,7 @@ export function ModelSettings() {
                             className="gap-1.5 text-xs font-semibold cursor-pointer shrink-0"
                           >
                             {verifyingCallback ? <RefreshCw className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-                            {verifyingCallback ? "Đang xác thực..." : "Xác nhận Link"}
+                            {verifyingCallback ? t("verifying", language) : t("confirm_link", language)}
                           </Button>
                         </div>
                       </div>
@@ -622,16 +627,16 @@ export function ModelSettings() {
                     </div>
                   )}
 
-                  {/* API Key option - ALWAYS rendered as fallback */}
+                  {/* API Key option */}
                   {(selectedProvider.apiKey || true) && (
                     <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
-                      <div className="text-xs font-semibold text-neutral-200">Cấu hình qua API Key</div>
+                      <div className="text-xs font-semibold text-neutral-200">{t("config_via_apikey", language)}</div>
                       <div className="flex gap-2">
                         <input
                           type="password"
                           value={apiKey}
                           onChange={(e) => setApiKey(e.target.value)}
-                          placeholder={`Nhập ${selectedProvider.name} API Key...`}
+                          placeholder={`${t("enter_apikey_placeholder", language)} (${selectedProvider.name})`}
                           className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
                         />
                         <Button
@@ -642,7 +647,7 @@ export function ModelSettings() {
                           className="gap-1.5 text-xs cursor-pointer shrink-0"
                         >
                           <KeyRound className="size-3.5 text-gold-400" />
-                          Lưu Key
+                          {t("save_key", language)}
                         </Button>
                       </div>
                     </div>

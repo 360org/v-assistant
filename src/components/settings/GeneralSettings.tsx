@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 export function GeneralSettings() {
   const {
@@ -18,12 +19,12 @@ export function GeneralSettings() {
     <div className="space-y-8">
       {/* Self-improving Memory */}
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-neutral-300">Bộ nhớ Tự cải tiến (Self-improving memory)</h2>
+        <h2 className="text-sm font-semibold text-neutral-300">{t("self_improve_title", language)}</h2>
         <Card className="mt-3 flex items-center justify-between gap-3 p-4">
           <div className="min-w-0">
-            <div className="text-sm font-medium text-neutral-100">Ghi nhớ ngữ cảnh tự động</div>
+            <div className="text-sm font-medium text-neutral-100">{t("self_improve_label", language)}</div>
             <div className="text-xs text-neutral-400">
-              Mỗi Agent sẽ tự học và ghi nhớ các sự thật quan trọng từ đoạn chat để tối ưu phản hồi trong tương lai.
+              {t("self_improve_desc", language)}
             </div>
           </div>
           <button
@@ -48,12 +49,12 @@ export function GeneralSettings() {
 
       {/* Language & Theme Settings */}
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-neutral-300">Giao diện & Ngôn ngữ (Appearance & Language)</h2>
+        <h2 className="text-sm font-semibold text-neutral-300">{t("appearance_language_title", language)}</h2>
         <Card className="mt-3 space-y-5 p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-neutral-100">Ngôn ngữ giao diện</div>
-              <div className="text-xs text-neutral-400">Chọn ngôn ngữ hiển thị chính của ứng dụng</div>
+              <div className="text-sm font-medium text-neutral-100">{t("language", language)}</div>
+              <div className="text-xs text-neutral-400">{t("language_desc", language)}</div>
             </div>
             <div className="inline-flex rounded-xl border border-neutral-800 bg-neutral-950 p-1 shadow-xs">
               <button
@@ -87,23 +88,23 @@ export function GeneralSettings() {
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-neutral-800/80 pt-4 gap-3">
             <div>
-              <div className="text-sm font-medium text-neutral-100">Chủ đề giao diện (Theme)</div>
-              <div className="text-xs text-neutral-400">Tùy chỉnh chế độ hiển thị Sáng / Tối</div>
+              <div className="text-sm font-medium text-neutral-100">{t("theme", language)}</div>
+              <div className="text-xs text-neutral-400">{t("theme_desc", language)}</div>
             </div>
             <div className="inline-flex flex-wrap rounded-xl border border-neutral-800 bg-neutral-950 p-1 gap-1 shadow-xs">
               {[
-                { id: "system", name: "Theo hệ thống", icon: "💻" },
-                { id: "light", name: "Light Mode", icon: "☀️" },
-                { id: "dark", name: "Dark Mode", icon: "🌙" },
-                { id: "gold", name: "Gold Dark", icon: "✨" },
-                { id: "midnight", name: "Midnight", icon: "🌌" },
-              ].map((t) => {
-                const active = theme === t.id;
+                { id: "system", name: t("theme_system", language), icon: "💻" },
+                { id: "light", name: t("theme_light", language), icon: "☀️" },
+                { id: "dark", name: t("theme_dark", language), icon: "🌙" },
+                { id: "gold", name: t("theme_gold", language), icon: "✨" },
+                { id: "midnight", name: t("theme_midnight", language), icon: "🌌" },
+              ].map((tItem) => {
+                const active = theme === tItem.id;
                 return (
                   <button
-                    key={t.id}
+                    key={tItem.id}
                     type="button"
-                    onClick={() => setTheme(t.id as any)}
+                    onClick={() => setTheme(tItem.id as any)}
                     className={cn(
                       "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
                       active
@@ -111,8 +112,8 @@ export function GeneralSettings() {
                         : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40",
                     )}
                   >
-                    <span>{t.icon}</span>
-                    <span>{t.name}</span>
+                    <span>{tItem.icon}</span>
+                    <span>{tItem.name}</span>
                   </button>
                 );
               })}
@@ -123,16 +124,16 @@ export function GeneralSettings() {
 
       {/* Danger Zone */}
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-red-400">Vùng nguy hiểm (Danger zone)</h2>
+        <h2 className="text-sm font-semibold text-red-400">{t("danger_zone", language)}</h2>
         <Card className="mt-3 flex items-center justify-between p-4 border-red-900/40 bg-red-950/10">
           <div>
-            <div className="text-sm font-medium text-neutral-100">Reset ứng dụng về trạng thái ban đầu</div>
+            <div className="text-sm font-medium text-neutral-100">{t("reset_app_title", language)}</div>
             <div className="text-xs text-neutral-400">
-              Xóa sạch toàn bộ hội thoại, tài liệu tri thức, cấu hình Agent và đăng xuất tài khoản.
+              {t("reset_app_desc", language)}
             </div>
           </div>
           <Button variant="danger" size="sm" onClick={resetApp} className="cursor-pointer">
-            Reset ngay
+            {t("reset_now", language)}
           </Button>
         </Card>
       </section>

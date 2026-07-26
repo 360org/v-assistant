@@ -3,14 +3,18 @@ import { ModelSettings } from "@/components/settings/ModelSettings";
 import { VaultSettings } from "@/components/settings/VaultSettings";
 import { WorkspaceSettingsSection } from "@/components/settings/WorkspaceSettingsSection";
 import { AppUpdateSection } from "@/components/settings/AppUpdateSection";
+import { useApp } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 export function Settings() {
+  const { language } = useApp();
+
   return (
     <div className="mx-auto max-w-4xl space-y-10 p-6">
       <div>
-        <h1 className="text-xl font-bold text-neutral-100">Cài đặt Hệ thống (Settings)</h1>
+        <h1 className="text-xl font-bold text-neutral-100">{t("settings", language)}</h1>
         <p className="mt-1 text-xs text-neutral-400">
-          Quản lý mô hình AI, két mật mã Vault, ranh giới thư mục làm việc và cập nhật phiên bản.
+          {t("settings_subtitle", language)}
         </p>
       </div>
 

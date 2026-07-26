@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 export function WorkspaceSettingsSection() {
   const {
@@ -11,6 +12,7 @@ export function WorkspaceSettingsSection() {
     setCustomDataPath,
     exportFullBackupData,
     importFullBackupData,
+    language,
   } = useApp();
 
   const [dataPathInput, setDataPathInput] = useState(customDataPath || "~/.v-assistant/data");
@@ -139,10 +141,10 @@ export function WorkspaceSettingsSection() {
       <section className="mt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-300">
-            Nơi lưu trữ dữ liệu (Data Storage Location)
+            {t("workspace_title", language)}
           </h2>
           <Badge tone={customDataPath ? "gold" : "neutral"}>
-            {customDataPath ? "Đã tùy chỉnh" : "Mặc định hệ thống"}
+            {customDataPath ? (language === "en" ? "Customized" : "Đã tùy chỉnh") : (language === "en" ? "System Default" : "Mặc định hệ thống")}
           </Badge>
         </div>
 
@@ -150,7 +152,7 @@ export function WorkspaceSettingsSection() {
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-neutral-100">
               <HardDrive className="size-4 text-gold-400" />
-              Đường dẫn lưu dữ liệu hiện tại trên máy host
+              {t("workspace_label", language)}
             </div>
             <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/80 px-3 py-2">
               <code className="flex-1 truncate font-mono text-xs text-gold-300">
@@ -158,13 +160,13 @@ export function WorkspaceSettingsSection() {
               </code>
               <button
                 onClick={handleCopyDataPath}
-                title="Chép đường dẫn"
+                title="Copy path"
                 className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
               >
                 {copiedPath ? (
                   <>
                     <Check className="size-3.5 text-emerald-400" />
-                    <span className="text-emerald-400 font-medium">Đã chép</span>
+                    <span className="text-emerald-400 font-medium">{language === "en" ? "Copied" : "Đã chép"}</span>
                   </>
                 ) : (
                   <>
@@ -178,14 +180,14 @@ export function WorkspaceSettingsSection() {
 
           <div className="flex flex-col gap-2">
             <label className="text-xs font-medium text-neutral-400">
-              Thay đổi đường dẫn lưu trữ thủ công hoặc chọn thư mục:
+              {t("workspace_desc", language)}
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={dataPathInput}
                 onChange={(e) => setDataPathInput(e.target.value)}
-                placeholder="Ví dụ: /Volumes/DATA/v-assistant-storage hoặc D:\V-Assistant-Data"
+                placeholder={language === "en" ? "Example: /Volumes/DATA/v-assistant-storage or D:\\V-Assistant-Data" : "Ví dụ: /Volumes/DATA/v-assistant-storage hoặc D:\\V-Assistant-Data"}
                 className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-200 focus:border-gold-500/50 focus:outline-hidden"
               />
               <input
@@ -205,7 +207,7 @@ export function WorkspaceSettingsSection() {
                   className="gap-1.5 whitespace-nowrap cursor-pointer"
                 >
                   <FolderOpen className="size-3.5 text-gold-400" />
-                  Chọn thư mục
+                  {t("choose_folder", language)}
                 </Button>
                 <Button
                   variant="primary"
@@ -214,7 +216,7 @@ export function WorkspaceSettingsSection() {
                   className="gap-1.5 whitespace-nowrap cursor-pointer"
                 >
                   <Save className="size-3.5" />
-                  Lưu vị trí
+                  {t("save_location", language)}
                 </Button>
               </div>
             </div>
@@ -228,7 +230,7 @@ export function WorkspaceSettingsSection() {
 
           <div className="flex items-center justify-between border-t border-neutral-800/80 pt-3">
             <span className="text-xs text-neutral-500">
-              Khôi phục lại đường dẫn lưu trữ thư mục mặc định của ứng dụng
+              {language === "en" ? "Reset app data storage path back to default" : "Khôi phục lại đường dẫn lưu trữ thư mục mặc định của ứng dụng"}
             </span>
             <Button
               variant="ghost"
@@ -237,12 +239,12 @@ export function WorkspaceSettingsSection() {
               className="gap-1.5 text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer"
             >
               <RotateCcw className="size-3.5" />
-              Đặt lại mặc định
+              {t("set_default", language)}
             </Button>
           </div>
 
           <div className="rounded-xl border border-gold-500/20 bg-gold-500/5 p-3 text-xs leading-relaxed text-neutral-300">
-            <span className="font-bold text-gold-400">💡 Gợi ý sao lưu tự động:</span> Bạn có thể trỏ thư mục lưu trữ sang các thư mục đám mây như <code className="rounded bg-neutral-900 px-1 py-0.5 font-mono text-gold-300">iCloud Drive</code>, <code className="rounded bg-neutral-900 px-1 py-0.5 font-mono text-gold-300">Google Drive</code> hoặc ổ cứng gắn ngoài SSD để dữ liệu hội thoại và kiến thức luôn được tự động backup an toàn!
+            <span className="font-bold text-gold-400">💡 {language === "en" ? "Auto-backup Tip:" : "Gợi ý sao lưu tự động:"}</span> {language === "en" ? "You can point your data directory to cloud folders like iCloud Drive, Google Drive or an external SSD so chat data and knowledge are always backed up safely!" : "Bạn có thể trỏ thư mục lưu trữ sang các thư mục đám mây như iCloud Drive, Google Drive hoặc ổ cứng gắn ngoài SSD để dữ liệu hội thoại và kiến thức luôn được tự động backup an toàn!"}
           </div>
         </Card>
       </section>
@@ -250,7 +252,7 @@ export function WorkspaceSettingsSection() {
       {/* Backup & Restore Section */}
       <section className="mt-10">
         <h2 className="text-sm font-semibold text-neutral-300">
-          📦 Sao lưu & Khôi phục Dữ liệu (Backup & Restore)
+          📦 {t("backup_restore_title", language)}
         </h2>
         <Card className="mt-3 space-y-4">
           <input
@@ -262,8 +264,8 @@ export function WorkspaceSettingsSection() {
           />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-neutral-100">Xuất dữ liệu Sao lưu (.json)</div>
-              <div className="text-xs text-neutral-400">Đóng gói toàn bộ lịch sử Chat, Kỹ năng, Lịch đăng bài thành tệp sao lưu</div>
+              <div className="text-sm font-medium text-neutral-100">{t("export_backup", language)}</div>
+              <div className="text-xs text-neutral-400">{t("export_backup_desc", language)}</div>
             </div>
             <Button
               variant="secondary"
@@ -272,14 +274,14 @@ export function WorkspaceSettingsSection() {
               className="gap-1.5 whitespace-nowrap cursor-pointer hover:border-gold-400"
             >
               <HardDrive className="size-3.5 text-gold-400" />
-              Xuất file Sao lưu
+              {t("export_backup", language)}
             </Button>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-800/80 pt-3">
             <div>
-              <div className="text-sm font-medium text-neutral-100">Khôi phục Dữ liệu từ Tệp Backup</div>
-              <div className="text-xs text-neutral-400">Tải tệp .json sao lưu lên để khôi phục toàn bộ cài đặt và lịch sử</div>
+              <div className="text-sm font-medium text-neutral-100">{t("import_backup", language)}</div>
+              <div className="text-xs text-neutral-400">{t("import_backup_desc", language)}</div>
             </div>
             <Button
               variant="outline"
@@ -288,7 +290,7 @@ export function WorkspaceSettingsSection() {
               className="gap-1.5 whitespace-nowrap cursor-pointer hover:border-gold-400"
             >
               <FolderOpen className="size-3.5 text-gold-400" />
-              Chọn tệp Backup
+              {t("choose_backup_file", language)}
             </Button>
           </div>
 
