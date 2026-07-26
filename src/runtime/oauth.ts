@@ -375,7 +375,7 @@ async function buildAuthUrl(
 
 // ─── Token exchange ───────────────────────────────────────────────────────────
 
-async function exchangeCode(
+export async function exchangeCode(
   provider: ProviderId,
   code: string,
   verifier: string,

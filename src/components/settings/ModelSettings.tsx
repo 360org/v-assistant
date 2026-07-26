@@ -18,7 +18,7 @@ import {
 import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
-import { beginManualSignIn, completeManualSignIn, type ManualSignInAttempt } from "@/runtime/oauth";
+import { beginManualSignIn, completeManualSignIn, exchangeCode, type ManualSignInAttempt } from "@/runtime/oauth";
 import type { ProviderId } from "@/lib/catalog";
 
 const LOCAL_AI_ACCOUNTS = [
@@ -219,18 +219,44 @@ export function ModelSettings() {
       let projectId: string | undefined;
       let expiresAt: number | undefined;
 
-      if (manualAttempt) {
-        const res = await completeManualSignIn(manualAttempt, manualCallbackUrl.trim());
-        key = res.apiKey;
-        refreshToken = res.refreshToken;
-        projectId = res.projectId;
-        expiresAt = res.expiresAt;
-      } else {
-        const tokens = await exchangeAiRouterOAuthCallbackUrl(selectedProvider.id, manualCallbackUrl.trim());
-        key = tokens.apiKey || tokens.accessToken || "";
-        refreshToken = tokens.refreshToken;
-        projectId = tokens.projectId;
-        expiresAt = tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined;
+      try {
+        if (manualAttempt) {
+          const res = await completeManualSignIn(manualAttempt, manualCallbackUrl.trim());
+          key = res.apiKey;
+          refreshToken = res.refreshToken;
+          projectId = res.projectId;
+          expiresAt = res.expiresAt;
+        } else {
+          const tokens = await exchangeAiRouterOAuthCallbackUrl(selectedProvider.id, manualCallbackUrl.trim());
+          key = tokens.apiKey || tokens.accessToken || "";
+          refreshToken = tokens.refreshToken;
+          projectId = tokens.projectId;
+          expiresAt = tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined;
+        }
+      } catch (routerErr) {
+        let urlObj: URL | null = null;
+        try {
+          urlObj = new URL(manualCallbackUrl.trim());
+        } catch {
+          /* ignore */
+        }
+        const code = urlObj?.searchParams.get("code") || urlObj?.searchParams.get("token") || manualCallbackUrl.trim();
+        const state = urlObj?.searchParams.get("state") || "";
+
+        if (selectedProvider.id === "antigravity" || selectedProvider.id === "gemini") {
+          const res = await exchangeCode("gemini", code, "", "http://localhost:1420/callback", state);
+          key = res.apiKey;
+          refreshToken = res.refreshToken;
+          projectId = res.projectId;
+          expiresAt = res.expiresAt;
+        } else if (selectedProvider.id === "claude") {
+          const res = await exchangeCode("claude", code, "", "http://localhost:443/callback", state);
+          key = res.apiKey;
+          refreshToken = res.refreshToken;
+          expiresAt = res.expiresAt;
+        } else {
+          throw routerErr;
+        }
       }
 
       if (key) {
@@ -515,13 +541,13 @@ export function ModelSettings() {
                           />
                           <Button
                             size="sm"
-                            variant="secondary"
+                            variant="primary"
                             onClick={handleCompleteManualCallback}
                             disabled={connecting || !manualCallbackUrl.trim()}
-                            className="gap-1.5 text-xs cursor-pointer shrink-0 hover:border-gold-400"
+                            className="gap-1.5 text-xs font-semibold cursor-pointer shrink-0"
                           >
-                            <CheckCircle2 className="size-3.5 text-emerald-400" />
-                            Xác nhận Link
+                            {connecting ? <RefreshCw className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                            {connecting ? "Đang xác thực..." : "Xác nhận Link"}
                           </Button>
                         </div>
                       </div>
