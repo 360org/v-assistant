@@ -49,78 +49,73 @@ export function GeneralSettings() {
       {/* Language & Theme Settings */}
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-neutral-300">Giao diện & Ngôn ngữ (Appearance & Language)</h2>
-        <Card className="mt-3 space-y-4 p-4">
-          <div className="flex items-center justify-between">
+        <Card className="mt-3 space-y-5 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-neutral-100">Ngôn ngữ giao diện</div>
               <div className="text-xs text-neutral-400">Chọn ngôn ngữ hiển thị chính của ứng dụng</div>
             </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant={language === "vi" ? "primary" : "outline"}
-                size="sm"
+            <div className="inline-flex rounded-xl border border-neutral-800 bg-neutral-950 p-1 shadow-xs">
+              <button
+                type="button"
                 onClick={() => setLanguage("vi")}
-                className="text-xs cursor-pointer"
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+                  language === "vi"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40",
+                )}
               >
-                Tiếng Việt
-              </Button>
-              <Button
-                variant={language === "en" ? "primary" : "outline"}
-                size="sm"
+                <span>🇻🇳</span>
+                <span>Tiếng Việt</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setLanguage("en")}
-                className="text-xs cursor-pointer"
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+                  language === "en"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40",
+                )}
               >
-                English
-              </Button>
+                <span>🇺🇸</span>
+                <span>English</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-neutral-800 pt-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-neutral-800/80 pt-4 gap-3">
             <div>
               <div className="text-sm font-medium text-neutral-100">Chủ đề giao diện (Theme)</div>
               <div className="text-xs text-neutral-400">Tùy chỉnh chế độ hiển thị Sáng / Tối</div>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                variant={theme === "system" ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setTheme("system")}
-                className="text-xs cursor-pointer"
-              >
-                💻 Theo Hệ thống
-              </Button>
-              <Button
-                variant={theme === "light" ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setTheme("light")}
-                className="text-xs cursor-pointer"
-              >
-                ☀️ Light Mode
-              </Button>
-              <Button
-                variant={theme === "dark" ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setTheme("dark")}
-                className="text-xs cursor-pointer"
-              >
-                🌙 Dark Mode
-              </Button>
-              <Button
-                variant={theme === "gold" ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setTheme("gold")}
-                className="text-xs cursor-pointer"
-              >
-                ✨ Gold Dark
-              </Button>
-              <Button
-                variant={theme === "midnight" ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setTheme("midnight")}
-                className="text-xs cursor-pointer"
-              >
-                🌌 Midnight
-              </Button>
+            <div className="inline-flex flex-wrap rounded-xl border border-neutral-800 bg-neutral-950 p-1 gap-1 shadow-xs">
+              {[
+                { id: "system", name: "Theo hệ thống", icon: "💻" },
+                { id: "light", name: "Light Mode", icon: "☀️" },
+                { id: "dark", name: "Dark Mode", icon: "🌙" },
+                { id: "gold", name: "Gold Dark", icon: "✨" },
+                { id: "midnight", name: "Midnight", icon: "🌌" },
+              ].map((t) => {
+                const active = theme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTheme(t.id as any)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+                      active
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40",
+                    )}
+                  >
+                    <span>{t.icon}</span>
+                    <span>{t.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </Card>

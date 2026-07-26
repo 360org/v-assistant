@@ -18,18 +18,19 @@ import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/store";
 import { Logo } from "@/components/Logo";
 import { SidebarAdBanner } from "@/components/SidebarAdBanner";
+import { t } from "@/lib/i18n";
 
-const items: { view: View; label: string; icon: LucideIcon }[] = [
-  { view: "home", label: "Home", icon: Home },
-  { view: "chat", label: "Chat", icon: MessageSquare },
-  { view: "sessions", label: "Sessions", icon: History },
-  { view: "agents", label: "Agents", icon: Bot },
-  { view: "skills", label: "Skills", icon: Wand2 },
-  { view: "knowledge", label: "Knowledge", icon: Library },
-  { view: "media", label: "Media Gallery", icon: ImageIcon },
-  { view: "vault", label: "Vault", icon: KeyRound },
-  { view: "scheduled", label: "Scheduled", icon: CalendarClock },
-  { view: "integrations", label: "Integrations", icon: Blocks },
+const items: { view: View; key: Parameters<typeof t>[0]; icon: LucideIcon }[] = [
+  { view: "home", key: "home", icon: Home },
+  { view: "chat", key: "chat", icon: MessageSquare },
+  { view: "sessions", key: "sessions", icon: History },
+  { view: "agents", key: "agents", icon: Bot },
+  { view: "skills", key: "skills", icon: Wand2 },
+  { view: "knowledge", key: "knowledge", icon: Library },
+  { view: "media", key: "media", icon: ImageIcon },
+  { view: "vault", key: "vault", icon: KeyRound },
+  { view: "scheduled", key: "scheduled", icon: CalendarClock },
+  { view: "integrations", key: "integrations", icon: Blocks },
 ];
 
 export function Sidebar({
@@ -40,7 +41,7 @@ export function Sidebar({
   /** Called after picking a menu item (used to close the mobile drawer). */
   onNavigate?: () => void;
 }) {
-  const { view, setView, user, appUpdate } = useApp();
+  const { view, setView, user, appUpdate, language } = useApp();
   const currentVersion = appUpdate?.currentVersion || (typeof __V_ASSISTANT_VERSION__ !== "undefined" ? __V_ASSISTANT_VERSION__ : "1.1.0");
 
   const go = (v: View) => {
@@ -64,7 +65,7 @@ export function Sidebar({
       </div>
 
       <nav className="mt-2 flex flex-col gap-1">
-        {items.map(({ view: v, label, icon: Icon }) => (
+        {items.map(({ view: v, key, icon: Icon }) => (
           <button
             key={v}
             onClick={() => go(v)}
@@ -76,7 +77,7 @@ export function Sidebar({
             )}
           >
             <Icon className="size-4" />
-            {label}
+            {t(key, language)}
           </button>
         ))}
       </nav>
@@ -120,7 +121,7 @@ export function Sidebar({
         >
           <div className="flex items-center gap-3">
             <Settings className="size-4" />
-            <span>Settings</span>
+            <span>{t("settings", language)}</span>
           </div>
           {appUpdate?.hasUpdate && (
             <span className="flex items-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-400/20 px-2 py-0.5 text-[10px] font-bold text-gold-300 shadow-xs animate-pulse">

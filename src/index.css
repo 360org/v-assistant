@@ -144,6 +144,22 @@ html.theme-light [class*="bg-zinc-900"] {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
 }
 
+/* Segmented Control & Active Buttons in Light Mode */
+html.theme-light .inline-flex.bg-neutral-950,
+html.theme-light div.bg-neutral-950 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-light .bg-blue-600 {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.theme-light .bg-blue-600 * {
+  color: #ffffff !important;
+}
+
 /* Sub-containers & Inner Boxes in Light Mode */
 html.theme-light [class*="bg-neutral-950/"],
 html.theme-light [class*="bg-neutral-900/"],
