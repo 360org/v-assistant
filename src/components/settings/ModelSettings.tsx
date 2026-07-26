@@ -1,20 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  deleteAiRouterConnection,
   getAiRouterConnections,
   getAiRouterProviderCatalog,
+  saveAiRouterConnection,
+  signInWithAiRouterCore,
+  testAiRouterConnection,
+  toggleAiRouterConnection,
   type AiRouterConnection,
   type AiRouterProvider,
 } from "@/runtime/aiRouter";
+import { openExternalUrl } from "@/components/MessageContent";
+import { cn } from "@/lib/utils";
 
 const LOCAL_AI_ACCOUNTS = [
-  { id: "antigravity", name: "Gemini" },
-  { id: "codex", name: "GPT" },
-  { id: "claude", name: "Claude" },
-  { id: "grok-cli", name: "Grok" },
+  { id: "antigravity", name: "Gemini", providerId: "antigravity" },
+  { id: "codex", name: "GPT", providerId: "codex" },
+  { id: "claude", name: "Claude", providerId: "claude" },
+  { id: "grok-cli", name: "Grok", providerId: "grok-cli" },
 ] as const;
 
 const LOCAL_ACCOUNT_PROVIDER_IDS: Record<string, readonly string[]> = {
@@ -30,6 +37,15 @@ export function ModelSettings() {
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [showProviderManager, setShowProviderManager] = useState(false);
   const [providerCatalog, setProviderCatalog] = useState<AiRouterProvider[]>([]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [providerQuery, setProviderQuery] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState<AiRouterProvider | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connectMessage, setConnectMessage] = useState<string | null>(null);
+  const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
+  const [authUrlCopied, setAuthUrlCopied] = useState(false);
+  const [actionConnId, setActionConnId] = useState<string | null>(null);
 
   const loadConnections = useCallback(async () => {
     setLoadingConnections(true);
@@ -38,7 +54,7 @@ export function ModelSettings() {
       setConnections(data);
       setConnectionError(null);
     } catch (err) {
-      setConnectionError(err instanceof Error ? err.message : "Failed to connect to local AI Router.");
+      setConnectionError(err instanceof Error ? err.message : "Không thể kết nối đến AI Router local.");
     } finally {
       setLoadingConnections(false);
     }
@@ -50,12 +66,16 @@ export function ModelSettings() {
 
   const refreshProviderCatalog = useCallback(async () => {
     try {
+      setCatalogError(null);
       const catalog = await getAiRouterProviderCatalog();
       setProviderCatalog(catalog);
-    } catch {
-      // Ignore catalog fetch error in fallback mode
+      if (catalog.length > 0 && !selectedProvider) {
+        setSelectedProvider(catalog[0]);
+      }
+    } catch (err) {
+      setCatalogError(err instanceof Error ? err.message : "Không thể tải danh mục Provider.");
     }
-  }, []);
+  }, [selectedProvider]);
 
   useEffect(() => {
     if (showProviderManager && providerCatalog.length === 0) {
@@ -63,29 +83,138 @@ export function ModelSettings() {
     }
   }, [showProviderManager, providerCatalog.length, refreshProviderCatalog]);
 
+  const filteredProviders = providerCatalog.filter(
+    (item) =>
+      item.name.toLowerCase().includes(providerQuery.toLowerCase()) ||
+      item.id.toLowerCase().includes(providerQuery.toLowerCase())
+  );
+
+  const openConfigureModalForAccount = (accProviderId: string) => {
+    setShowProviderManager(true);
+    const matched = providerCatalog.find((p) =>
+      LOCAL_ACCOUNT_PROVIDER_IDS[accProviderId]?.includes(p.id.toLowerCase())
+    );
+    if (matched) {
+      setSelectedProvider(matched);
+    }
+  };
+
+  const handleTestConnection = async (connId: string) => {
+    setActionConnId(connId);
+    try {
+      await testAiRouterConnection(connId);
+      await loadConnections();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionConnId(null);
+    }
+  };
+
+  const handleToggleConnection = async (connId: string, currentActive: boolean) => {
+    setActionConnId(connId);
+    try {
+      await toggleAiRouterConnection(connId, !currentActive);
+      await loadConnections();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionConnId(null);
+    }
+  };
+
+  const handleDeleteConnection = async (connId: string) => {
+    if (!confirm("Bạn có chắc muốn xóa kết nối AI này khỏi AI Router?")) return;
+    setActionConnId(connId);
+    try {
+      await deleteAiRouterConnection(connId);
+      await loadConnections();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionConnId(null);
+    }
+  };
+
+  const connectApiKey = async () => {
+    if (!selectedProvider || !apiKey.trim()) return;
+    setConnecting(true);
+    setConnectMessage(null);
+    try {
+      await saveAiRouterConnection({
+        id: `${selectedProvider.id}_${Date.now()}`,
+        provider: selectedProvider.id,
+        name: selectedProvider.name,
+        authType: "api-key",
+        credentialRef: apiKey.trim(),
+      });
+      setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
+      setApiKey("");
+      await loadConnections();
+    } catch (err) {
+      setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleOAuthSignIn = async () => {
+    if (!selectedProvider) return;
+    setConnecting(true);
+    setConnectMessage(null);
+    setManualAuthUrl(null);
+    try {
+      const tokens = await signInWithAiRouterCore(selectedProvider.id, (url) => {
+        setManualAuthUrl(url);
+        void openExternalUrl(url);
+      });
+      if (tokens) {
+        setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
+        await loadConnections();
+      }
+    } catch (err) {
+      setConnectMessage(`❌ Lỗi OAuth: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const copyManualAuthUrl = async () => {
+    if (!manualAuthUrl) return;
+    await navigator.clipboard.writeText(manualAuthUrl);
+    setAuthUrlCopied(true);
+    setTimeout(() => setAuthUrlCopied(false), 2000);
+  };
+
   return (
     <section className="mt-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-300">
-          Mô hình AI & Tài khoản Kết nối (AI Models & Connected Accounts)
-        </h2>
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-300">
+            Mô hình AI & Tài khoản Kết nối (AI Models & Connected Accounts)
+          </h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Quản lý kết nối API Keys, OAuth vendor thông qua Local AI Router (Port 20128).
+          </p>
+        </div>
         <Button
-          variant="outline"
+          variant={showProviderManager ? "secondary" : "primary"}
           size="sm"
           onClick={() => setShowProviderManager((prev) => !prev)}
-          className="gap-1.5 cursor-pointer text-xs"
+          className="gap-1.5 cursor-pointer text-xs font-medium"
         >
           {showProviderManager ? "Đóng Quản lý Provider" : "+ Thêm Provider Mới"}
         </Button>
       </div>
 
+      {/* Account Cards Grid */}
       <Card className="mt-3 p-4">
         {loadingConnections ? (
-          <div className="py-4 text-center text-xs text-neutral-400">Đang tải danh sách mô hình AI Router...</div>
+          <div className="py-6 text-center text-xs text-neutral-400">Đang kiểm tra danh sách kết nối AI Router...</div>
         ) : connectionError ? (
           <div className="flex items-center justify-between gap-3 text-xs text-red-300">
-            <span>{connectionError}</span>
-            <Button size="sm" variant="secondary" onClick={() => void loadConnections()}>
+            <span>⚠️ {connectionError}</span>
+            <Button size="sm" variant="secondary" onClick={() => void loadConnections()} className="cursor-pointer">
               <RefreshCw className="size-3.5" /> Thử lại
             </Button>
           </div>
@@ -93,39 +222,246 @@ export function ModelSettings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {LOCAL_AI_ACCOUNTS.map((acc) => {
               const matchedConns = connections.filter((c) =>
-                LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider)
+                LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider.toLowerCase())
               );
               const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0];
 
               return (
-                <div key={acc.id} className="flex items-center justify-between p-3 rounded-xl border border-neutral-800 bg-neutral-950/60">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-neutral-100">{acc.name}</span>
-                      {activeConn?.isActive ? (
-                        <Badge tone="green" className="text-[10px]">Ready</Badge>
-                      ) : (
-                        <Badge tone="neutral" className="text-[10px]">Chưa kết nối</Badge>
-                      )}
+                <div key={acc.id} className="flex flex-col justify-between p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:border-neutral-700 transition-all">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-neutral-100">{acc.name}</span>
+                        {activeConn?.isActive ? (
+                          <Badge tone="green" className="text-[10px]">Active</Badge>
+                        ) : activeConn ? (
+                          <Badge tone="gold" className="text-[10px]">Tắt</Badge>
+                        ) : (
+                          <Badge tone="neutral" className="text-[10px]">Chưa cấu hình</Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-neutral-400 font-mono">
+                        {activeConn?.accountLabel || activeConn?.email || activeConn?.name || "Chưa chọn tài khoản liên kết"}
+                      </div>
                     </div>
-                    <div className="mt-1 text-[11px] text-neutral-400">
-                      {activeConn?.accountLabel || activeConn?.email || activeConn?.name || "Chưa có tài khoản liên kết"}
-                    </div>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openConfigureModalForAccount(acc.providerId)}
+                      className="text-xs cursor-pointer hover:border-gold-400"
+                    >
+                      Cấu hình
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowProviderManager(true)}
-                    className="text-xs cursor-pointer"
-                  >
-                    Cấu hình
-                  </Button>
+
+                  {activeConn && (
+                    <div className="mt-3 flex items-center justify-between pt-2 border-t border-neutral-800/80 text-[11px]">
+                      <div className="flex items-center gap-2 text-neutral-500">
+                        <span>Model: {activeConn.defaultModel || "Standard"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleTestConnection(activeConn.id)}
+                          disabled={actionConnId === activeConn.id}
+                          className="text-gold-300 hover:underline cursor-pointer"
+                        >
+                          Kiểm tra API
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleConnection(activeConn.id, Boolean(activeConn.isActive))}
+                          disabled={actionConnId === activeConn.id}
+                          className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
+                        >
+                          {activeConn.isActive ? "Tắt" : "Bật"}
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteConnection(activeConn.id)}
+                          disabled={actionConnId === activeConn.id}
+                          className="text-red-400 hover:underline cursor-pointer"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
       </Card>
+
+      {/* Provider Manager Form Container (Rendered when showProviderManager is true) */}
+      {showProviderManager && (
+        <Card className="mt-4 p-5 border-gold-400/40 bg-neutral-950/90 shadow-2xl animate-fadeIn">
+          <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+            <div>
+              <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+                <ShieldCheck className="size-4 text-gold-400" />
+                Quản lý AI Vendor & Kết nối Trực tiếp
+              </h3>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Thêm API Keys hoặc Đăng nhập OAuth để liên kết tài khoản Gemini, ChatGPT, Claude, Grok, DeepSeek...
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowProviderManager(false)}
+              className="size-8 p-0 cursor-pointer"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 mt-4">
+            {/* Left Col: Provider Catalog Search & List */}
+            <div className="md:col-span-5 border-r border-neutral-800/80 pr-4">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 size-4 text-neutral-500" />
+                <input
+                  type="text"
+                  value={providerQuery}
+                  onChange={(e) => setProviderQuery(e.target.value)}
+                  placeholder="Tìm Provider (OpenAI, Anthropic, Gemini...)"
+                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 pl-9 pr-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400/70 focus:outline-none"
+                />
+              </div>
+
+              {catalogError ? (
+                <div className="mt-3 text-xs text-red-300">{catalogError}</div>
+              ) : (
+                <div className="mt-3 max-h-64 overflow-y-auto space-y-1 pr-1">
+                  {filteredProviders.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-neutral-500">Không tìm thấy Provider phù hợp</div>
+                  ) : (
+                    filteredProviders.map((prov) => {
+                      const isSelected = selectedProvider?.id === prov.id;
+                      return (
+                        <button
+                          key={prov.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProvider(prov);
+                            setConnectMessage(null);
+                            setManualAuthUrl(null);
+                          }}
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-xs transition-colors cursor-pointer",
+                            isSelected
+                              ? "bg-gold-500/20 text-gold-200 font-semibold border border-gold-500/30"
+                              : "text-neutral-300 hover:bg-neutral-900"
+                          )}
+                        >
+                          <span className="truncate">{prov.name}</span>
+                          <span className="text-[10px] text-neutral-500 uppercase font-mono">
+                            {prov.oauth ? "OAuth" : prov.apiKey ? "API Key" : "Direct"}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Col: Connection Config Form */}
+            <div className="md:col-span-7 flex flex-col justify-between">
+              {selectedProvider ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-neutral-100">{selectedProvider.name}</span>
+                    <Badge tone="gold" className="text-[10px]">{selectedProvider.id}</Badge>
+                  </div>
+
+                  {/* OAuth Flow option */}
+                  {selectedProvider.oauth && (
+                    <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
+                      <div className="text-xs font-semibold text-neutral-200">Đăng nhập Nhanh via OAuth (Subscription)</div>
+                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                        Ủy quyền liên kết tài khoản trực tiếp qua trình duyệt web mà không cần lấy API key thủ công.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={handleOAuthSignIn}
+                        disabled={connecting}
+                        className="w-full gap-2 text-xs font-medium cursor-pointer"
+                      >
+                        <ExternalLink className="size-3.5" />
+                        {connecting ? "Đang mở trình duyệt..." : `Đăng nhập ${selectedProvider.name}`}
+                      </Button>
+
+                      {manualAuthUrl && (
+                        <div className="mt-2 p-2 rounded bg-neutral-950 border border-neutral-800 text-[11px] font-mono space-y-1">
+                          <div className="text-neutral-400">URL xác thực thủ công:</div>
+                          <div className="flex items-center gap-1">
+                            <span className="truncate text-gold-300 flex-1">{manualAuthUrl}</span>
+                            <button
+                              onClick={copyManualAuthUrl}
+                              className="p-1 text-neutral-400 hover:text-neutral-200 cursor-pointer"
+                              title="Copy Link"
+                            >
+                              {authUrlCopied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* API Key option */}
+                  {selectedProvider.apiKey && (
+                    <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
+                      <div className="text-xs font-semibold text-neutral-200">Cấu hình qua API Key</div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          placeholder={`Nhập ${selectedProvider.name} API Key...`}
+                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
+                        />
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={connectApiKey}
+                          disabled={connecting || !apiKey.trim()}
+                          className="gap-1.5 text-xs cursor-pointer shrink-0"
+                        >
+                          <KeyRound className="size-3.5 text-gold-400" />
+                          Lưu Key
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {connectMessage && (
+                    <div className={cn(
+                      "p-3 rounded-lg text-xs font-medium border",
+                      connectMessage.includes("✅")
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                        : "bg-red-500/10 border-red-500/30 text-red-300"
+                    )}>
+                      {connectMessage}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-12 text-center text-xs text-neutral-500">
+                  Chọn một AI Provider ở danh sách bên trái để cấu hình kết nối.
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
     </section>
   );
 }
