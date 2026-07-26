@@ -86,6 +86,7 @@ export interface CreateAiRouterConnection {
   email?: string;
   accountLabel?: string;
   priority?: number;
+  isActive?: boolean;
   authType: "subscription" | "api-key";
   credentialRef: string;
   defaultModel?: string;

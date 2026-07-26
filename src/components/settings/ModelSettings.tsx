@@ -156,6 +156,7 @@ export function ModelSettings() {
         name: selectedProvider.name,
         authType: "api-key",
         credentialRef: apiKey.trim(),
+        isActive: true,
       }).catch(() => {});
       setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
       await loadConnections();
@@ -316,6 +317,7 @@ export function ModelSettings() {
           name: selectedProvider.name,
           authType: "subscription",
           credentialRef: key,
+          isActive: true,
         }).catch(() => {});
         setConnectMessage(`✅ Xác thực & lưu kết nối thành công tài khoản OAuth ${selectedProvider.name}!`);
         setManualCallbackUrl("");
@@ -378,91 +380,141 @@ export function ModelSettings() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {LOCAL_AI_ACCOUNTS.map((acc) => {
-              const matchedConns = connections.filter((c) =>
-                LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider.toLowerCase())
+          (() => {
+            const dynamicAccountCards = [...LOCAL_AI_ACCOUNTS] as Array<{ id: string; name: string; providerId: string }>;
+
+            // Add connections from AI Router not in core 4
+            connections.forEach((conn) => {
+              const isCore = LOCAL_AI_ACCOUNTS.some((acc) =>
+                LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(conn.provider.toLowerCase())
               );
-              const storeCfg = providerConfigs[acc.providerId as ProviderId] || providerConfigs[acc.id as ProviderId];
-              const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
+              if (!isCore) {
+                const existing = dynamicAccountCards.find(
+                  (c) => c.providerId.toLowerCase() === conn.provider.toLowerCase() || c.id === conn.id
+                );
+                if (!existing) {
+                  dynamicAccountCards.push({
+                    id: conn.id || conn.provider,
+                    name: conn.name || conn.provider.toUpperCase(),
+                    providerId: conn.provider,
+                  });
+                }
+              }
+            });
 
-              const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0] || (isStoreConnected ? {
-                id: acc.id,
-                provider: acc.providerId,
-                name: acc.name,
-                accountLabel: user?.detail || user?.name || `${acc.name} Connected`,
-                isActive: true,
-                defaultModel: "Standard",
-              } : undefined);
+            // Add connected providers from Store providerConfigs not in dynamic cards
+            Object.entries(providerConfigs).forEach(([provId, cfg]) => {
+              if (cfg && (cfg.apiKey || cfg.connectionStatus === "connected")) {
+                const isCore = LOCAL_AI_ACCOUNTS.some((acc) =>
+                  LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(provId.toLowerCase())
+                );
+                if (!isCore) {
+                  const existing = dynamicAccountCards.find(
+                    (c) => c.providerId.toLowerCase() === provId.toLowerCase()
+                  );
+                  if (!existing) {
+                    dynamicAccountCards.push({
+                      id: provId,
+                      name: provId.toUpperCase(),
+                      providerId: provId,
+                    });
+                  }
+                }
+              }
+            });
 
-              return (
-                <div key={acc.id} className="flex flex-col justify-between p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:border-neutral-700 transition-all">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-neutral-100">{acc.name}</span>
-                        {activeConn?.isActive ? (
-                          <Badge tone="green" className="text-[10px]">{t("active", language)}</Badge>
-                        ) : activeConn ? (
-                          <Badge tone="gold" className="text-[10px]">{t("inactive", language)}</Badge>
-                        ) : (
-                          <Badge tone="neutral" className="text-[10px]">{t("not_configured", language)}</Badge>
-                        )}
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {dynamicAccountCards.map((acc) => {
+                  const matchedConns = connections.filter((c) =>
+                    LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider.toLowerCase()) ||
+                    c.provider.toLowerCase() === acc.providerId.toLowerCase() ||
+                    c.id === acc.id
+                  );
+                  const storeCfg = providerConfigs[acc.providerId as ProviderId] || providerConfigs[acc.id as ProviderId];
+                  const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
+
+                  const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0] || (isStoreConnected ? {
+                    id: acc.id,
+                    provider: acc.providerId,
+                    name: acc.name,
+                    accountLabel: user?.detail || user?.name || `${acc.name} Connected`,
+                    isActive: true,
+                    defaultModel: "Standard",
+                  } : undefined);
+
+                  const isConnActive = Boolean(activeConn?.isActive || isStoreConnected);
+
+                  return (
+                    <div key={acc.id} className="flex flex-col justify-between p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:border-neutral-700 transition-all">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-neutral-100">{acc.name}</span>
+                            {isConnActive ? (
+                              <Badge tone="green" className="text-[10px]">{t("active", language)}</Badge>
+                            ) : activeConn ? (
+                              <Badge tone="gold" className="text-[10px]">{t("inactive", language)}</Badge>
+                            ) : (
+                              <Badge tone="neutral" className="text-[10px]">{t("not_configured", language)}</Badge>
+                            )}
+                          </div>
+                          <div className="mt-1 text-xs text-neutral-400 font-mono">
+                            {activeConn?.accountLabel || activeConn?.email || activeConn?.name || (language === "en" ? "No linked account" : "Chưa chọn tài khoản liên kết")}
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openConfigureModalForAccount(acc.providerId)}
+                          className="text-xs cursor-pointer hover:border-gold-400"
+                        >
+                          {t("configure", language)}
+                        </Button>
                       </div>
-                      <div className="mt-1 text-xs text-neutral-400 font-mono">
-                        {activeConn?.accountLabel || activeConn?.email || activeConn?.name || (language === "en" ? "No linked account" : "Chưa chọn tài khoản liên kết")}
-                      </div>
+
+                      {activeConn && (
+                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-neutral-800/80 text-[11px]">
+                          <div className="flex items-center gap-2 text-neutral-500">
+                            <span>Model: {activeConn.defaultModel || "Standard"}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleTestConnection(activeConn.id)}
+                              disabled={actionConnId === activeConn.id}
+                              className="text-gold-300 hover:underline cursor-pointer"
+                            >
+                              {t("test_api", language)}
+                            </button>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleConnection(activeConn.id, Boolean(activeConn.isActive))}
+                              disabled={actionConnId === activeConn.id}
+                              className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
+                            >
+                              {activeConn.isActive ? t("toggle_off", language) : t("toggle_on", language)}
+                            </button>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteConnection(activeConn.id)}
+                              disabled={actionConnId === activeConn.id}
+                              className="text-red-400 hover:underline cursor-pointer"
+                            >
+                              {t("delete", language)}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openConfigureModalForAccount(acc.providerId)}
-                      className="text-xs cursor-pointer hover:border-gold-400"
-                    >
-                      {t("configure", language)}
-                    </Button>
-                  </div>
-
-                  {activeConn && (
-                    <div className="mt-3 flex items-center justify-between pt-2 border-t border-neutral-800/80 text-[11px]">
-                      <div className="flex items-center gap-2 text-neutral-500">
-                        <span>Model: {activeConn.defaultModel || "Standard"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleTestConnection(activeConn.id)}
-                          disabled={actionConnId === activeConn.id}
-                          className="text-gold-300 hover:underline cursor-pointer"
-                        >
-                          {t("test_api", language)}
-                        </button>
-                        <span>•</span>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleConnection(activeConn.id, Boolean(activeConn.isActive))}
-                          disabled={actionConnId === activeConn.id}
-                          className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
-                        >
-                          {activeConn.isActive ? t("toggle_off", language) : t("toggle_on", language)}
-                        </button>
-                        <span>•</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteConnection(activeConn.id)}
-                          disabled={actionConnId === activeConn.id}
-                          className="text-red-400 hover:underline cursor-pointer"
-                        >
-                          {t("delete", language)}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            );
+          })()
         )}
       </Card>
 
