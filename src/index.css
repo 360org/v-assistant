@@ -79,29 +79,82 @@ html.theme-gold {
   --color-gold-300: #ecc25e;
 }
 
-/* Light Theme Overrides */
-html.theme-light body {
+/* ==========================================================================
+   LIGHT THEME DESIGN SYSTEM - Premium, Friendly & Modern Tech SaaS
+   ========================================================================== */
+
+html.theme-light,
+html.theme-light body,
+html.theme-light main,
+html.theme-light #root {
   background-color: #f8fafc !important;
   color: #0f172a !important;
+  color-scheme: light !important;
 }
 
 html.theme-light {
   --color-gold-400: #2563eb;
   --color-gold-500: #1d4ed8;
   --color-gold-300: #3b82f6;
-  color-scheme: light;
+  --color-gold-600: #1e40af;
+  --color-gold-200: #bfdbfe;
+  --color-gold-100: #dbeafe;
+  --color-gold-50: #eff6ff;
 }
 
+/* Sidebar in Light Mode */
+html.theme-light aside,
+html.theme-light nav {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light aside button,
+html.theme-light nav button {
+  color: #475569 !important;
+}
+
+html.theme-light aside button:hover,
+html.theme-light nav button:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Active Nav Link in Light Mode */
+html.theme-light .bg-neutral-800,
+html.theme-light [class*="bg-neutral-800"] {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+/* All Cards, Containers & Panels in Light Mode */
 html.theme-light .bg-neutral-950,
 html.theme-light .bg-neutral-900,
-html.theme-light .bg-neutral-800\/50,
-html.theme-light .bg-neutral-900\/50,
-html.theme-light .bg-neutral-900\/80 {
+html.theme-light .bg-neutral-850,
+html.theme-light .bg-black,
+html.theme-light [class*="bg-neutral-950"],
+html.theme-light [class*="bg-neutral-900"],
+html.theme-light [class*="bg-neutral-800"],
+html.theme-light [class*="bg-slate-900"],
+html.theme-light [class*="bg-zinc-900"] {
   background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Sub-containers & Inner Boxes in Light Mode */
+html.theme-light [class*="bg-neutral-950/"],
+html.theme-light [class*="bg-neutral-900/"],
+html.theme-light [class*="bg-neutral-800/"] {
+  background-color: #f8fafc !important;
   color: #0f172a !important;
   border-color: #e2e8f0 !important;
 }
 
+/* Typography & Contrast in Light Mode */
+html.theme-light .text-neutral-50,
 html.theme-light .text-neutral-100,
 html.theme-light .text-neutral-200,
 html.theme-light .text-neutral-300 {
@@ -113,18 +166,48 @@ html.theme-light .text-neutral-500 {
   color: #475569 !important;
 }
 
-html.theme-light .border-neutral-800,
-html.theme-light .border-neutral-700\/50,
-html.theme-light .border-neutral-800\/50,
-html.theme-light .border-neutral-800\/80 {
+html.theme-light .text-gold-300,
+html.theme-light .text-gold-400 {
+  color: #2563eb !important;
+}
+
+/* Borders in Light Mode */
+html.theme-light [class*="border-neutral-"],
+html.theme-light [class*="border-gold-"] {
   border-color: #e2e8f0 !important;
 }
 
+/* Inputs, Textareas, Selects in Light Mode */
 html.theme-light input,
 html.theme-light textarea,
 html.theme-light select {
-  background-color: #f1f5f9 !important;
+  background-color: #ffffff !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
 }
+
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.theme-light input:focus,
+html.theme-light textarea:focus,
+html.theme-light select:focus {
+  border-color: #2563eb !important;
+  outline: 2px solid rgba(37, 99, 235, 0.15) !important;
+}
+
+/* Badges & Code Blocks in Light Mode */
+html.theme-light code {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Custom Banner in Sidebar */
+html.theme-light [class*="bg-gradient-to-"] {
+  border-color: #e2e8f0 !important;
+}
+
 
