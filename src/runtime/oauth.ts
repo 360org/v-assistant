@@ -75,9 +75,16 @@ export interface ManualSignInAttempt {
 
 const AI_ROUTER_OAUTH_URL = "http://127.0.0.1:20128/v1/oauth";
 
-const ROUTER_OAUTH_PROVIDER: Partial<Record<ProviderId, string>> = {
+const ROUTER_OAUTH_PROVIDER: Partial<Record<string, string>> = {
   gemini: "antigravity",
+  antigravity: "antigravity",
   claude: "claude",
+  codex: "codex",
+  chatgpt: "codex",
+  openai: "codex",
+  "grok-cli": "grok-cli",
+  grok: "grok-cli",
+  xai: "grok-cli",
 };
 
 interface RouterAuthorization {
@@ -223,12 +230,16 @@ function callbackUrl(provider: ProviderId): string {
 export async function beginManualSignIn(provider: ProviderId): Promise<ManualSignInAttempt> {
   const routerProvider = ROUTER_OAUTH_PROVIDER[provider];
   if (routerProvider) {
+    const redirectUri = routerProvider === "codex"
+      ? "http://localhost:1455/auth/callback"
+      : routerProvider === "claude"
+      ? "http://localhost:443/callback"
+      : "http://localhost:1420/callback";
+
     const response = await fetch(`${AI_ROUTER_OAUTH_URL}/authorize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // This is a browser-visible callback only. The code exchange remains in
-      // the native AI Router sidecar, which owns provider credentials and HTTP.
-      body: JSON.stringify({ provider: routerProvider, redirectUri: "http://localhost:1420/callback" }),
+      body: JSON.stringify({ provider: routerProvider, redirectUri }),
     });
     const authorization = await response.json() as RouterAuthorization;
     if (!response.ok || !authorization.authUrl || !authorization.state || !authorization.codeVerifier || !authorization.redirectUri) {
