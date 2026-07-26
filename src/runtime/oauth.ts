@@ -799,13 +799,22 @@ export async function fetchVendorAccount(
       return { label: "Claude User", detail: "Connected via Claude" };
     }
     if (pLower === "gemini" || pLower === "antigravity") {
-      const res = await fetch(devUrl("https://www.googleapis.com/oauth2/v1/userinfo"), {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { email?: string; name?: string };
-        if (data.email) return { label: data.email, detail: data.name || "Connected via Google" };
-      }
+      try {
+        const res = await fetch(`https://www.googleapis.com/oauth2/v1/userinfo?access_token=${encodeURIComponent(apiKey)}`);
+        if (res.ok) {
+          const data = (await res.json()) as { email?: string; name?: string };
+          if (data.email) return { label: data.email, detail: data.name || "Connected via Google" };
+        }
+      } catch { /* fallback */ }
+      try {
+        const res = await fetch(devUrl("https://www.googleapis.com/oauth2/v1/userinfo"), {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { email?: string; name?: string };
+          if (data.email) return { label: data.email, detail: data.name || "Connected via Google" };
+        }
+      } catch { /* fallback */ }
       const payload = parseJwt(apiKey);
       if (payload?.email) return { label: payload.email, detail: "Connected via Google" };
       return { label: "Google User", detail: "Connected via Google" };

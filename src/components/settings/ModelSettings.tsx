@@ -514,7 +514,7 @@ export function ModelSettings() {
 
             const renderCards: DisplayCard[] = [];
 
-            // Deduplicate connections by provider & email/accountLabel so duplicate cards with the same email don't render
+            // Deduplicate connections by provider & email so duplicate cards with the same email don't render
             const dedupeMap = new Map<string, (typeof connections)[number]>();
             connections.forEach((conn) => {
               const providerId = conn.provider.toLowerCase();
@@ -523,8 +523,8 @@ export function ModelSettings() {
               if (providerId === "codex" || providerId === "chatgpt" || providerId === "openai") normalizedProv = "codex";
               if (providerId === "antigravity" || providerId === "gemini") normalizedProv = "antigravity";
 
-              const label = (conn.accountLabel || conn.email || conn.label || conn.name || "").toLowerCase().trim();
-              const dedupeKey = `${normalizedProv}::${label}`;
+              const emailAddr = (conn.email || (conn.accountLabel?.includes("@") ? conn.accountLabel : "")).toLowerCase().trim();
+              const dedupeKey = emailAddr ? `${normalizedProv}::${emailAddr}` : conn.id;
 
               const existing = dedupeMap.get(dedupeKey);
               if (!existing) {
