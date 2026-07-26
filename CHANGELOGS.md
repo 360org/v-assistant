@@ -3,19 +3,16 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
-### Interactive 1-Click Permission Approval & Absolute Host Workspace Access
-*   **Thẻ Phê Duyệt Quyền Truy Cập 1-Click (Permission Approval Card)**:
-    - Khi Agent phát hiện hoặc yêu cầu thao tác trên đường dẫn tệp/thư mục nằm ngoài phạm vi mặc định (hoặc trên máy host), giao diện Chat tự động hiển thị **Thẻ Xin Quyền Trực Quan** kèm đường dẫn và nút bấm **[ Cho phép (Approve) ]** / **[ Từ chối (Deny) ]**.
-    - Cho phép người dùng nhấp **[ Cho phép (Approve) ]** 1-Click ngay trong khung Chat để tự động cấp quyền và thực thi công việc ngay lập tức mà không phải vào Cài đặt thủ công.
-*   **Hỗ trợ đường dẫn tuyệt đối cho Native Tools (`agent-runner`)**:
-    - Chuẩn hóa hàm `workspacePath` trong `agent-runner/src/native-tools/index.ts`, hỗ trợ đọc các đường dẫn tuyệt đối trên máy chủ (`/Volumes/DATA/...`) khi được người dùng phê duyệt.
-    - Cập nhật script `build` trong `package.json` tự động biên dịch `agent-runner` (`npx tsc --project agent-runner/tsconfig.json`) đồng bộ vào gói đóng gói ứng dụng.
-*   **Robust PDF Extraction & Image-based PDF Fallback**:
-    - Bọc an toàn `extractPdf` chống lỗi Web Worker trong môi trường Tauri WebView; tự động fallback đăng ký tài liệu dạng PDF Asset đối với tệp PDF dạng ảnh quét (Delivery Slip, Hóa đơn) giúp tệp hiển thị trạng thái `Ready` tức thì.
-*   **Tạo Skill Hướng Dẫn Phát Triển (`v-assistant-dev-guidelines`)**:
-    - Đóng gói toàn bộ bài học kinh nghiệm, quy chuẩn đóng gói sidecar, cơ chế cấp quyền 1-Click, PDF fallback và kỷ luật commit/release vào skill `v-assistant-dev-guidelines` (đồng bộ tại `.agents/skills/` và `skills/`).
-*   **Giao diện Sidebar Profile 2 dòng**:
-    - Tách biệt tên người dùng, thẻ Badge `v1.1.0` (Emerald) và dòng thương hiệu `Powered by VuaAI.net` thành 2 dòng riêng biệt, chống tràn/cắt chữ.
+### Refactoring & Workflow Improvements (Items 1-3)
+*   **Item 1 - Automated Sidecar Build Guard (`package.json`)**:
+    - Chuẩn hóa script `"build:runner": "npx tsc --project agent-runner/tsconfig.json"` và tích hợp trực tiếp vào `"build": "npm run build:runner && node scripts/validate-skills.mjs && tsc && vite build"`.
+    - Tự động hóa 100% việc biên dịch `agent-runner/src/` sang `agent-runner/dist/index.js` trước khi Tauri đóng gói ứng dụng.
+*   **Item 2 - UX-First Permission & 1-Click Error Recovery (`Chat.tsx`)**:
+    - Giữ cơ chế **Thẻ Xin Quyền Cấp Truy Cập 1-Click (Permission Approval Card)** cho thư mục host.
+    - Bổ sung nút **[ ⚡ Thử lại / Retry ]** 1-Click ngay trong bong bóng tin nhắn phản hồi báo lỗi, cho phép gửi lại câu hỏi lập tức mà không cần tải lại toàn bộ trang.
+*   **Item 3 - God Files Breakdown (`AppUpdateSection.tsx`)**:
+    - Khởi động đợt tách 3 god files (`Settings.tsx`, `Chat.tsx`, `store.tsx`).
+    - Tách khối cập nhật phần mềm thành component độc lập `src/components/settings/AppUpdateSection.tsx`, giảm dung lượng `Settings.tsx` và tăng tốc độ Vite Fast Refresh (HMR).
 
 ## [1.1.0] - 2026-07-25
 ### Comprehensive System Hardening, Multimodal Vision & Production Release

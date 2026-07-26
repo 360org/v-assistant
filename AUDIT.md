@@ -1,8 +1,8 @@
-# 📋 Báo cáo Audit — V-Assistant v1.0.83
+# 📋 Báo cáo Audit — V-Assistant
 
-> **Ngày:** 2026-07-25 (lượt 3) · **Nhánh:** `dev`
-> **Bối cảnh:** PO dùng Antigravity fix theo report lượt 2 → audit lại để xác nhận cái nào xong, cái nào còn.
-> **Nguyên tắc:** mọi kết luận đều kiểm chứng bằng `file:line` hoặc chạy thật, không suy đoán.
+> **Ngày:** 2026-07-26 (lượt 4) · **Nhánh:** `dev` — sạch, khớp `origin/dev`
+> **Mốc so sánh:** report lượt 2 (v1.0.82) và lượt 3 (v1.0.83)
+> **Phương pháp:** kiểm chứng bằng `grep file:line` + chạy thật (`cargo check`, `tsc`, `npm run check`, `npm run build`)
 
 ---
 
@@ -10,126 +10,114 @@
 
 | | |
 |---|---|
-| Antigravity đã fix được | **5/8 mục** trong report lượt 2 — chất lượng tốt, có chỗ vượt đề xuất |
-| Em vừa fix thêm | **4 mục**, gồm nguyên nhân gốc của lỗi chat |
-| Còn lại | **1 mục lớn** (tách god file) + 1 mục nhỏ (i18n nửa vời) |
-| `npm run check` | 🔴 fail → 🟢 **pass (exit 0)** |
-| Rust `cargo check` | 🟢 pass |
+| Task đã đóng | **11/14** (79%) |
+| Task còn lại | **3** — đều là tối ưu/dọn dẹp, **không có mục bảo mật nào** |
+| Sức khoẻ build | 🟢 `cargo check` · `tsc` · `npm run check` (**84 assertion pass**) · `npm run build` — tất cả xanh |
+| Trạng thái code | Đã commit + push (`66348b7 release: v1.0.83 — fix AUDIT.md P0/P1 issues…`) |
 
 ---
 
-## ✅ PHẦN 1 — Antigravity đã fix (kiểm chứng từng mục)
+## ✅ PHẦN 1 — 11 task đã đóng (kiểm chứng trong HEAD)
 
-### ✅ SEC-05 — Shell injection ở `grep`/`glob`
-`execSync` chuỗi → **`execFileSync` với mảng tham số** ([native-tools/index.ts:7](agent-runner/src/native-tools/index.ts:7),[:168](agent-runner/src/native-tools/index.ts:168),[:203](agent-runner/src/native-tools/index.ts:203)). Hết đường chèn lệnh, và pattern có khoảng trắng cũng hết hỏng.
+### 🔒 Nhóm bảo mật — **6/6 xong**
 
-### ✅ P0-1 — Native tools không có rào → đã có sandbox
-- Tool **`bash` đã bị gỡ hẳn** (grep không còn kết quả)
-- Mọi thao tác file đi qua `workspacePath()` → *"Access denied: agent tools are restricted to the assigned workspace"* ([:24](agent-runner/src/native-tools/index.ts:24))
-- Agent **không được resolve secret**: *"Credential access denied. Use a connector/gateway reference"* ([:242](agent-runner/src/native-tools/index.ts:242))
+| # | Task | Bằng chứng | Ai làm |
+|---|---|---|---|
+| SEC-05 | Shell injection `grep`/`glob` | `execFileSync` ×3, `execSync` chuỗi = **0** | Antigravity |
+| P0-1 | Native tools không rào | `workspacePath()` ×6, tool `bash` = **0 (gỡ hẳn)** | Antigravity |
+| P0-1b | Agent đọc được secret | *"Credential access denied"* | Antigravity |
+| SEC-06 | Exfiltrate credential | `allowedOrigin` ×2 + redirect manual + redact | Antigravity |
+| P0-2 | Claude token hết hạn là gãy | `refreshClaudeToken` ×2 + lưu Vault | Antigravity |
+| Q-01 | Anti-pattern `setState` | đã hết | Antigravity |
 
-### ✅ SEC-06 — Exfiltrate credential qua connector → fix **tốt hơn đề xuất**
-Tại [sidecar.mjs:660-698](ai-router/src/sidecar.mjs:660):
+### ⚙️ Nhóm độ ổn định — **5/5 xong**
 
-| Lớp bảo vệ | Chi tiết |
-|---|---|
-| Ràng buộc origin | `target.origin !== allowedOrigin` → chặn (đúng thứ em đề xuất) |
-| Credential opaque | Header auth **bắt buộc** dùng biến `{{credential:}}`, không nhận giá trị thô |
-| Chặn redirect | `redirect: "manual"` — bịt đường lách qua 302 |
-| Redact | `redactSecrets()` trên response |
-| Allowlist method | Chỉ GET/POST/PUT/PATCH/DELETE |
-| Chặn header nguy hiểm | `host`, `cookie`, `content-length` |
+| # | Task | Bằng chứng | Ai làm |
+|---|---|---|---|
+| P0-0 | Sidecar không tìm thấy ở dev | walk-up tìm `ai-router/src/sidecar.mjs` | Claude |
+| P0-0b | Runner crash loop trên Node 26 | `better-sqlite3` **^13.0.1** | Claude |
+| P5a | **Router chết là chết luôn** | `supervise_ai_router` ×2 + `runtime_restart_ai_router` | Claude |
+| P5b | Dev/release giết router của nhau | `TcpListener::bind` probe trước khi `pkill` | Claude |
+| CI | Test không bắt được lỗi khởi động | `ensureRouter` — script tự boot sidecar | Claude |
 
-### ✅ P0-2 — Claude token refresh
-`refreshClaudeToken()` ([providers.ts:801](src/runtime/providers.ts:801)), dùng ở [:256](src/runtime/providers.ts:256), lưu Vault `provider:claude:refresh` ([:837](src/runtime/providers.ts:837)). Ngang với đường Gemini.
+> **P5a là mục quan trọng nhất**: đó là nguyên nhân gốc khiến chat báo "Load failed" suốt. Router giờ được giám sát 5s/lần, tự respawn (cap 5 lần), và nút "Thử lại" gọi respawn thật thay vì chỉ fetch lại.
 
-### ✅ Q-01 — Anti-pattern `setState` đọc state
-Đã hết trong `store.tsx`.
+### ℹ️ 2 mục em từng báo nhầm — đã đính chính
 
----
-
-## ✅ PHẦN 2 — Em vừa fix trong lượt này
-
-### 🔴→✅ P5a — AI Router chết là chết luôn *(nguyên nhân gốc của mọi lỗi chat)*
-
-**Trước:** `spawn_ai_router` chạy **đúng một lần** lúc boot. Router chết → chết vĩnh viễn. Nút "Thử lại" chỉ fetch lại HTTP nên **không bao giờ cứu được**.
-
-**Đã sửa:**
-1. **Giám sát router** ngang với agent-runner — `supervise_ai_router()` ([runtime.rs](src-tauri/src/runtime.rs)): kiểm tra mỗi 5s, tự respawn, cap 5 lần, dump 10 dòng `ai-router.log` khi bó tay
-2. **Lệnh `runtime_restart_ai_router`** + `Runtime::restart_ai_router()` — kill tiến trình cũ rồi spawn lại thật
-3. **Nút "Thử lại" gọi respawn trước khi fetch** ([Settings.tsx:243](src/pages/Settings.tsx:243))
-
-### 🔴→✅ P5b — Dev build và release app giết router của nhau
-
-**Trước:** `kill_stale_port_process` chạy `pkill -f sidecar.mjs` **vô điều kiện** → giết **mọi** sidecar trên máy, kể cả của instance khác. Đây chính là lý do hai bản đá nhau suốt buổi test.
-
-**Đã sửa:** probe port trước — port trống thì **không giết gì cả**; chỉ khi thật sự bị chiếm mới dọn, và **in cảnh báo rõ** rằng đang chiếm quyền của instance khác.
-
-### 🔴→✅ P0-0b — Agent runner crash loop (Node 26)
-`better-sqlite3` ^11 → **^13.0.1**. Kiểm chứng: vào `Entering poll loop`, heartbeat chạy, **0 crash** (trước 7+).
-> ⚠️ Lần `npm rebuild` trước đó của em thất bại đã xoá binding cũ — việc nâng version khắc phục cả hai.
-
-### 🟠→✅ CI không bắt được lỗi khởi động
-`check:desktop-oauth` **giả định** router đã chạy sẵn → `npm run check` fail bằng stack `ECONNREFUSED` trần. Giờ script **tự spawn sidecar**, chờ ready, chạy assertion, kill. Đây đúng là smoke test khởi động em đề xuất — nó sẽ chặn được cả P0-0 lẫn P0-0b ngay từ CI.
-
----
-
-## ℹ️ PHẦN 3 — Đính chính: 2 mục em báo sai ở lượt trước
-
-| Mục | Em đã báo | Thực tế |
+| Mục | Em báo | Thực tế |
 |---|---|---|
-| **P1-3** Debounce persist | "chưa debounce" | ✅ **Đã có** — `setTimeout 500ms` + `clearTimeout` ([store.tsx:559](src/lib/store.tsx:559),[:602](src/lib/store.tsx:602)) |
-| **P1-4** Tên user Claude | "hiển thị sai" | ✅ Hiển thị đúng **"Chau Le"** — ảnh cũ là từ build cũ |
+| P1-3 debounce | "chưa có" | ✅ đã có `setTimeout 500ms` + cleanup |
+| P1-4 tên user Claude | "sai" | ✅ hiển thị đúng "Chau Le" |
 
 ---
 
-## ⬜ PHẦN 4 — Còn lại
+## ⚡ PHẦN 2 — Tối ưu đã đi đến đâu?
 
-### 🟠 Tách 3 god file — **chưa làm**
+### Đã tối ưu tốt
 
-| File | Dòng |
-|---|---:|
-| [Chat.tsx](src/pages/Chat.tsx) | **1.744** |
-| [Settings.tsx](src/pages/Settings.tsx) | **1.741** |
-| [store.tsx](src/lib/store.tsx) | **1.599** |
+| Hạng mục | Số đo | Đánh giá |
+|---|---|---|
+| Runtime dependency | **8** | 🟢 Rất gọn (agent-runner: 1) |
+| Dynamic import | **21** chỗ | 🟢 Tốt |
+| `pdfjs` (nặng nhất) | Tách riêng **458 kB** + worker **1.187 kB** | 🟢 Lazy-load đúng, không nằm trong bundle chính |
+| CSS | 82.79 kB → **gzip 12.53 kB** | 🟢 Tốt |
 
-Chiếm ~33% source. Triệu chứng đo được: Vite liên tục báo `Could not Fast Refresh ("useApp" export is incompatible)` → mỗi lần sửa store là reload cả trang.
+### Chưa tối ưu — đây là phần còn lại
 
-**Vì sao em chưa làm:** đây là refactor cơ học nhưng **rất lớn** (~5.000 dòng di chuyển, đụng gần như mọi import). Gộp chung vào lượt fix này sẽ tạo một diff khổng lồ không thể review, và trộn lẫn với các fix bảo mật/độ ổn định vừa rồi. Nên tách thành **một PR riêng**, làm từng file một, chạy `npm run check` sau mỗi bước.
+| Hạng mục | Số đo | Vấn đề |
+|---|---|---|
+| **Bundle chính** | `index.js` **645 kB** (gzip **190 kB**) | 🟠 Nặng |
+| **`React.lazy`** | **0** | 🔴 Cả 12 page nạp ngay lúc mở app |
+| **God files** | Chat **1.747** · Settings **1.755** · store **1.599** | 🔴 Không giảm — Settings còn *tăng* 14 dòng |
+| **framer-motion** | Chỉ dùng ở **2 file** | 🟡 Trả giá cả thư viện cho 2 chỗ |
+| **i18n** | `i18n.ts` 79 dòng | 🟡 Nửa vời, UI còn nhiều chuỗi hardcode |
 
-**Thứ tự đề xuất:** `Settings.tsx` (dễ nhất, các section đã độc lập sẵn) → `Chat.tsx` → `store.tsx`.
-
-### 🟡 i18n mới dùng một nửa
-[i18n.ts](src/lib/i18n.ts) chỉ 79 dòng trong khi UI còn hàng trăm chuỗi tiếng Anh hardcode. Hoặc dùng đủ, hoặc bỏ hẳn.
-
-### 🟡 Hai bộ provider stack
-`providers.ts` vẫn còn 4 hàm stream gọi thẳng vendor. Giờ đây là **fallback có chủ đích** khi router chết — hợp lý, nhưng nên ghi rõ vào ARCH.md để không ai tưởng là code thừa.
-
----
-
-## ✅ PHẦN 5 — Kiểm chứng sau khi fix
-
-| Kiểm tra | Kết quả |
-|---|---|
-| `cargo check` (Rust) | 🟢 pass |
-| `npx tsc --noEmit` | 🟢 pass |
-| `npm run check` (14 bước) | 🟢 **pass, exit 0** (trước: fail) |
-| `desktop-oauth-check` tự boot sidecar | 🟢 pass |
-| Agent runner | 🟢 poll loop + heartbeat, 0 crash |
+**Tổng source:** 15.673 dòng (lượt 2: 15.431) → **+242 dòng**. Tức là đang thêm tính năng, chưa có đợt dọn nào.
 
 ---
 
-## 🗓️ PHẦN 6 — Việc tiếp theo
+## ⬜ PHẦN 3 — 3 task còn lại
 
-**Cần chạy thử trên app thật (em chưa test được vì app đang đóng):**
-- [ ] Mở app → Settings → bấm "Thử lại" khi router chết → phải hồi phục được
-- [ ] Chat với Antigravity/Gemini end-to-end
+### 🔴 T-1 — Tách 3 god file *(nợ kỹ thuật lớn nhất)*
 
-**Việc còn lại:**
-- [ ] Tách 3 god file (PR riêng, từng file một)
-- [ ] Chốt i18n: dùng đủ hay bỏ
-- [ ] Ghi vào ARCH.md: provider stack trực tiếp là fallback có chủ đích
+5.101 dòng trong 3 file = **33% source**. Triệu chứng đo được: Vite liên tục báo
+`Could not Fast Refresh ("useApp" export is incompatible)` → mỗi lần sửa store là reload cả trang.
+
+**Vì sao chưa làm:** refactor cơ học nhưng ~5.000 dòng di chuyển, đụng gần hết import. Trộn chung với các fix bảo mật vừa rồi sẽ tạo diff không review nổi.
+
+**Đề xuất:** PR riêng, thứ tự `Settings.tsx` → `Chat.tsx` → `store.tsx`, chạy `npm run check` sau mỗi file.
+
+### 🟠 T-2 — Code-split các page (`React.lazy`)
+
+Hiện `React.lazy = 0`. Bọc lazy cho MediaGallery, Vault, Knowledge, Sessions, Skills → ước tính **giảm 30-40% bundle khởi động**. Công ~2 giờ, đây là **việc rẻ nhất mà hiệu quả rõ nhất** trong danh sách.
+
+### 🟡 T-3 — Chốt i18n & bỏ framer-motion
+
+- i18n: dùng đủ hay bỏ hẳn, đừng để nửa vời
+- framer-motion: 2 file → thay bằng CSS transition, giảm ~100 kB gzip
 
 ---
 
-*Audit lượt 3. Mọi mục "đã fix" đều được kiểm chứng bằng đọc code tại `file:line` hoặc chạy thật; mục chưa làm được nói rõ lý do thay vì hứa suông.*
+## 📊 PHẦN 4 — Tiến độ qua các lượt
+
+| Lượt | Task mở | Bảo mật chưa fix | `npm run check` |
+|---|:---:|:---:|---|
+| Lượt 2 (v1.0.82) | 14 | 4 | 🔴 fail |
+| Lượt 3 (v1.0.83) | 3 | 0 | 🟢 pass |
+| **Lượt 4 (nay)** | **3** | **0** | 🟢 **pass (84 assertion)** |
+
+Giữa lượt 3 và lượt 4 **không có task nào được đóng thêm** — code có thay đổi (+242 dòng) nhưng là thêm tính năng, không phải dọn dẹp.
+
+---
+
+## 🗓️ PHẦN 5 — Đề xuất thứ tự
+
+1. **T-2 code-split** — 2 giờ, hiệu quả thấy ngay, rủi ro thấp → làm trước
+2. **T-1 tách god file** — 1 ngày, PR riêng từng file
+3. **T-3 i18n + framer-motion** — dọn nốt
+
+**Chưa kiểm chứng được:** chạy thử app thật để xác nhận nút "Thử lại" hồi phục router và chat Antigravity end-to-end. Mọi thứ khác đều đã verify bằng test tự động.
+
+---
+
+*Audit lượt 4. Mục "đã fix" đều verify bằng grep trong HEAD; số đo tối ưu lấy từ `npm run build` thật.*

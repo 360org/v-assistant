@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eraser, ExternalLink, FileCode, FileText, FolderOpen, Globe, Image, Layers3, Link2, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
@@ -1167,9 +1167,23 @@ export function Chat() {
                           </span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 py-1 text-xs text-amber-400/90 font-medium select-none">
-                          <span className="size-2 rounded-full bg-amber-400 shrink-0" />
-                          <span>⚠️ Chưa nhận được dữ liệu phản hồi (Vui lòng chọn mô hình AI khả dụng hoặc thử lại)</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2 py-1 text-xs text-amber-400/90 font-medium select-none">
+                          <div className="flex items-center gap-2">
+                            <span className="size-2 rounded-full bg-amber-400 shrink-0" />
+                            <span>⚠️ Chưa nhận được dữ liệu phản hồi (Vui lòng chọn mô hình AI khả dụng hoặc thử lại)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+                              if (lastUserMsg) {
+                                send(lastUserMsg.content);
+                              }
+                            }}
+                            className="flex cursor-pointer items-center gap-1 rounded bg-amber-500/20 border border-amber-500/40 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/30 transition-colors"
+                          >
+                            <RotateCcw className="size-3" /> Thử lại (Retry)
+                          </button>
                         </div>
                       )}
                       
