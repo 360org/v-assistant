@@ -299,6 +299,43 @@ async fn execute_cli_command(command: String, cwd: Option<String>) -> Result<Str
     }
 }
 
+#[tauri::command]
+fn set_autostart(enable: bool) -> Result<bool, String> {
+    if let Ok(home) = std::env::var("HOME") {
+        let plist_path = std::path::PathBuf::from(home).join("Library/LaunchAgents/net.vuaai.v-assistant.plist");
+        if enable {
+            if let Ok(exe_path) = std::env::current_exe() {
+                let plist_content = format!(
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>net.vuaai.v-assistant</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"#,
+                    exe_path.to_string_lossy()
+                );
+                if let Some(parent) = plist_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::write(plist_path, plist_content);
+            }
+        } else {
+            if plist_path.exists() {
+                let _ = std::fs::remove_file(plist_path);
+            }
+        }
+    }
+    Ok(enable)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
