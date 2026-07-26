@@ -47,6 +47,7 @@ export function ModelSettings() {
   const [selectedProvider, setSelectedProvider] = useState<AiRouterProvider | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [connecting, setConnecting] = useState(false);
+  const [verifyingCallback, setVerifyingCallback] = useState(false);
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
   const [manualAuthUrl, setManualAuthUrl] = useState<string | null>(null);
   const [manualCallbackUrl, setManualCallbackUrl] = useState("");
@@ -182,36 +183,42 @@ export function ModelSettings() {
       if (attempt) {
         setManualAttempt(attempt);
         setManualAuthUrl(attempt.authUrl);
+        setConnecting(false);
       } else {
-        const tokens = await signInWithAiRouterCore(selectedProvider.id, (url) => {
+        void signInWithAiRouterCore(selectedProvider.id, (url) => {
           setManualAuthUrl(url);
+          setConnecting(false);
           void openExternalUrl(url);
-        });
-        if (tokens) {
-          const key = tokens.apiKey || tokens.accessToken || "";
-          if (key) {
-            await connectProvider(selectedProvider.id as ProviderId, {
-              apiKey: key,
-              refreshToken: tokens.refreshToken,
-              projectId: tokens.projectId,
-              expiresAt: tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined,
-              connectionStatus: "connected",
-            });
+        }).then(async (tokens) => {
+          if (tokens) {
+            const key = tokens.apiKey || tokens.accessToken || "";
+            if (key) {
+              await connectProvider(selectedProvider.id as ProviderId, {
+                apiKey: key,
+                refreshToken: tokens.refreshToken,
+                projectId: tokens.projectId,
+                expiresAt: tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined,
+                connectionStatus: "connected",
+              });
+            }
+            setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
+            await loadConnections();
           }
-          setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
-          await loadConnections();
-        }
+        }).catch(() => {
+          /* manual paste will handle it if background popup fails */
+        }).finally(() => {
+          setConnecting(false);
+        });
       }
     } catch (err) {
       setConnectMessage(`❌ Lỗi OAuth: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
       setConnecting(false);
     }
   };
 
   const handleCompleteManualCallback = async () => {
     if (!selectedProvider || !manualCallbackUrl.trim()) return;
-    setConnecting(true);
+    setVerifyingCallback(true);
     setConnectMessage(null);
     try {
       let key = "";
@@ -278,6 +285,7 @@ export function ModelSettings() {
         setConnectMessage(`✅ Xác thực & lưu kết nối thành công tài khoản OAuth ${selectedProvider.name}!`);
         setManualCallbackUrl("");
         setManualAttempt(null);
+        setConnecting(false);
         await loadConnections();
       } else {
         throw new Error("Không nhận được token xác thực từ URL callback.");
@@ -285,7 +293,7 @@ export function ModelSettings() {
     } catch (err) {
       setConnectMessage(`❌ Lỗi Callback: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setConnecting(false);
+      setVerifyingCallback(false);
     }
   };
 
@@ -543,14 +551,27 @@ export function ModelSettings() {
                             size="sm"
                             variant="primary"
                             onClick={handleCompleteManualCallback}
-                            disabled={connecting || !manualCallbackUrl.trim()}
+                            disabled={verifyingCallback || !manualCallbackUrl.trim()}
                             className="gap-1.5 text-xs font-semibold cursor-pointer shrink-0"
                           >
-                            {connecting ? <RefreshCw className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-                            {connecting ? "Đang xác thực..." : "Xác nhận Link"}
+                            {verifyingCallback ? <RefreshCw className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                            {verifyingCallback ? "Đang xác thực..." : "Xác nhận Link"}
                           </Button>
                         </div>
                       </div>
+
+                      {connectMessage && (
+                        <div
+                          className={cn(
+                            "mt-3 p-3 rounded-xl text-xs font-medium border animate-fadeIn",
+                            connectMessage.startsWith("✅")
+                              ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-200"
+                              : "bg-red-950/60 border-red-500/50 text-red-200",
+                          )}
+                        >
+                          {connectMessage}
+                        </div>
+                      )}
                     </div>
                   )}
 

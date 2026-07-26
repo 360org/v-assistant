@@ -1,16 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-gold-50: #fdf8ec;
-  --color-gold-100: #f9edcc;
-  --color-gold-200: #f3da95;
-  --color-gold-300: #ecc25e;
-  --color-gold-400: #e6ad39;
-  --color-gold-500: #dd9422;
-  --color-gold-600: #c4741b;
-  --color-gold-700: #a3541a;
-  --color-gold-800: #85421c;
-  --color-gold-900: #6e371a;
+  /* Tech Blue Palette (Main #0077cd) */
+  --color-gold-50: #f0f8ff;
+  --color-gold-100: #d6ecff;
+  --color-gold-200: #add9ff;
+  --color-gold-300: #5cb3ff;
+  --color-gold-400: #0077cd;
+  --color-gold-500: #0062ab;
+  --color-gold-600: #004d88;
+  --color-gold-700: #003966;
+  --color-gold-800: #002645;
+  --color-gold-900: #001526;
+
+  /* Cyber Emerald Palette (Accent #00ce2c) */
+  --color-emerald-50: #e8fceb;
+  --color-emerald-100: #c5f9cd;
+  --color-emerald-200: #93f3a2;
+  --color-emerald-300: #4ee665;
+  --color-emerald-400: #00ce2c;
+  --color-emerald-500: #00ad24;
+  --color-emerald-600: #008a1c;
+  --color-emerald-700: #006915;
+  --color-emerald-800: #00490e;
+  --color-emerald-900: #002d08;
+  --color-emerald-950: #001a04;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
 }
@@ -56,31 +71,31 @@ html.theme-midnight body {
   background-color: #0b0f19 !important;
 }
 html.theme-midnight {
-  --color-gold-400: #818cf8;
-  --color-gold-500: #6366f1;
-  --color-gold-300: #a5b4fc;
+  --color-gold-400: #0077cd;
+  --color-gold-500: #0062ab;
+  --color-gold-300: #5cb3ff;
 }
 
 html.theme-dark body {
   background-color: #0d0d0d !important;
 }
 html.theme-dark {
-  --color-gold-400: #3b82f6;
-  --color-gold-500: #2563eb;
-  --color-gold-300: #60a5fa;
+  --color-gold-400: #0077cd;
+  --color-gold-500: #0062ab;
+  --color-gold-300: #5cb3ff;
 }
 
 html.theme-gold body {
   background-color: #0a0a0a !important;
 }
 html.theme-gold {
-  --color-gold-400: #e6ad39;
-  --color-gold-500: #dd9422;
-  --color-gold-300: #ecc25e;
+  --color-gold-400: #00ce2c;
+  --color-gold-500: #00ad24;
+  --color-gold-300: #4ee665;
 }
 
 /* ==========================================================================
-   LIGHT THEME DESIGN SYSTEM - Premium, Friendly & Modern Tech SaaS
+   LIGHT THEME DESIGN SYSTEM - Tech Blue #0077cd & Cyber Emerald #00ce2c
    ========================================================================== */
 
 html.theme-light,
@@ -93,13 +108,13 @@ html.theme-light #root {
 }
 
 html.theme-light {
-  --color-gold-400: #2563eb;
-  --color-gold-500: #1d4ed8;
-  --color-gold-300: #3b82f6;
-  --color-gold-600: #1e40af;
-  --color-gold-200: #bfdbfe;
-  --color-gold-100: #dbeafe;
-  --color-gold-50: #eff6ff;
+  --color-gold-400: #0077cd;
+  --color-gold-500: #0062ab;
+  --color-gold-300: #5cb3ff;
+  --color-gold-600: #004d88;
+  --color-gold-200: #add9ff;
+  --color-gold-100: #d6ecff;
+  --color-gold-50: #f0f8ff;
 }
 
 /* Sidebar in Light Mode */
@@ -123,9 +138,9 @@ html.theme-light nav button:hover {
 /* Active Nav Link in Light Mode */
 html.theme-light .bg-neutral-800,
 html.theme-light [class*="bg-neutral-800"] {
-  background-color: #eff6ff !important;
-  color: #1d4ed8 !important;
-  border-color: #bfdbfe !important;
+  background-color: #f0f8ff !important;
+  color: #0077cd !important;
+  border-color: #add9ff !important;
 }
 
 /* All Cards, Containers & Panels in Light Mode */
@@ -152,7 +167,7 @@ html.theme-light div.bg-neutral-950 {
 }
 
 html.theme-light .bg-blue-600 {
-  background-color: #2563eb !important;
+  background-color: #0077cd !important;
   color: #ffffff !important;
 }
 
