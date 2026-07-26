@@ -3,6 +3,9 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+*   **Persistent Background Chat & Task Execution (`src/App.tsx`)**:
+    - Khắc phục triệt để lỗi khi Agent đang xử lý tác vụ mà người dùng chuyển qua menu/trang khác (như Lịch & Nhiệm vụ, Kho Media, Cài đặt...) thì tiến trình bị hủy và bắt thử lại (Retry).
+    - Giữ trang **Trò chuyện (`Chat`)** luôn mounted ngầm trong DOM (`hidden` khi ở trang khác), đảm bảo tiến trình streaming, gọi tool, đọc/ghi tệp và thực thi tác vụ chạy xuyên suốt đến khi hoàn tất mà không bao giờ bị dừng giữa chừng.
 *   **Fix File Upload Hanging & PDF Worker Timeout (`src/runtime/knowledge.ts`)**:
     - Khắc phục triệt để lỗi tệp tin tải lên (PDF, DOCX, XLSX, hình ảnh) bị kẹt ở trạng thái **"Processing" quay hoài 10 phút**:
       - Thêm cơ chế `Promise.race` với **Hard Timeout 4 giây** cho hàm trích xuất `extractPdf`: Nếu PDF worker của Webview bị kẹt, hệ thống sẽ giải phóng và tự động trả về thông tin tệp tin nguyên bản.

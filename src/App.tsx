@@ -96,19 +96,27 @@ export default function App() {
 
       <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-y-auto">
         <UpdateNotificationBanner />
-        <div className="flex-1 min-h-0">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={view}
-            className="h-full"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-          >
-            <Page />
-          </motion.div>
-        </AnimatePresence>
+        <div className="flex-1 min-h-0 relative h-full">
+          {/* Chat page is kept permanently mounted so active streaming & background agent tasks never get killed when switching views */}
+          <div className={view === "chat" ? "h-full" : "hidden"}>
+            <Chat />
+          </div>
+
+          {/* Other views */}
+          {view !== "chat" && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={view}
+                className="h-full"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Page />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       </main>
     </div>

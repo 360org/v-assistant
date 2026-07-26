@@ -6,6 +6,10 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+## [1.1.2] - 2026-07-26
+
+- **Persistent Background Task Execution**: Giữ trang Trò chuyện (`Chat`) luôn mounted ngầm trong DOM (`hidden` khi ở trang khác). Khi Agent đang thực thi tác vụ (đọc/ghi tệp, gọi API, đặt lịch...), người dùng chuyển qua menu/trang khác (Lịch & Nhiệm vụ, Kho Media, Cài đặt...) thì tiến trình vẫn tiếp tục chạy hoàn tất 100% mà không bị dừng hay báo lỗi Retry.
+
 ## [1.1.1] - 2026-07-26
 
 - **Lịch & Nhiệm vụ Menu**: Đổi tên nhãn menu hiển thị ở Sidebar từ "Lịch đăng bài & Tác vụ" thành **"Lịch & Nhiệm vụ"**.
