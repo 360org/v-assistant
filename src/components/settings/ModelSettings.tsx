@@ -140,6 +140,36 @@ export function ModelSettings() {
     }
   };
 
+  const parseEmailFromTokenData = (tokens?: { email?: string; idToken?: string } | null, callbackUrl?: string): string | undefined => {
+    if (tokens?.email && tokens.email.includes("@")) return tokens.email;
+
+    if (tokens?.idToken) {
+      try {
+        const parts = tokens.idToken.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload.email && typeof payload.email === "string" && payload.email.includes("@")) {
+            return payload.email;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (callbackUrl) {
+      try {
+        const urlObj = new URL(callbackUrl.trim());
+        const email = urlObj.searchParams.get("email") || urlObj.searchParams.get("user") || urlObj.searchParams.get("login");
+        if (email && email.includes("@")) return email;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return undefined;
+  };
+
   const connectApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
     setConnecting(true);
@@ -150,14 +180,28 @@ export function ModelSettings() {
         apiKey: apiKey.trim(),
         connectionStatus: "connected",
       });
+
+      const keyVal = apiKey.trim();
+      const existingConn = connections.find(
+        (c) =>
+          c.provider.toLowerCase() === selectedProvider.id.toLowerCase() &&
+          c.credentialRef === keyVal
+      );
+
+      const connId = existingConn ? existingConn.id : `${selectedProvider.id}_${Date.now()}`;
+      const maskedKey = keyVal.length > 10 ? `Key (${keyVal.slice(0, 4)}...${keyVal.slice(-4)})` : "API Key";
+      const accountLabel = existingConn?.accountLabel || existingConn?.email || maskedKey;
+
       await saveAiRouterConnection({
-        id: `${selectedProvider.id}_${Date.now()}`,
+        id: connId,
         provider: selectedProvider.id,
         name: selectedProvider.name,
+        accountLabel,
         authType: "api-key",
-        credentialRef: apiKey.trim(),
+        credentialRef: keyVal,
         isActive: true,
       }).catch(() => {});
+
       setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
       await loadConnections();
       setTimeout(() => {
@@ -236,6 +280,29 @@ export function ModelSettings() {
                 expiresAt: tokens.expiresIn ? Date.now() + tokens.expiresIn * 1000 : undefined,
                 connectionStatus: "connected",
               });
+
+              const targetEmail = tokens.email || parseEmailFromTokenData(tokens);
+              const existingConn = connections.find(
+                (c) =>
+                  c.provider.toLowerCase() === selectedProvider.id.toLowerCase() &&
+                  ((targetEmail && (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
+                    c.credentialRef === key)
+              );
+
+              const connId = existingConn ? existingConn.id : `${selectedProvider.id}_${Date.now()}`;
+              const countForProv = connections.filter((c) => c.provider.toLowerCase() === selectedProvider.id.toLowerCase()).length + 1;
+              const accountLabel = targetEmail || existingConn?.accountLabel || existingConn?.email || user?.detail || user?.name || `${selectedProvider.name} Account #${countForProv}`;
+
+              await saveAiRouterConnection({
+                id: connId,
+                provider: selectedProvider.id,
+                name: selectedProvider.name,
+                accountLabel,
+                email: targetEmail || existingConn?.email,
+                authType: "subscription",
+                credentialRef: key,
+                isActive: true,
+              }).catch(() => {});
             }
             setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
             await loadConnections();
@@ -311,14 +378,30 @@ export function ModelSettings() {
           expiresAt,
           connectionStatus: "connected",
         });
+
+        const targetEmail = parseEmailFromTokenData(null, manualCallbackUrl.trim());
+        const existingConn = connections.find(
+          (c) =>
+            c.provider.toLowerCase() === selectedProvider.id.toLowerCase() &&
+            ((targetEmail && (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
+              c.credentialRef === key)
+        );
+
+        const connId = existingConn ? existingConn.id : `${selectedProvider.id}_${Date.now()}`;
+        const countForProv = connections.filter((c) => c.provider.toLowerCase() === selectedProvider.id.toLowerCase()).length + 1;
+        const accountLabel = targetEmail || existingConn?.accountLabel || existingConn?.email || user?.detail || user?.name || `${selectedProvider.name} Account #${countForProv}`;
+
         await saveAiRouterConnection({
-          id: `${selectedProvider.id}_${Date.now()}`,
+          id: connId,
           provider: selectedProvider.id,
           name: selectedProvider.name,
+          accountLabel,
+          email: targetEmail || existingConn?.email,
           authType: "subscription",
           credentialRef: key,
           isActive: true,
         }).catch(() => {});
+
         setConnectMessage(`✅ Xác thực & lưu kết nối thành công tài khoản OAuth ${selectedProvider.name}!`);
         setManualCallbackUrl("");
         setManualAttempt(null);
