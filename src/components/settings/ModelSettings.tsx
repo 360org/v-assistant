@@ -19,7 +19,7 @@ import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import { beginManualSignIn, completeManualSignIn, exchangeCode, type ManualSignInAttempt } from "@/runtime/oauth";
+import { beginManualSignIn, completeManualSignIn, exchangeCode, fetchVendorAccount, type ManualSignInAttempt } from "@/runtime/oauth";
 import { vaultGet } from "@/runtime/vault";
 import type { ProviderId } from "@/lib/catalog";
 
@@ -130,7 +130,6 @@ export function ModelSettings() {
 
     setSelectedProvider(matched);
 
-    // Pre-fill existing API Key from store / Vault
     const storeCfg = providerConfigs[matched.id as ProviderId] || providerConfigs[accProviderId as ProviderId];
     const savedKey = storeCfg?.apiKey || (await vaultGet(`provider_api_key:${matched.id}`).catch(() => null));
     if (savedKey) {
@@ -170,6 +169,71 @@ export function ModelSettings() {
     return undefined;
   };
 
+  const saveConnectionAndCleanupDuplicates = async (
+    providerId: string,
+    providerName: string,
+    key: string,
+    authType: "subscription" | "api-key",
+    tokenData?: { email?: string; idToken?: string } | null,
+    callbackUrlStr?: string
+  ) => {
+    const vendorAcc = await fetchVendorAccount(providerId as ProviderId, key).catch(() => null);
+    const targetEmail =
+      vendorAcc?.label && vendorAcc.label.includes("@")
+        ? vendorAcc.label
+        : tokenData?.email || parseEmailFromTokenData(tokenData, callbackUrlStr);
+
+    const matchedProviderKeys = [providerId.toLowerCase()];
+    if (providerId === "grok-cli" || providerId === "grok") matchedProviderKeys.push("grok-cli", "grok", "xai");
+    if (providerId === "codex" || providerId === "chatgpt" || providerId === "openai") matchedProviderKeys.push("codex", "chatgpt", "openai");
+    if (providerId === "antigravity" || providerId === "gemini") matchedProviderKeys.push("antigravity", "gemini");
+
+    const existingConn = connections.find(
+      (c) =>
+        matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p)) &&
+        ((targetEmail &&
+          targetEmail.includes("@") &&
+          (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
+          c.credentialRef === key)
+    );
+
+    const connId = existingConn ? existingConn.id : `${providerId}_${Date.now()}`;
+    const countForProv = connections.filter((c) =>
+      matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p))
+    ).length + 1;
+    const maskedKey = key.length > 10 ? `Key (${key.slice(0, 4)}...${key.slice(-4)})` : "API Key";
+    const accountLabel =
+      targetEmail ||
+      existingConn?.accountLabel ||
+      existingConn?.email ||
+      vendorAcc?.label ||
+      (authType === "api-key" ? maskedKey : `${providerName} Account #${countForProv}`);
+
+    await saveAiRouterConnection({
+      id: connId,
+      provider: providerId,
+      name: providerName,
+      accountLabel,
+      email: targetEmail || existingConn?.email,
+      authType,
+      credentialRef: key,
+      isActive: true,
+    });
+
+    for (const c of connections) {
+      if (
+        c.id !== connId &&
+        matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p)) &&
+        ((targetEmail &&
+          targetEmail.includes("@") &&
+          (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
+          c.credentialRef === key)
+      ) {
+        await deleteAiRouterConnection(c.id).catch(() => {});
+      }
+    }
+  };
+
   const connectApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
     setConnecting(true);
@@ -181,32 +245,18 @@ export function ModelSettings() {
         connectionStatus: "connected",
       });
 
-      const keyVal = apiKey.trim();
-      const existingConn = connections.find(
-        (c) =>
-          c.provider.toLowerCase() === selectedProvider.id.toLowerCase() &&
-          c.credentialRef === keyVal
-      );
-
-      const connId = existingConn ? existingConn.id : `${selectedProvider.id}_${Date.now()}`;
-      const maskedKey = keyVal.length > 10 ? `Key (${keyVal.slice(0, 4)}...${keyVal.slice(-4)})` : "API Key";
-      const accountLabel = existingConn?.accountLabel || existingConn?.email || maskedKey;
-
-      await saveAiRouterConnection({
-        id: connId,
-        provider: selectedProvider.id,
-        name: selectedProvider.name,
-        accountLabel,
-        authType: "api-key",
-        credentialRef: keyVal,
-        isActive: true,
-      }).catch(() => {});
+      await saveConnectionAndCleanupDuplicates(
+        selectedProvider.id,
+        selectedProvider.name,
+        apiKey.trim(),
+        "api-key"
+      ).catch(() => {});
 
       setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
       await loadConnections();
       setTimeout(() => {
         setShowProviderManager(false);
-      }, 1200);
+      }, 1000);
     } catch (err) {
       setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -281,31 +331,19 @@ export function ModelSettings() {
                 connectionStatus: "connected",
               });
 
-              const targetEmail = tokens.email || parseEmailFromTokenData(tokens);
-              const existingConn = connections.find(
-                (c) =>
-                  c.provider.toLowerCase() === selectedProvider.id.toLowerCase() &&
-                  ((targetEmail && (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
-                    c.credentialRef === key)
-              );
-
-              const connId = existingConn ? existingConn.id : `${selectedProvider.id}_${Date.now()}`;
-              const countForProv = connections.filter((c) => c.provider.toLowerCase() === selectedProvider.id.toLowerCase()).length + 1;
-              const accountLabel = targetEmail || existingConn?.accountLabel || existingConn?.email || user?.detail || user?.name || `${selectedProvider.name} Account #${countForProv}`;
-
-              await saveAiRouterConnection({
-                id: connId,
-                provider: selectedProvider.id,
-                name: selectedProvider.name,
-                accountLabel,
-                email: targetEmail || existingConn?.email,
-                authType: "subscription",
-                credentialRef: key,
-                isActive: true,
-              }).catch(() => {});
+              await saveConnectionAndCleanupDuplicates(
+                selectedProvider.id,
+                selectedProvider.name,
+                key,
+                "subscription",
+                tokens
+              ).catch(() => {});
             }
             setConnectMessage(`✅ Đăng nhập thành công tài khoản OAuth ${selectedProvider.name}!`);
             await loadConnections();
+            setTimeout(() => {
+              setShowProviderManager(false);
+            }, 1000);
           }
         }).catch(() => {
           /* manual paste will handle it if background popup fails */
@@ -379,28 +417,14 @@ export function ModelSettings() {
           connectionStatus: "connected",
         });
 
-        const targetEmail = parseEmailFromTokenData(null, manualCallbackUrl.trim());
-        const existingConn = connections.find(
-          (c) =>
-            c.provider.toLowerCase() === selectedProvider.id.toLowerCase() &&
-            ((targetEmail && (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
-              c.credentialRef === key)
-        );
-
-        const connId = existingConn ? existingConn.id : `${selectedProvider.id}_${Date.now()}`;
-        const countForProv = connections.filter((c) => c.provider.toLowerCase() === selectedProvider.id.toLowerCase()).length + 1;
-        const accountLabel = targetEmail || existingConn?.accountLabel || existingConn?.email || user?.detail || user?.name || `${selectedProvider.name} Account #${countForProv}`;
-
-        await saveAiRouterConnection({
-          id: connId,
-          provider: selectedProvider.id,
-          name: selectedProvider.name,
-          accountLabel,
-          email: targetEmail || existingConn?.email,
-          authType: "subscription",
-          credentialRef: key,
-          isActive: true,
-        }).catch(() => {});
+        await saveConnectionAndCleanupDuplicates(
+          selectedProvider.id,
+          selectedProvider.name,
+          key,
+          "subscription",
+          null,
+          manualCallbackUrl.trim()
+        ).catch(() => {});
 
         setConnectMessage(`✅ Xác thực & lưu kết nối thành công tài khoản OAuth ${selectedProvider.name}!`);
         setManualCallbackUrl("");
@@ -409,7 +433,7 @@ export function ModelSettings() {
         await loadConnections();
         setTimeout(() => {
           setShowProviderManager(false);
-        }, 1200);
+        }, 1000);
       } else {
         throw new Error("Không nhận được token xác thực từ URL callback.");
       }
@@ -490,8 +514,33 @@ export function ModelSettings() {
 
             const renderCards: DisplayCard[] = [];
 
-            // 1. Render EVERY connection in `connections` (from AI Router) as an individual card!
-            connections.forEach((conn, idx) => {
+            // Deduplicate connections by provider & email/accountLabel so duplicate cards with the same email don't render
+            const dedupeMap = new Map<string, (typeof connections)[number]>();
+            connections.forEach((conn) => {
+              const providerId = conn.provider.toLowerCase();
+              let normalizedProv = providerId;
+              if (providerId === "grok-cli" || providerId === "grok" || providerId === "xai") normalizedProv = "grok-cli";
+              if (providerId === "codex" || providerId === "chatgpt" || providerId === "openai") normalizedProv = "codex";
+              if (providerId === "antigravity" || providerId === "gemini") normalizedProv = "antigravity";
+
+              const label = (conn.accountLabel || conn.email || conn.label || conn.name || "").toLowerCase().trim();
+              const dedupeKey = `${normalizedProv}::${label}`;
+
+              const existing = dedupeMap.get(dedupeKey);
+              if (!existing) {
+                dedupeMap.set(dedupeKey, conn);
+              } else {
+                // If current conn is Active and existing is Disabled, prefer Active!
+                if (conn.isActive && !existing.isActive) {
+                  dedupeMap.set(dedupeKey, conn);
+                }
+              }
+            });
+
+            const deduplicatedConnections = Array.from(dedupeMap.values());
+
+            // 1. Render EVERY unique connection in `connections` (from AI Router) as an individual card!
+            deduplicatedConnections.forEach((conn, idx) => {
               const providerId = conn.provider;
               let name = conn.name;
               if (!name) {
