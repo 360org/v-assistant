@@ -6,6 +6,15 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+## [1.1.1] - 2026-07-26
+
+- **Lịch & Nhiệm vụ Menu**: Đổi tên nhãn menu hiển thị ở Sidebar từ "Lịch đăng bài & Tác vụ" thành **"Lịch & Nhiệm vụ"**.
+- **Native Tool `schedule_task`**: Tích hợp công cụ native cho Agent Runner tự động đưa tác vụ lên lịch vào mục **Lịch & Nhiệm vụ** của ứng dụng V-Assistant.
+- **Backup Timestamp & Success Banner**: Xuất file backup kèm timestamp đầy đủ (`v-assistant-backup-YYYY-MM-DD_HHmmss.json`) và hiển thị thông báo thành công.
+- **Run on Startup Option**: Thêm công tắc tự động khởi động cùng hệ thống trong Cài đặt hệ thống (bật/tắt daemon `LaunchAgents` trên macOS).
+- **Fix File Upload Hanging**: Thêm cơ chế Hard Timeout 4s/6s chống kẹt trạng thái **Processing** khi nạp tệp PDF, DOCX, XLSX, hình ảnh.
+- **Claude Desktop Capabilities Roadmap**: Bổ sung Checklist mục 13 chi tiết các tính năng Computer Use & Advanced Capabilities.
+
 ## [1.0.15] - 2026-07-20
 
 ### Sửa lỗi

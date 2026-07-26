@@ -687,16 +687,44 @@
 
 ---
 
+## 13. Tính năng Điều khiển Máy tính & Advanced Capabilities (Claude Desktop Style)
+
+### 13.1 Native Computer Use & OS Control
+- [x] **Desktop App Execution**: Chạy ứng dụng desktop native bằng Tauri 2 (Rust) + React UI
+- [x] **Auto Launch (Run on Startup)**: Khởi động ngầm V-Assistant cùng hệ thống macOS/Windows (`set_autostart`)
+- [ ] **Mouse & Keyboard Control (`computer_action`)**: Cho phép Agent thực hiện di chuyển chuột, click, double click, gõ phím, drag & drop trực tiếp trên màn hình host OS
+- [ ] **Screen Capture & Visual Inspection (`screen_capture`)**: Chụp ảnh màn hình toàn cảnh hoặc theo cửa sổ ứng dụng để Agent phân tích hình ảnh UI bằng Vision Model
+- [ ] **App Focus & Window Management**: Tự động mở, chuyển đổi focus giữa các ứng dụng trên hệ thống (VS Code, Chrome, Terminal, Finder, Finder...)
+
+### 13.2 Browser Tools & Automation
+- [x] **Web Search & HTTP Fetch**: Tìm kiếm thông tin web công khai và đọc trang HTML/Markdown (`web_search`, `http_request`)
+- [ ] **Interactive Browser Automation (Playwright / Puppeteer MCP)**: Tự động tương tác với website phức tạp đòi hỏi JavaScript (click nút, điền form, chụp ảnh màn hình web, xử lý captcha)
+- [ ] **Chrome DevTools Protocol (CDP) Bridge**: Kết nối trực tiếp vào trình duyệt Google Chrome đang mở của người dùng qua Remote Debugging Port để đọc cookies/session và điều khiển tab
+- [ ] **Session & Cookie Persistence**: Lưu trạng thái đăng nhập trên các website mục tiêu để Agent thực hiện tác vụ tự động không bị ngắt quãng
+
+### 13.3 Interactive Visual Artifacts & Live Preview
+- [x] **Rich Markdown Blocks**: Hiển thị Code block hỗ trợ syntax highlighting + Nút Copy 1-click, Tables, Blockquotes, HRs, Lists
+- [ ] **Live Artifacts Sandbox Previewer**: Khung xem trước trực tiếp các tệp HTML, SVG, React, Mermaid Diagrams, Chart.js tương tự Claude Artifacts
+- [ ] **Interactive Component State**: Cho phép người dùng chỉnh sửa trực tiếp hoặc gửi phản hồi trực quan trên giao diện Artifacts để Agent cập nhật tức thì
+
+### 13.4 Isolated Code Execution & File Generation
+- [x] **Native File Operations**: Đọc/ghi tệp tin thông minh, tự động parse tệp Excel (.xlsx/.xls) thành Markdown table (`file_read`, `file_write`, `file_edit`)
+- [x] **Mandatory Workspace Storage Policy**: Ép buộc Agent lưu toàn bộ tệp kế hoạch/mã nguồn vào Workspace active, tuyệt đối không ghi tràn ra Desktop/tmp
+- [ ] **Sandboxed Code Executor (`code_execution_engine`)**: Môi trường chạy thử mã nguồn TypeScript/Node.js/Python an toàn (V8/WASM sandbox) trước khi áp dụng vào dự án
+- [ ] **Multi-file Project Generator**: Tự động sinh cấu trúc toàn bộ dự án từ spec và đóng gói tệp ZIP / Git repository cho người dùng
+
+---
+
 ## Tổng kết Số liệu
 
 | Phân loại | ✅ Xong | 🔄 Update | ⬜ Chưa làm |
 |-----------|:---:|:---:|:---:|
 | Tài liệu | 9 | 0 | 2 |
-| Giao diện UI | 27 | 2 | 6 |
+| Giao diện UI | 28 | 2 | 6 |
 | Authentication | 4 | 0 | 3 |
 | AI Providers & 9router | 6 | 0 | 5 |
-| **Agent Runner (Core)** | **49** | **2** | **5** |
-| Tauri Shell (Host-side) | 2 | 3 | 7 |
+| **Agent Runner (Core)** | **51** | **2** | **5** |
+| Tauri Shell (Host-side) | 4 | 3 | 7 |
 | Vault | 1 | 1 | 8 |
 | Channels | 2 | 0 | 8 |
 | Integrations | 2 | 0 | 7 |
@@ -704,11 +732,8 @@
 | Memory | 3 | 1 | 2 |
 | Scheduled | 4 | 0 | 4 |
 | Bảo mật | 3 | 0 | 10 |
+| Computer Use & Advanced | 6 | 0 | 9 |
 | Testing & CI/CD | 9 | 0 | 12 |
-| **TỔNG** | **77** | **7** | **124** |
+| **TỔNG** | **87** | **7** | **125** |
 
-> **77 tính năng đã hoàn thành**, **7 cần cập nhật**, **124 chưa triển khai**.
->
-> **Trọng tâm #1: Agent Runner (7 items)** — hoàn tất MCP built-in/core delivery, sau đó interactive, scheduling, self-improving memory và agent management. Hai mục MCP đầu đang chờ native desktop acceptance test trước khi đánh dấu hoàn thành. Docker chỉ là profile triển khai server, không là runtime desktop.
-> **Trọng tâm #2: Bảo mật (10 items)** — kế thừa NanoClaw circuit-breaker, command-gate, egress-lockdown.
-> **Trọng tâm #3: Tauri Host-side (7 items)** — kế thừa NanoClaw session-manager, container-runner, delivery.
+> **87 tính năng đã hoàn thành**, **7 cần cập nhật**, **125 chưa triển khai**.

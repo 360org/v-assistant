@@ -382,7 +382,8 @@ pub fn run() {
             read_host_file,
             write_host_file,
             list_host_dir,
-            execute_cli_command
+            execute_cli_command,
+            set_autostart
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")

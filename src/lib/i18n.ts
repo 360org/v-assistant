@@ -19,7 +19,7 @@ export const translations = {
     knowledge: "Bộ tri thức",
     media: "Kho Media",
     vault: "Kho Bảo mật Vault",
-    scheduled: "Lịch đăng bài & Tác vụ",
+    scheduled: "Lịch & Nhiệm vụ",
     integrations: "Tích hợp & Channels",
     settings: "Cài đặt hệ thống",
     settings_subtitle: "Quản lý mô hình AI, két mật mã Vault, ranh giới thư mục làm việc và cập nhật phiên bản.",

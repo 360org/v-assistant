@@ -3,6 +3,25 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+*   **Fix File Upload Hanging & PDF Worker Timeout (`src/runtime/knowledge.ts`)**:
+    - Khắc phục triệt để lỗi tệp tin tải lên (PDF, DOCX, XLSX, hình ảnh) bị kẹt ở trạng thái **"Processing" quay hoài 10 phút**:
+      - Thêm cơ chế `Promise.race` với **Hard Timeout 4 giây** cho hàm trích xuất `extractPdf`: Nếu PDF worker của Webview bị kẹt, hệ thống sẽ giải phóng và tự động trả về thông tin tệp tin nguyên bản.
+      - Thêm cơ chế **Hard Timeout 6 giây** cho hàm `indexKnowledgeFile`: Đảm bảo mọi tệp tin tải lên đều hoàn tất xử lý và chuyển sang trạng thái **"Ready"** trong tối đa vài giây, tuyệt đối không bị treo.
+      - Thêm cơ chế `FileReader` timeout 2.5s khi nạp ảnh base64.
+*   **Backup Timestamp & Success Banner (`WorkspaceSettingsSection.tsx`)**:
+    - Mỗi khi nhấn **Xuất dữ liệu Sao lưu (.json)**, ứng dụng sẽ tự động sinh tệp tin kèm timestamp đầy đủ dạng `v-assistant-backup-YYYY-MM-DD_HHmmss.json`.
+    - Hiển thị thông báo `Backup success` trực quan kèm thời gian xuất dữ liệu chính xác dạng `HH:mm:ss ngày DD/MM/YYYY`.
+*   **Run on Startup Option (`GeneralSettings.tsx`, `src-tauri/src/lib.rs`)**:
+    - Thêm công tắc **Tự động chạy cùng hệ thống (Run on Startup)** trong Cài đặt hệ thống.
+    - Tích hợp lệnh Rust native `set_autostart` tự động đăng ký/gỡ bỏ daemon khởi động ngầm (`LaunchAgents` trên macOS).
+*   **Claude Desktop App Capabilities Roadmap (`CHECKLIST.md`)**:
+    - Bổ sung mục 13 chi tiết các tiêu chuẩn điều khiển máy tính nâng cao: Native Computer Use & OS Control (chuột, phím, màn hình), Interactive Browser Automation (Playwright/Puppeteer MCP & CDP bridge), Live Artifacts Sandbox Previewer, và Code Execution Sandbox.
+*   **Renamed Sidebar Menu & i18n (`i18n.ts`, `Scheduled.tsx`)**:
+    - Đổi tên nhãn menu hiển thị ở Sidebar từ "Lịch đăng bài & Tác vụ" thành **"Lịch & Nhiệm vụ"** theo đúng yêu cầu người dùng.
+*   **Native Tool `schedule_task` & Automatic UI Sync (`agent-runner`, `store.tsx`)**:
+    - Trang bị công cụ native `schedule_task` cho Agent Runner: Khi người dùng yêu cầu "đặt lịch đăng bài", "lên lịch tự động", "nhắc nhở"... Agent tự động gọi `schedule_task` để tạo tác vụ lên lịch trực tiếp trong mục **Lịch & Nhiệm vụ** của ứng dụng V-Assistant thay vì thao tác sai trên website đích.
+    - Tự động đồng bộ các tác vụ đặt lịch từ `scheduled_tasks.json` lên màn hình **Lịch & Nhiệm vụ (Scheduled Tasks)** của giao diện 2 giây/lần.
+    - Bổ sung quy định bắt buộc `MANDATORY SCHEDULING RULE` vào System Prompt để Agent không còn nhầm lẫn địa điểm lên lịch.
 *   **Mandatory Workspace File Storage Rule (`agent-runner/src/index.ts`)**:
     - Bổ sung quy định nghiêm ngặt trong System Prompt của Agent Runner: Tất cả các tệp tài liệu, kế hoạch, bài viết tạo ra từ công cụ (`file_write`,...) **BẮT BUỘC phải được lưu trữ bên trong thư mục Workspace active của hệ thống**. Tuyệt đối không lưu tệp ra `~/Desktop` hay các đường dẫn bên ngoài trừ khi người dùng yêu cầu đích danh đường dẫn tuyệt đối.
 *   **Fix Reset & Delete Account Card Button in Desktop Webview (`ModelSettings.tsx`)**:

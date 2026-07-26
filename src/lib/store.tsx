@@ -1016,6 +1016,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [addScheduledTask]);
 
   useEffect(() => {
+    // Poll scheduled_tasks.json from data directory to auto-sync tasks created by Agent Runner
+    const interval = setInterval(async () => {
+      try {
+        if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const content = await invoke<string>("read_data_file", { relativePath: "scheduled_tasks.json" }).catch(() => null);
+          if (content) {
+            const parsed = JSON.parse(content) as ScheduledTask[];
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setState((s) => {
+                const existingIds = new Set(s.scheduledTasks.map((t) => t.id));
+                const newItems = parsed.filter((item) => !existingIds.has(item.id));
+                if (newItems.length === 0) return s;
+                return {
+                  ...s,
+                  scheduledTasks: [...newItems, ...s.scheduledTasks],
+                };
+              });
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     const handleCreateSkill = (e: Event) => {
       const detail = (e as CustomEvent).detail as { raw: string; source: string };
       if (detail && detail.raw) {

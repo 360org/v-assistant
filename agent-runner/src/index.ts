@@ -81,6 +81,10 @@ function buildSystemPrompt(assistantName: string, agentName: string, agentDir: s
   parts.push('- http_request: Make unauthenticated HTTP requests');
   parts.push('- web_search: Search the public web, then use http_request to read a result');
   parts.push('- connector_request: Use an opaque connector reference through the trusted gateway');
+  parts.push('- schedule_task: Create and add a scheduled task into V-Assistant "Lịch & Nhiệm vụ" (Scheduled Tasks)');
+  parts.push('');
+  parts.push('=== MANDATORY SCHEDULING RULE ===');
+  parts.push('When the user asks to schedule a task, post, report, or reminder (e.g., "đặt lịch đăng bài", "lên lịch chạy tự động", "nhắc nhở"), ALWAYS use the "schedule_task" tool to add it directly to V-Assistant "Lịch & Nhiệm vụ". DO NOT attempt to schedule it on external target websites unless explicitly asked.');
   parts.push('');
   parts.push('=== MANDATORY WORKSPACE & FILE STORAGE RULE ===');
   parts.push('- All created or generated files MUST be saved inside your active workspace directory.');

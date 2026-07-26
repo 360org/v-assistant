@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +16,61 @@ export function GeneralSettings() {
     resetApp,
   } = useApp();
 
+  const [runOnStartup, setRunOnStartup] = useState<boolean>(() => {
+    return localStorage.getItem("v-assistant-autostart") === "true";
+  });
+
+  const handleToggleAutostart = async (enable: boolean) => {
+    setRunOnStartup(enable);
+    localStorage.setItem("v-assistant-autostart", enable ? "true" : "false");
+    try {
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("set_autostart", { enable });
+      }
+    } catch {
+      /* ignore desktop fallback */
+    }
+  };
+
   return (
     <div className="space-y-8">
-      {/* Self-improving Memory */}
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold text-neutral-300">{t("self_improve_title", language)}</h2>
-        <Card className="mt-3 flex items-center justify-between gap-3 p-4">
+      {/* Run on Startup & Self-improving Memory */}
+      <section className="mt-8 space-y-4">
+        <h2 className="text-sm font-semibold text-neutral-300">
+          {language === "en" ? "System Startup & Memory Settings" : "Khởi động cùng Hệ thống & Bộ nhớ"}
+        </h2>
+        <Card className="flex items-center justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-neutral-100">
+              {language === "en" ? "Run on Startup" : "Tự động chạy cùng hệ thống (Run on Startup)"}
+            </div>
+            <div className="text-xs text-neutral-400">
+              {language === "en"
+                ? "Automatically launch V-Assistant when your computer starts up."
+                : "Khởi động V-Assistant chạy ngầm sẵn sàng phục vụ ngay khi bật máy tính."}
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={runOnStartup}
+            aria-label="Run on startup"
+            onClick={() => handleToggleAutostart(!runOnStartup)}
+            className={cn(
+              "relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors",
+              runOnStartup ? "bg-emerald-500" : "bg-neutral-700",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 size-5 rounded-full bg-neutral-950 transition-all",
+                runOnStartup ? "left-[22px]" : "left-0.5",
+              )}
+            />
+          </button>
+        </Card>
+
+        <Card className="flex items-center justify-between gap-3 p-4">
           <div className="min-w-0">
             <div className="text-sm font-medium text-neutral-100">{t("self_improve_label", language)}</div>
             <div className="text-xs text-neutral-400">

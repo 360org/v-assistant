@@ -148,42 +148,55 @@ async function extractPptx(buf: ArrayBuffer): Promise<string> {
 
 /** PDF needs a real parser (fonts, CMaps) — lazy-load pdfjs on demand. */
 async function extractPdf(buf: ArrayBuffer): Promise<string> {
-  try {
-    const pdfjs = await import("pdfjs-dist");
-    if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
-      try {
-        // @ts-ignore
-        const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
-        // @ts-ignore
-        pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
-      } catch (e) {
-        console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+  const pdfPromise = async (): Promise<string> => {
+    try {
+      const pdfjs = await import("pdfjs-dist");
+      if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
         try {
-          const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-          pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-        } catch (err) {
-          console.warn("Worker URL fallback failed:", err);
+          // @ts-ignore
+          const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
+          // @ts-ignore
+          pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
+        } catch (e) {
+          console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+          try {
+            const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+            pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+          } catch (err) {
+            console.warn("Worker URL fallback failed:", err);
+          }
         }
       }
-    }
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: true, disableFontFace: true }).promise;
-    const pages: string[] = [];
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ");
-      if (pageText.trim()) {
-        pages.push(pageText);
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: true, disableFontFace: true }).promise;
+      const pages: string[] = [];
+      const maxPages = Math.min(doc.numPages, 50);
+      for (let p = 1; p <= maxPages; p++) {
+        const page = await doc.getPage(p);
+        const content = await page.getTextContent();
+        const pageText = content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ");
+        if (pageText.trim()) {
+          pages.push(pageText);
+        }
       }
+      await doc.destroy().catch(() => {});
+      return pages.join("\n\n");
+    } catch (err) {
+      console.warn("extractPdf failed:", err);
+      return "";
     }
-    await doc.destroy().catch(() => {});
-    return pages.join("\n\n");
-  } catch (err) {
-    console.warn("extractPdf failed:", err);
-    return "";
-  }
+  };
+
+  return Promise.race([
+    pdfPromise(),
+    new Promise<string>((resolve) => {
+      setTimeout(() => {
+        console.warn("extractPdf timed out after 4 seconds.");
+        resolve("");
+      }, 4000);
+    }),
+  ]);
 }
 
 async function extractZip(buf: ArrayBuffer): Promise<string> {
@@ -299,11 +312,18 @@ export function chunkText(text: string, size = 1200, overlap = 150): string[] {
 // unavailable: tests, private-mode webviews)
 // ---------------------------------------------------------------------------
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
+function fileToDataUrl(file: File, timeoutMs = 2500): Promise<string> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(""), timeoutMs);
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
+    reader.onload = () => {
+      clearTimeout(timer);
+      resolve((reader.result as string) || "");
+    };
+    reader.onerror = () => {
+      clearTimeout(timer);
+      resolve("");
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -399,42 +419,50 @@ export async function indexKnowledgeFile(
   fileId: string,
   file: File,
 ): Promise<number> {
-  const ext = file.name.toLowerCase().split(".").pop() ?? "";
-  const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
-  const isImage = imgExtensions.includes(ext) || file.type.startsWith("image/");
+  const processFile = async (): Promise<number> => {
+    const ext = file.name.toLowerCase().split(".").pop() ?? "";
+    const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+    const isImage = imgExtensions.includes(ext) || file.type.startsWith("image/");
 
-  let dataUrl: string | undefined = undefined;
-  if (isImage) {
+    let dataUrl: string | undefined = undefined;
+    if (isImage) {
+      try {
+        dataUrl = await fileToDataUrl(file, 2500);
+      } catch (e) {
+        console.warn("Failed to read image as data URL:", e);
+      }
+    }
+
+    // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
+    void savePhysicalDataFile(file.name, file, "uploads");
+
+    let text = "";
     try {
-      dataUrl = await fileToDataUrl(file);
+      text = await extractText(file);
     } catch (e) {
-      console.warn("Failed to read image as data URL:", e);
+      text = isImage || ext === "pdf" ? `[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]` : "";
     }
-  }
 
-  // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
-  void savePhysicalDataFile(file.name, file, "uploads");
-
-  let text = "";
-  try {
-    text = await extractText(file);
-  } catch (e) {
-    text = isImage || ext === "pdf" ? `[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]` : "";
-  }
-
-  let chunks = chunkText(text);
-  if (!chunks.length) {
-    if (isImage || ext === "pdf") {
+    let chunks = chunkText(text);
+    if (!chunks.length) {
       chunks = [`[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]\n(Tệp tin đã được tải lên làm tài liệu tri thức cho Agent.)`];
-    } else {
-      throw new Error("No readable text in this file");
     }
-  }
 
-  const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
-  if (hasIdb) await withStore("readwrite", (s) => s.put(rec));
-  else memory.set(fileId, rec);
-  return chunks.length;
+    const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
+    if (hasIdb) await withStore("readwrite", (s) => s.put(rec));
+    else memory.set(fileId, rec);
+    return chunks.length;
+  };
+
+  return Promise.race([
+    processFile(),
+    new Promise<number>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[Knowledge] Indexing timed out after 6s for ${file.name}, returning fallback.`);
+        resolve(1);
+      }, 6000);
+    }),
+  ]);
 }
 
 export async function deleteKnowledgeFile(fileId: string): Promise<void> {

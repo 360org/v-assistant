@@ -450,6 +450,63 @@ const vaultListTool: NativeTool = {
   },
 };
 
+// --- Schedule Task Tool ---
+const scheduleTaskTool: NativeTool = {
+  definition: {
+    name: 'schedule_task',
+    description: 'Create and add a new scheduled task directly into V-Assistant "Lịch & Nhiệm vụ" (Scheduled Tasks). ALWAYS use this tool whenever the user asks to schedule a task, post, report, or reminder in V-Assistant.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name/Title of the scheduled task (e.g. "Đăng bài Blog Hàng ngày")' },
+        prompt: { type: 'string', description: 'Action/Prompt that the assistant will execute on schedule (e.g. "Đăng bài Ngày 2 lên Odoo Blog")' },
+        schedule: { type: 'string', description: 'Schedule or recurrence string (e.g. "Every day at 9:00", "Hàng ngày lúc 09:30", "2026-07-27 09:30")' },
+        enabled: { type: 'boolean', description: 'Whether the scheduled task is enabled immediately (default true)' },
+      },
+      required: ['name', 'prompt', 'schedule'],
+    },
+  },
+  async execute(args): Promise<string> {
+    const name = (args.name as string) || 'Tác vụ tự động';
+    const prompt = (args.prompt as string) || '';
+    const schedule = (args.schedule as string) || 'Hàng ngày';
+    const enabled = args.enabled !== false;
+
+    const dataDir = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '', '.v-assistant/data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const tasksFile = path.join(dataDir, 'scheduled_tasks.json');
+
+    let tasks: any[] = [];
+    try {
+      if (fs.existsSync(tasksFile)) {
+        tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
+      }
+    } catch {
+      tasks = [];
+    }
+
+    const newTask = {
+      id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      prompt,
+      schedule,
+      enabled,
+      createdAt: Date.now(),
+      lastRun: Date.now(),
+    };
+
+    // Deduplicate by name & schedule if already exists
+    tasks = tasks.filter((t) => !(t.name === name && t.schedule === schedule));
+    tasks.unshift(newTask);
+
+    fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2), 'utf8');
+
+    return `✅ Đã tạo tác vụ lên lịch thành công trong Lịch & Nhiệm vụ:\n- Tên tác vụ: "${name}"\n- Lịch chạy: ${schedule}\n- Nội dung thực thi: "${prompt}"\nTác vụ đã được kích hoạt và xuất hiện trên giao diện ứng dụng.`;
+  },
+};
+
 // --- Registry ---
 
 /** All built-in native tools */
@@ -463,6 +520,7 @@ export const NATIVE_TOOLS: NativeTool[] = [
   webSearchTool,
   connectorRequestTool,
   vaultListTool,
+  scheduleTaskTool,
 ];
 
 /** Get tool definitions for all native tools (for sending to LLM) */
