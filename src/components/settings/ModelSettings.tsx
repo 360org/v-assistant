@@ -356,14 +356,27 @@ export function ModelSettings() {
             {t("models_connected_desc", language)}
           </p>
         </div>
-        <Button
-          variant={showProviderManager ? "secondary" : "primary"}
-          size="sm"
-          onClick={() => setShowProviderManager((prev) => !prev)}
-          className="gap-1.5 cursor-pointer text-xs font-medium"
-        >
-          {showProviderManager ? t("close_provider_manager", language) : t("add_provider", language)}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadConnections()}
+            disabled={loadingConnections}
+            className="gap-1.5 cursor-pointer text-xs font-medium hover:border-gold-400"
+            title={language === "en" ? "Reload all AI Router connections" : "Tải lại toàn bộ danh sách kết nối AI Router"}
+          >
+            <RefreshCw className={cn("size-3.5 text-gold-400", loadingConnections && "animate-spin")} />
+            {loadingConnections ? t("checking", language) : (language === "en" ? "Reload List" : "Làm mới danh sách")}
+          </Button>
+          <Button
+            variant={showProviderManager ? "secondary" : "primary"}
+            size="sm"
+            onClick={() => setShowProviderManager((prev) => !prev)}
+            className="gap-1.5 cursor-pointer text-xs font-medium"
+          >
+            {showProviderManager ? t("close_provider_manager", language) : t("add_provider", language)}
+          </Button>
+        </div>
       </div>
 
       {/* Account Cards Grid */}
@@ -381,109 +394,135 @@ export function ModelSettings() {
           </div>
         ) : (
           (() => {
-            const dynamicAccountCards = [...LOCAL_AI_ACCOUNTS] as Array<{ id: string; name: string; providerId: string }>;
+            interface DisplayCard {
+              key: string;
+              id: string;
+              providerId: string;
+              name: string;
+              accountLabel: string;
+              isActive: boolean;
+              defaultModel: string;
+              connId?: string;
+            }
 
-            // Add connections from AI Router not in core 4
-            connections.forEach((conn) => {
-              const isCore = LOCAL_AI_ACCOUNTS.some((acc) =>
-                LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(conn.provider.toLowerCase())
+            const renderCards: DisplayCard[] = [];
+
+            // 1. Render EVERY connection in `connections` (from AI Router) as an individual card!
+            connections.forEach((conn, idx) => {
+              const providerId = conn.provider;
+              let name = conn.name;
+              if (!name) {
+                if (providerId === "antigravity" || providerId === "gemini") name = "Gemini";
+                else if (providerId === "codex" || providerId === "openai" || providerId === "chatgpt") name = "GPT";
+                else if (providerId === "claude") name = "Claude";
+                else if (providerId === "grok-cli" || providerId === "grok") name = "Grok";
+                else name = providerId.toUpperCase();
+              }
+
+              const accountLabel = conn.accountLabel || conn.email || conn.label || conn.name || `${name} Account #${idx + 1}`;
+
+              renderCards.push({
+                key: conn.id,
+                id: conn.id,
+                providerId,
+                name,
+                accountLabel,
+                isActive: Boolean(conn.isActive ?? true),
+                defaultModel: conn.defaultModel || "Standard",
+                connId: conn.id,
+              });
+            });
+
+            // 2. Add fallback card for core accounts if NOT yet represented in renderCards
+            LOCAL_AI_ACCOUNTS.forEach((coreAcc) => {
+              const hasConn = renderCards.some(
+                (card) =>
+                  LOCAL_ACCOUNT_PROVIDER_IDS[coreAcc.id]?.includes(card.providerId.toLowerCase()) ||
+                  card.providerId.toLowerCase() === coreAcc.providerId.toLowerCase()
               );
-              if (!isCore) {
-                const existing = dynamicAccountCards.find(
-                  (c) => c.providerId.toLowerCase() === conn.provider.toLowerCase() || c.id === conn.id
-                );
-                if (!existing) {
-                  dynamicAccountCards.push({
-                    id: conn.id || conn.provider,
-                    name: conn.name || conn.provider.toUpperCase(),
-                    providerId: conn.provider,
-                  });
-                }
+
+              const storeCfg = providerConfigs[coreAcc.providerId as ProviderId] || providerConfigs[coreAcc.id as ProviderId];
+              const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
+
+              if (!hasConn) {
+                renderCards.push({
+                  key: coreAcc.id,
+                  id: coreAcc.id,
+                  providerId: coreAcc.providerId,
+                  name: coreAcc.name,
+                  accountLabel: isStoreConnected
+                    ? (user?.detail || user?.name || `${coreAcc.name} Connected`)
+                    : (language === "en" ? "No linked account" : "Chưa chọn tài khoản liên kết"),
+                  isActive: isStoreConnected,
+                  defaultModel: "Standard",
+                  connId: isStoreConnected ? coreAcc.id : undefined,
+                });
               }
             });
 
-            // Add connected providers from Store providerConfigs not in dynamic cards
+            // 3. Add fallback card for any providerConfigs from Store not yet in renderCards
             Object.entries(providerConfigs).forEach(([provId, cfg]) => {
               if (cfg && (cfg.apiKey || cfg.connectionStatus === "connected")) {
-                const isCore = LOCAL_AI_ACCOUNTS.some((acc) =>
-                  LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(provId.toLowerCase())
+                const hasCard = renderCards.some(
+                  (card) => card.providerId.toLowerCase() === provId.toLowerCase()
                 );
-                if (!isCore) {
-                  const existing = dynamicAccountCards.find(
-                    (c) => c.providerId.toLowerCase() === provId.toLowerCase()
-                  );
-                  if (!existing) {
-                    dynamicAccountCards.push({
-                      id: provId,
-                      name: provId.toUpperCase(),
-                      providerId: provId,
-                    });
-                  }
+                if (!hasCard) {
+                  renderCards.push({
+                    key: provId,
+                    id: provId,
+                    providerId: provId,
+                    name: provId.toUpperCase(),
+                    accountLabel: user?.detail || user?.name || `${provId.toUpperCase()} Connected`,
+                    isActive: true,
+                    defaultModel: "Standard",
+                    connId: provId,
+                  });
                 }
               }
             });
 
             return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {dynamicAccountCards.map((acc) => {
-                  const matchedConns = connections.filter((c) =>
-                    LOCAL_ACCOUNT_PROVIDER_IDS[acc.id]?.includes(c.provider.toLowerCase()) ||
-                    c.provider.toLowerCase() === acc.providerId.toLowerCase() ||
-                    c.id === acc.id
-                  );
-                  const storeCfg = providerConfigs[acc.providerId as ProviderId] || providerConfigs[acc.id as ProviderId];
-                  const isStoreConnected = Boolean(storeCfg?.apiKey || storeCfg?.connectionStatus === "connected");
-
-                  const activeConn = matchedConns.find((c) => c.isActive) || matchedConns[0] || (isStoreConnected ? {
-                    id: acc.id,
-                    provider: acc.providerId,
-                    name: acc.name,
-                    accountLabel: user?.detail || user?.name || `${acc.name} Connected`,
-                    isActive: true,
-                    defaultModel: "Standard",
-                  } : undefined);
-
-                  const isConnActive = Boolean(activeConn?.isActive || isStoreConnected);
-
+                {renderCards.map((card) => {
                   return (
-                    <div key={acc.id} className="flex flex-col justify-between p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:border-neutral-700 transition-all">
+                    <div key={card.key} className="flex flex-col justify-between p-3.5 rounded-xl border border-neutral-800 bg-neutral-950/70 hover:border-neutral-700 transition-all">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-neutral-100">{acc.name}</span>
-                            {isConnActive ? (
+                            <span className="text-sm font-bold text-neutral-100">{card.name}</span>
+                            {card.isActive ? (
                               <Badge tone="green" className="text-[10px]">{t("active", language)}</Badge>
-                            ) : activeConn ? (
+                            ) : card.connId ? (
                               <Badge tone="gold" className="text-[10px]">{t("inactive", language)}</Badge>
                             ) : (
                               <Badge tone="neutral" className="text-[10px]">{t("not_configured", language)}</Badge>
                             )}
                           </div>
                           <div className="mt-1 text-xs text-neutral-400 font-mono">
-                            {activeConn?.accountLabel || activeConn?.email || activeConn?.name || (language === "en" ? "No linked account" : "Chưa chọn tài khoản liên kết")}
+                            {card.accountLabel}
                           </div>
                         </div>
 
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => openConfigureModalForAccount(acc.providerId)}
+                          onClick={() => openConfigureModalForAccount(card.providerId)}
                           className="text-xs cursor-pointer hover:border-gold-400"
                         >
                           {t("configure", language)}
                         </Button>
                       </div>
 
-                      {activeConn && (
+                      {card.connId && (
                         <div className="mt-3 flex items-center justify-between pt-2 border-t border-neutral-800/80 text-[11px]">
                           <div className="flex items-center gap-2 text-neutral-500">
-                            <span>Model: {activeConn.defaultModel || "Standard"}</span>
+                            <span>Model: {card.defaultModel}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleTestConnection(activeConn.id)}
-                              disabled={actionConnId === activeConn.id}
+                              onClick={() => handleTestConnection(card.connId!)}
+                              disabled={actionConnId === card.connId}
                               className="text-gold-300 hover:underline cursor-pointer"
                             >
                               {t("test_api", language)}
@@ -491,17 +530,17 @@ export function ModelSettings() {
                             <span>•</span>
                             <button
                               type="button"
-                              onClick={() => handleToggleConnection(activeConn.id, Boolean(activeConn.isActive))}
-                              disabled={actionConnId === activeConn.id}
+                              onClick={() => handleToggleConnection(card.connId!, Boolean(card.isActive))}
+                              disabled={actionConnId === card.connId}
                               className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
                             >
-                              {activeConn.isActive ? t("toggle_off", language) : t("toggle_on", language)}
+                              {card.isActive ? t("toggle_off", language) : t("toggle_on", language)}
                             </button>
                             <span>•</span>
                             <button
                               type="button"
-                              onClick={() => handleDeleteConnection(activeConn.id)}
-                              disabled={actionConnId === activeConn.id}
+                              onClick={() => handleDeleteConnection(card.connId!)}
+                              disabled={actionConnId === card.connId}
                               className="text-red-400 hover:underline cursor-pointer"
                             >
                               {t("delete", language)}
