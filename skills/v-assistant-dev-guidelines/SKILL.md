@@ -73,6 +73,15 @@ webview. Đã di trú: Scheduler, Telegram. Còn lại: selfImprove, Knowledge/R
   đè lên `scheduled_tasks.json` lúc state chưa hydrate xong → xoá sạch 33 nhiệm
   vụ của PO. Luật: chỉ ghi sau khi đã đọc được file ít nhất một lần
   (`tasksLoadedRef` trong `store.tsx` là mẫu tham chiếu).
+- **`useEffect` restart runner KHÔNG được phụ thuộc vào object/array.** Object
+  trong state đổi identity mỗi lần `setState`, nên effect chạy lại liên tục —
+  một phiên dev đã respawn runner **177 lần**. Runner giờ ôm scheduler +
+  Telegram nên mỗi lần respawn là tháo long-poll và bắn lại tick khởi động.
+  Luật: gom thứ runner thực sự cần thành **một chuỗi primitive**
+  (`runnerSignature`) rồi key effect vào đó.
+- **Có `scripts/host-process-contract-check.mjs`** khoá các luật trên. Nó bắt
+  đúng những lỗi biên dịch sạch nhưng chạy sai. Đừng nới lỏng assertion để cho
+  qua — sửa code.
 
 ### 0.5 Không sửa thứ đang chạy đúng
 Trước khi "sửa" một phần đang hoạt động: **hỏi PO xem nó có đang đúng ý không**. Nhiều thứ trông như bug thực ra là quyết định sản phẩm có chủ đích. Chi phí làm lại một phần đang chạy tốt luôn cao hơn chi phí hỏi một câu.
