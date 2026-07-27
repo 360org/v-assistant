@@ -83,10 +83,13 @@ const fired = await runDueTasks(
 );
 check('the due task fired', fired.length === 1 && fired[0] === 'run1');
 
-const rows = getOutboundDb().prepare('SELECT content FROM messages_out').all();
+const rows = getOutboundDb().prepare('SELECT channel_type, content FROM messages_out').all();
 const delivered = rows.map((r) => String(r.content)).join('\n');
 check('the answer reached outbound.db', delivered.includes('scheduled answer'));
 check('the delivery names its task', delivered.includes('run1'));
+// Chat, Telegram and schedules share one outbound queue; without this tag the
+// chat window would show a scheduled result as the answer to its own question.
+check('the delivery is tagged as scheduled', rows.every((r) => r.channel_type === 'scheduled'));
 
 closeAll();
 console.log(pass ? '\n✓ Host Process scheduler works' : '\n✗ FAILED');

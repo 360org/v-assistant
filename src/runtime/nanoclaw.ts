@@ -11,11 +11,16 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Engine, ChatMessage } from "./engine";
 import type { ProviderId } from "@/lib/catalog";
 
-interface OutboundMessage {
+export interface OutboundMessage {
   id: number;
   group_id: string;
   content: string;
   created_at: number;
+  /** `chat`, `telegram`, `scheduled` — which channel produced the row. */
+  channel_type: string | null;
+  thread_id: string | null;
+  /** `user` or `assistant` for channels that mirror both sides of a turn. */
+  role: string | null;
 }
 
 const POLL_INTERVAL_MS = 500;
@@ -38,6 +43,21 @@ export async function engineRunning(): Promise<boolean> {
     return status.engine_running;
   } catch {
     return false;
+  }
+}
+
+/**
+ * The runtime directory the Host Process actually uses (`VUA_DATA_DIR`). Files
+ * shared with the runner — the scheduled-task list above all — must be written
+ * here; guessing `~/.v-assistant/data` puts them where nothing reads them.
+ */
+export async function runtimeDir(): Promise<string | null> {
+  if (!inDesktopShell()) return null;
+  try {
+    const status = await invoke<{ dir: string }>("runtime_status");
+    return status.dir || null;
+  } catch {
+    return null;
   }
 }
 
@@ -78,11 +98,17 @@ export const nanoclawEngine: Engine = {
         groupId,
         afterId: after,
       });
+      // The Host Process shares one outbound queue across every channel, so a
+      // Telegram reply or a scheduled result can land mid-turn. Only rows this
+      // window produced may be shown as its answer.
+      let answered = false;
       for (const reply of replies) {
         after = reply.id;
+        if (reply.channel_type !== "chat") continue;
+        answered = true;
         yield reply.content;
       }
-      if (replies.length > 0) return;
+      if (answered) return;
     }
     throw new Error("The assistant did not reply in time. Please try again.");
   },
@@ -94,6 +120,23 @@ async function latestOutboundId(groupId: string): Promise<number> {
     afterId: 0,
   });
   return backlog.length ? backlog[backlog.length - 1].id : 0;
+}
+
+/**
+ * Every outbound row newer than `afterId`. The app polls this so a Telegram
+ * conversation or a scheduled result that happened while the window was closed
+ * still shows up; the caller picks the channels it cares about and advances its
+ * watermark past the rest.
+ */
+export async function receiveOutbound(afterId: number): Promise<OutboundMessage[]> {
+  if (!inDesktopShell()) return [];
+  return invoke<OutboundMessage[]>("runtime_receive", { groupId: "main", afterId });
+}
+
+/** Highest outbound seq right now, used to start polling without replaying. */
+export async function latestOutboundSeq(): Promise<number> {
+  if (!inDesktopShell()) return 0;
+  return latestOutboundId("main");
 }
 
 /** Push installed agents to the runtime so the engine has their groups. */

@@ -46,6 +46,12 @@ pub struct OutboundMessage {
     pub group_id: String,
     pub content: String,
     pub created_at: i64,
+    /// Which channel produced the row — `chat`, `telegram`, … Callers filter on
+    /// it so a Telegram reply is never handed to the chat window as its answer.
+    pub channel_type: Option<String>,
+    pub thread_id: Option<String>,
+    /// `user` or `assistant` for channels that mirror both sides of a turn.
+    pub role: Option<String>,
 }
 
 /// One agent definition.
@@ -124,12 +130,62 @@ fn find_node(project_dir: &Path) -> Option<PathBuf> {
     find_executable("node")
 }
 
+/// Stop a runner left behind by a previous app process.
+///
+/// The runner now owns the scheduler and the Telegram channel, so a survivor
+/// is not merely idle: it keeps ticking schedules and long-polling Telegram
+/// alongside the new one, which shows up as duplicate answers. The pid is
+/// recorded per data directory, so this only ever targets our own child.
+fn kill_stale_runner(dir: &Path) {
+    let pidfile = dir.join("runner.pid");
+    let Ok(raw) = std::fs::read_to_string(&pidfile) else { return };
+    let Ok(pid) = raw.trim().parse::<u32>() else {
+        let _ = std::fs::remove_file(&pidfile);
+        return;
+    };
+
+    // Confirm the pid is still our runner before signalling it. Pids are
+    // reused, and a stale file must never take down an unrelated process.
+    // `tasklist` only reports the image name (node.exe); the command line is
+    // what identifies the runner, so ask CIM for it.
+    #[cfg(windows)]
+    let (probe, kill) = (
+        (
+            "powershell",
+            vec![
+                "-NoProfile".to_string(),
+                "-Command".into(),
+                format!("(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"),
+            ],
+        ),
+        ("taskkill", vec!["/PID".into(), pid.to_string(), "/F".into()]),
+    );
+    #[cfg(not(windows))]
+    let (probe, kill) = (
+        ("ps", vec!["-p".to_string(), pid.to_string(), "-o".into(), "command=".into()]),
+        ("kill", vec![pid.to_string()]),
+    );
+
+    let is_ours = Command::new(probe.0)
+        .args(&probe.1)
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).contains("agent-runner"))
+        .unwrap_or(false);
+    if is_ours {
+        let _ = Command::new(kill.0).args(&kill.1).status();
+        eprintln!("[tauri-runtime] Stopped stale agent-runner (pid {pid})");
+    }
+    let _ = std::fs::remove_file(&pidfile);
+}
+
 fn spawn_process(
     dir: &Path,
     project_dir: &Path,
     config_path: &Path,
     connector_token: &str,
 ) -> Result<Child, String> {
+    kill_stale_runner(dir);
+
     let runner_src = project_dir.join("agent-runner/src/index.ts");
     let runner_dist = project_dir.join("agent-runner/dist/index.js");
     let node_bin = find_node(project_dir).unwrap_or_else(|| PathBuf::from("node"));
@@ -197,7 +253,9 @@ fn spawn_process(
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
 
-    cmd.spawn().map_err(err)
+    let child = cmd.spawn().map_err(err)?;
+    let _ = std::fs::write(dir.join("runner.pid"), child.id().to_string());
+    Ok(child)
 }
 
 /// Free the router port if a previous run left a sidecar behind.
@@ -569,8 +627,8 @@ impl Runtime {
         let conn = Connection::open(self.outbound()).map_err(err)?;
         let mut stmt = conn
             .prepare(
-                "SELECT seq, content FROM messages_out 
-                 WHERE seq > ?1 
+                "SELECT seq, content, channel_type, thread_id FROM messages_out
+                 WHERE seq > ?1
                  ORDER BY seq ASC",
             )
             .map_err(err)?;
@@ -579,12 +637,19 @@ impl Runtime {
             .query_map([after_id], |row| {
                 let seq: i64 = row.get(0)?;
                 let content: String = row.get(1)?;
-                
+                let channel_type: Option<String> = row.get(2)?;
+                let thread_id: Option<String> = row.get(3)?;
+
                 let mut text = content.clone();
+                let mut role = None;
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(t) = parsed.get("text").and_then(|x| x.as_str()) {
                         text = t.to_string();
                     }
+                    role = parsed
+                        .get("role")
+                        .and_then(|x| x.as_str())
+                        .map(|x| x.to_string());
                 }
 
                 Ok(OutboundMessage {
@@ -592,6 +657,9 @@ impl Runtime {
                     group_id: "default".to_string(),
                     content: text,
                     created_at: chrono::Utc::now().timestamp(),
+                    channel_type,
+                    thread_id,
+                    role,
                 })
             })
             .map_err(err)?;

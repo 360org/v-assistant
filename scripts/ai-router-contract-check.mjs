@@ -87,7 +87,9 @@ assert(sidecarSource.includes('cookie: entry.authType === "cookie"'), "Cookie su
 assert(sidecarSource.includes('authModes.includes("apikey")'), "Dual-mode providers must preserve their API-key option");
 assert(aiRouterClient.includes('authorize.flowType === "device_code"'), "Frontend must support inherited device-code providers");
 assert(aiRouterClient.includes("capture_grok_sso_cookie"), "Grok Web needs a native cookie capture bridge");
-assert(settingsSource.includes("Open Grok & capture session"), "Grok Web UI must offer direct session capture");
+// Asserted on the wiring, not the button label — the UI copy is Vietnamese.
+assert(settingsSource.includes("captureGrokWebSsoCookie()"), "Grok Web UI must offer direct session capture");
+assert(settingsSource.includes('"subscription",'), "A captured Grok session must be stored as a subscription, not an API key");
 assert(
   authRustSource.includes("capture_grok_sso_cookie")
     && authRustSource.includes("read_grok_sso_from_chrome_cookie_store")

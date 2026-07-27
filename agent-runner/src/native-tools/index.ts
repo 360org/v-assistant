@@ -7,6 +7,7 @@
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { loadConfig } from '../config.js';
 import type { ToolDefinition, ToolResult } from '../providers/types.js';
 
 function log(msg: string): void {
@@ -14,32 +15,48 @@ function log(msg: string): void {
 }
 
 /**
- * Resolve the workspace root through symlinks so containment checks compare
- * real paths. On macOS `/tmp` is itself a symlink to `/private/tmp`, so a
- * lexical-only comparison would reject the agent's own workspace.
+ * Resolve a root through symlinks so containment checks compare real paths.
+ * On macOS `/tmp` is itself a symlink to `/private/tmp`, so a lexical-only
+ * comparison would reject the agent's own workspace.
  */
-function resolveRoot(): string {
-  const configured = path.resolve(
-    process.env.VUA_AGENT_WORKSPACE || path.join(process.env.VUA_DATA_DIR || '/tmp/v-assistant', 'workspace'),
-  );
+function realRoot(configured: string): string {
+  const resolved = path.resolve(configured);
   try {
-    return fs.realpathSync(configured);
+    return fs.realpathSync(resolved);
   } catch {
-    return configured; // not created yet
+    return resolved; // not created yet
   }
 }
 
-const WORKSPACE_ROOT = resolveRoot();
+const DATA_DIR = process.env.VUA_DATA_DIR || '/tmp/v-assistant';
+
+const WORKSPACE_ROOT = realRoot(
+  process.env.VUA_AGENT_WORKSPACE || path.join(DATA_DIR, 'workspace'),
+);
+
+/**
+ * The agent's own directory — instructions, soul and the persistent memory tree
+ * the system prompt tells it to read and update. It sits beside the workspace
+ * rather than inside it, so it needs its own grant; without one the agent is
+ * told about a memory it is not allowed to open.
+ */
+const AGENT_ROOT = realRoot(path.join(DATA_DIR, 'agents', loadConfig().agentName));
+
+const ALLOWED_ROOTS = [WORKSPACE_ROOT, AGENT_ROOT];
 const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
 
 const ACCESS_DENIED = 'Access denied: agent tools are restricted to the assigned workspace';
 
-/** Reject anything that resolves outside the workspace root. */
-function assertInsideWorkspace(target: string): void {
-  const rel = path.relative(WORKSPACE_ROOT, target);
+function isInside(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
   // "" is the root itself (allowed, e.g. glob over the whole workspace).
   // ".." or "../…" escapes upward; an absolute rel means a different volume.
-  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+/** Reject anything that resolves outside every granted root. */
+function assertInsideWorkspace(target: string): void {
+  if (!ALLOWED_ROOTS.some((root) => isInside(root, target))) {
     throw new Error(ACCESS_DENIED);
   }
 }

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  captureGrokWebSsoCookie,
   deleteAiRouterConnection,
   exchangeAiRouterOAuthCallbackUrl,
   getAiRouterConnections,
@@ -278,6 +279,51 @@ export function ModelSettings() {
     }
   };
 
+
+  /**
+   * Grok Web has no OAuth and no API key — the subscription lives in an `sso`
+   * cookie. Store it as a subscription so it ranks ahead of API keys, the way
+   * every other vendor sign-in does.
+   */
+  const saveGrokSession = async (cookie: string) => {
+    if (!selectedProvider) return;
+    await saveConnectionAndCleanupDuplicates(
+      selectedProvider.id,
+      selectedProvider.name,
+      cookie.trim(),
+      "subscription",
+    );
+    setApiKey("");
+    await loadConnections();
+  };
+
+  const captureGrokSession = async () => {
+    if (!selectedProvider) return;
+    setConnecting(true);
+    setConnectMessage("Đang mở Grok. Hãy đăng nhập ở đó, V-Assistant sẽ tự lấy phiên sso.");
+    try {
+      await saveGrokSession(await captureGrokWebSsoCookie());
+      setConnectMessage("✅ Đã lấy phiên Grok Web, lưu vào Vault và xác thực xong.");
+    } catch (err) {
+      setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const connectGrokSessionManually = async () => {
+    if (!apiKey.trim()) return;
+    setConnecting(true);
+    setConnectMessage(null);
+    try {
+      await saveGrokSession(apiKey);
+      setConnectMessage("✅ Đã lưu phiên đăng ký vào Vault và xác thực xong.");
+    } catch (err) {
+      setConnectMessage(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const handleTestConnection = async (connId: string) => {
     setActionConnId(connId);
@@ -890,6 +936,46 @@ export function ModelSettings() {
                           {connectMessage}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Grok Web subscription — captured from the browser session */}
+                  {selectedProvider.cookie && (
+                    <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
+                      <div className="text-xs font-semibold text-neutral-200">Kết nối gói đăng ký Grok Web</div>
+                      <p className="text-xs text-neutral-500">
+                        {selectedProvider.authHint ||
+                          "Đăng nhập Grok trên trình duyệt, V-Assistant sẽ lấy phiên sso và cất vào Vault."}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={captureGrokSession}
+                        disabled={connecting}
+                        className="gap-1.5 text-xs cursor-pointer"
+                      >
+                        <ExternalLink className="size-3.5 text-gold-400" />
+                        Mở Grok &amp; lấy phiên đăng nhập
+                      </Button>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          placeholder="Hoặc dán thủ công cookie sso"
+                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
+                        />
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={connectGrokSessionManually}
+                          disabled={connecting || !apiKey.trim()}
+                          className="gap-1.5 text-xs cursor-pointer shrink-0"
+                        >
+                          <KeyRound className="size-3.5 text-gold-400" />
+                          Lưu phiên
+                        </Button>
+                      </div>
                     </div>
                   )}
 

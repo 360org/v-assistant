@@ -18,9 +18,15 @@ import fs from 'fs';
 import path from 'path';
 import { getSessionState, setSessionState, writeMessageOut } from '../db/index.js';
 import { executeAgentLoop, type PollLoopConfig } from '../poll-loop.js';
+import { notifyTelegram } from '../channels/telegram.js';
 import { isDue } from './schedule.js';
 
 const TICK_MS = 30_000;
+/**
+ * Tags every row this module writes, so the chat window — which polls the same
+ * outbound queue — never mistakes a scheduled result for its own answer.
+ */
+const CHANNEL = 'scheduled';
 
 export interface ScheduledTask {
   id: string;
@@ -117,11 +123,14 @@ export async function runDueTasks(config: PollLoopConfig, now = new Date()): Pro
         writeMessageOut({
           id: generateId(),
           kind: 'chat',
-          platform_id: null,
-          channel_type: null,
-          thread_id: null,
+          platform_id: CHANNEL,
+          channel_type: CHANNEL,
+          thread_id: task.id,
           content: JSON.stringify({ text: result.text, scheduledTaskId: task.id, scheduledTaskName: task.name }),
         });
+        // The point of a schedule is that it reaches the user with the app
+        // closed, so push it to Telegram too when a bot is connected.
+        void notifyTelegram(`⏰ ${task.name || task.id}\n\n${result.text}`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -129,9 +138,9 @@ export async function runDueTasks(config: PollLoopConfig, now = new Date()): Pro
       writeMessageOut({
         id: generateId(),
         kind: 'chat',
-        platform_id: null,
-        channel_type: null,
-        thread_id: null,
+        platform_id: CHANNEL,
+        channel_type: CHANNEL,
+        thread_id: task.id,
         content: JSON.stringify({
           text: `⚠️ Scheduled task "${task.name || task.id}" failed: ${message}`,
           scheduledTaskId: task.id,

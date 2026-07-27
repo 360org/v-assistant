@@ -53,6 +53,27 @@ Trước khi đề xuất bất kỳ thay đổi nào về **luồng người d�
 
 Mọi thay đổi làm đảo thứ tự này, hoặc đẩy API key lên trước, đều là **sai hướng sản phẩm**.
 
+### 0.45 Bộ não ở Host Process — webview chỉ hiển thị
+
+idea.md §1.3: đóng cửa sổ app thì lịch vẫn chạy, Telegram vẫn trả lời. Nên
+**mọi hệ con có vòng lặp riêng đều phải nằm trong `agent-runner/`**, không phải
+webview. Đã di trú: Scheduler, Telegram. Còn lại: selfImprove, Knowledge/RAG.
+
+- **Không được để hai bản cùng chạy.** Khi chuyển một hệ con sang Host Process,
+  phải **xoá bản webview ngay trong cùng commit** — nếu không lịch sẽ chạy 2 lần.
+- **Runner không ghi được `inbound.db`** (host sở hữu, runner mở read-only). Hệ
+  con trong runner gọi thẳng `executeAgentLoop()` rồi ghi `messages_out`.
+- **Một hàng đợi `messages_out` dùng chung cho mọi kênh** → mỗi dòng **bắt buộc**
+  có `channel_type` (`chat` / `telegram` / `scheduled`). Ghi `null` là lỗi: câu
+  trả lời Telegram sẽ nhảy vào ô chat như thể là câu trả lời của người dùng.
+- **File chia sẻ giữa app và runner phải nằm ở `runtime_status().dir`**, KHÔNG
+  phải `~/.v-assistant/data`. Hai đường dẫn này khác nhau; đoán sai thì file ghi
+  ra chỗ không ai đọc.
+- **Trước khi ghi đè file dữ liệu sống, phải đọc nó trước.** Đã có lần ghi `[]`
+  đè lên `scheduled_tasks.json` lúc state chưa hydrate xong → xoá sạch 33 nhiệm
+  vụ của PO. Luật: chỉ ghi sau khi đã đọc được file ít nhất một lần
+  (`tasksLoadedRef` trong `store.tsx` là mẫu tham chiếu).
+
 ### 0.5 Không sửa thứ đang chạy đúng
 Trước khi "sửa" một phần đang hoạt động: **hỏi PO xem nó có đang đúng ý không**. Nhiều thứ trông như bug thực ra là quyết định sản phẩm có chủ đích. Chi phí làm lại một phần đang chạy tốt luôn cao hơn chi phí hỏi một câu.
 
@@ -102,6 +123,7 @@ Trước khi "sửa" một phần đang hoạt động: **hỏi PO xem nó có �
 * Router là **đường duy nhất** tới model — router chết = app vô dụng. Từng có bug: spawn đúng 1 lần, chết là chết luôn, nút "Thử lại" chỉ fetch lại HTTP nên không bao giờ cứu được.
 * Nút retry trên UI phải **respawn tiến trình thật**, không chỉ gọi lại API.
 * **Không `pkill` theo tên tiến trình một cách vô điều kiện** — sẽ giết luôn sidecar của instance khác. Probe port trước, chỉ dọn khi thật sự bị chiếm, và log rõ.
+* **Runner mồ côi phải bị dọn trước khi spawn cái mới.** Runner giờ ôm scheduler + Telegram, để sót 2 tiến trình là lịch chạy 2 lần và Telegram trả lời trùng. Cơ chế: ghi `runner.pid` vào data dir, lần spawn sau đọc pid đó, **xác minh command line đúng là agent-runner rồi mới kill** (pid bị tái sử dụng — kill mù sẽ giết tiến trình lạ).
 
 ---
 

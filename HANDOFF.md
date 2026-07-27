@@ -20,68 +20,74 @@
 
 | # | Hệ con | Trạng thái | Ghi chú |
 |---|---|---|---|
-| 1 | **Scheduler** | ✅ **XONG** | `agent-runner/src/scheduler/` · 17 test · commit `a00f4d2` |
-| 2 | **Telegram** | 🟡 **ĐANG LÀM — xong phía Router** | xem bên dưới |
-| 3 | selfImprove | ⬜ Chưa | 87 dòng, ghi memory file per-agent |
-| 4 | Knowledge/RAG | ⬜ Chưa | 592 dòng, phải chuyển IndexedDB → SQLite |
+| 1 | **Scheduler** | ✅ **XONG** | `agent-runner/src/scheduler/` · 18 test · bản webview đã gỡ |
+| 2 | **Telegram** | ✅ **XONG** | Router giữ token + Runner long-poll · 16 test · bản webview đã gỡ |
+| 3 | selfImprove | ⬜ Chưa | `src/runtime/selfImprove.ts`, 87 dòng, gọi từ `src/pages/Chat.tsx` |
+| 4 | Knowledge/RAG | ⬜ Chưa | `src/runtime/knowledge.ts`, 592 dòng, phải chuyển IndexedDB → SQLite |
+
+Webview giờ **không còn chạy bộ não nào** cho 2 hệ đã xong — nó chỉ hiển thị.
+Đã xoá: `src/runtime/telegram.ts`, `scheduler.ts`, `schedule.ts`, `nanoclawSessions.ts`
+và 2 script test tương ứng ở root. Tổng cộng **-636 dòng**.
 
 ---
 
-## Telegram — đang dở, làm tiếp từ đây
+## Telegram chạy thế nào (đã xong)
 
-### Vì sao không thể dùng Connector Gateway
-Telegram đặt bot token **trong URL path** (`/bot<token>/getUpdates`). Gateway **cấm** credential trong URL:
-```js
-if (/\{\{credential:/i.test(target.href))
-  throw new Error("Credential variables are not allowed in connector URLs.");
-```
-`/v1/vault/manifest` chỉ trả metadata, không trả giá trị. Runner không có đường đọc Vault.
+Telegram nhét bot token **trong URL path** (`/bot<token>/getUpdates`), mà connector
+gateway cấm credential trong URL. → **Router giữ token, Runner chỉ điều khiển.**
 
-→ **Phương án đã chốt (A):** đặt Telegram channel **trong AI Router** — thành phần duy nhất được resolve secret. Token không bao giờ rời router.
-
-### ✅ Đã làm (phía Router) — `ai-router/src/sidecar.mjs`
-Ba endpoint, đều yêu cầu `Authorization: Bearer <AI_ROUTER_CONNECTOR_TOKEN>`:
+**Router** — `ai-router/src/sidecar.mjs`, đều cần `Authorization: Bearer <AI_ROUTER_CONNECTOR_TOKEN>`:
 
 | Endpoint | Method | Tác dụng |
 |---|---|---|
 | `/v1/channels/telegram/status` | GET | Có token chưa (không lộ giá trị) |
-| `/v1/channels/telegram/updates` | POST `{offset,timeout}` | Long-poll, trả `{updates:[{updateId,text,chatId}]}` |
-| `/v1/channels/telegram/send` | POST `{chatId,text}` | Gửi tin nhắn |
+| `/v1/channels/telegram/updates` | POST `{offset,timeout}` | Long-poll |
+| `/v1/channels/telegram/send` | POST `{chatId?,text}` | Gửi tin (thiếu `chatId` → dùng chat id trong Vault) |
 
-Kèm `telegramCredentials()` đọc Vault entry có nhãn/service khớp `telegram`, lấy field `bot token` / `chat id`. Lỗi trả về đều đi qua `redactSecrets()`.
+**Runner** — `agent-runner/src/channels/telegram.ts`: long-poll → `executeAgentLoop`
+→ `/send`. Bỏ qua backlog lần đầu, transcript theo `sessionId` của từng chat.
+Mỗi lượt ghi thêm vào `messages_out` (`channel_type='telegram'`) để UI thấy hội thoại.
 
-**Đã kiểm chứng:** `node --check` sạch; router boot; `/v1/models` → 200; `/v1/channels/telegram/status` → **401 khi thiếu token** (đúng).
+**Hàng đợi outbound dùng chung 3 kênh** — mỗi dòng phải gắn `channel_type`:
 
-### ⬜ Còn phải làm (phía Runner)
-1. Tạo `agent-runner/src/channels/telegram.ts`:
-   - Vòng long-poll gọi 3 endpoint trên (`VUA_AI_ROUTER_URL` + `VUA_CONNECTOR_GATEWAY_TOKEN` đã có sẵn trong env runner).
-   - Bỏ qua backlog lần đầu (`drained`), giống bản webview cũ.
-   - Mỗi tin nhắn → `executeAgentLoop(...)` (đã export ở `poll-loop.ts`) → gửi trả bằng `/send`.
-   - Ghi cả lượt vào `messages_out` để UI thấy hội thoại.
-   - Giữ transcript theo `sessionId = telegram:<chatId>` (dùng `getTranscript`/`setTranscript` trong `db/session-state.ts`).
-2. Gọi `startTelegramChannel(loopConfig)` trong `agent-runner/src/index.ts` (cạnh `startScheduler`).
-3. Test `agent-runner/scripts/telegram-check.mjs` (stub fetch tới router, stub provider) + đăng ký vào `package.json` scripts `test`/`check`.
-4. Gỡ Telegram khỏi webview: `src/runtime/telegram.ts` và chỗ gọi trong `src/lib/store.tsx`.
+| `channel_type` | Ai ghi | Ai đọc |
+|---|---|---|
+| `chat` | poll-loop | cửa sổ chat (`nanoclaw.ts`) |
+| `telegram` | channel Telegram | poller nền trong `store.tsx` |
+| `scheduled` | scheduler | poller nền trong `store.tsx` |
+
+Thiếu tag này thì câu trả lời Telegram sẽ nhảy vào ô chat như thể là câu trả lời
+của người dùng. Đừng ghi `channel_type = null`.
 
 ---
 
-## Việc tồn đọng khác
+## Việc tồn đọng
 
 ### 🔴 Push bị chặn — cần `workflow` scope
-Commit `2950b10` sửa `.github/workflows/release.yml`. Không tách được vì `scripts/desktop-bundle-contract-check.mjs` kiểm chứng chính nội dung workflow đó.
+Commit `2950b10` sửa `.github/workflows/release.yml`. Không tách được vì
+`scripts/desktop-bundle-contract-check.mjs` kiểm chứng chính nội dung workflow đó.
 ```bash
 git push origin dev
 ```
 
-### 🔴 Regression Grok Web — `npm run check` ở root đang đỏ
-Commit `da49b43` (tách god file) làm mất UI gọi `captureGrokWebSsoCookie` + `saveSubscriptionCookie`. Trước refactor có 4 chỗ, nay 0. Cần khôi phục vào `src/components/settings/ModelSettings.tsx`.
-Code cũ lấy tại: `git show da49b43~1:src/pages/Settings.tsx` (dòng ~596 và ~1305).
+### 🟡 Danh sách lịch cũ — chờ anh quyết
+Trong lúc test live, code (bản chưa có guard) đã ghi `[]` đè lên
+`scheduled_tasks.json`, xoá 33 nhiệm vụ. **Đã dựng lại đủ 33** từ nhật ký
+`workspace/.audit/tool_calls.log`, để sẵn ở scratchpad
+(`scheduled_tasks_recovered.json`), `enabled: false` để không tự chạy.
+Guard chống lặp lại đã có (`tasksLoadedRef` trong `store.tsx`).
 
 ---
 
 ## Nền tảng đã chốt (đừng làm lại)
 
-- **`node:sqlite`** thay `better-sqlite3` → runner **0 runtime dependency**, thuần JS, một `dist/index.js` chạy cả 3 nền tảng. Bundle contract sẽ **fail nếu native addon quay lại**.
-- **Workspace sandbox** đã vá: `workspacePath()` chặn cả đường dẫn tuyệt đối lẫn `../`, kiểm qua symlink hai phía.
-- Quy trình test: **không Docker**. `npm run tauri dev` (nhanh) hoặc `npm run build:local` (bản cài), rồi thao tác thật trên UI.
+- **`node:sqlite`** thay `better-sqlite3` → runner **0 runtime dependency**, một
+  `dist/index.js` chạy cả 3 nền tảng. Bundle contract **fail nếu native addon quay lại**.
+- **Sandbox có 2 gốc**: `workspace/` và `agents/<tên>/` (memory của chính agent).
+  Trước đó chỉ có workspace nên agent bị chặn đọc memory mà system prompt bảo nó đọc.
+- **`runner.pid`**: app giết runner mồ côi trước khi spawn cái mới. Runner giờ ôm
+  scheduler + Telegram, để sót 2 tiến trình là trả lời trùng.
+- **File chia sẻ với runner phải nằm ở `runtime_status().dir`**, không phải
+  `~/.v-assistant/data`. Hai chỗ này khác nhau.
+- Quy trình test: **không Docker**. `npm run tauri dev`, rồi thao tác thật trên UI.
 - Đọc `skills/v-assistant-dev-guidelines/SKILL.md` trước khi sửa — **Luật số 1: bám idea.md**.

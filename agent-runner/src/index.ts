@@ -7,6 +7,7 @@ import './providers/index.js';
 import { createProvider, type ProviderName } from './providers/factory.js';
 import { runPollLoop } from './poll-loop.js';
 import { startScheduler } from './scheduler/index.js';
+import { startTelegramChannel } from './channels/telegram.js';
 import { mcpManager } from './mcp-client/index.js';
 import { ensureMemoryScaffold } from './memory/memory-scaffold.js';
 
@@ -64,6 +65,10 @@ async function main(): Promise<void> {
   // Scheduled tasks live here, not in the webview: closing the app window must
   // not stop a schedule (idea.md §1.3 — the brain runs in the Host Process).
   startScheduler(loopConfig);
+
+  // Same reason for Telegram: the bot must answer with the window closed. The
+  // AI Router holds the bot token; this only drives its token-free endpoints.
+  startTelegramChannel(loopConfig);
 
   log('Entering poll loop...');
 
