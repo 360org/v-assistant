@@ -1466,31 +1466,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void syncAgents(agentsToSync);
   }, [state.installedAgents, state.agentConfigs]);
 
-  // Restart the Agent Runner whenever active agent, active provider, or provider config changes
+  // Everything the runner is actually configured with, as one primitive.
+  //
+  // Keying the restart on `providerConfigs` restarted it on *every* store
+  // update, because that object gets a new identity each time — one dev session
+  // respawned the runner 177 times. That is no longer merely wasteful: the
+  // runner owns the scheduler and the Telegram channel, so each respawn tore
+  // down the long-poll and re-fired the scheduler's start-up tick.
+  const runnerAgentId = state.activeAgentId || "default";
+  const runnerModel =
+    (state.provider ? state.providerConfigs[state.provider]?.model : undefined) || "auto";
+  const runnerSignature = `${runnerAgentId}|${runnerModel}|${state.selfImprove ? "1" : "0"}`;
+
   useEffect(() => {
     let cancelled = false;
-    const activeId = state.activeAgentId || "default";
-    const cfg =
-      (state.provider ? state.providerConfigs[state.provider] : undefined) ?? {};
+    const [agentId, model, selfImprove] = runnerSignature.split("|");
 
     (async () => {
       if (cancelled) return;
-
-      console.log(`[store] Syncing & starting runner: agent=${activeId}, provider=ai-router`);
-      await restartAgentRunner(
-        activeId,
-        AI_ROUTER_BASE_URL,
-        cfg.model || "auto",
-        state.selfImprove,
-      );
+      console.log(`[store] Syncing & starting runner: agent=${agentId}, model=${model}`);
+      // Self-improvement runs in the runner, which reads the flag from
+      // runner.json — restarting is how a flipped switch reaches it.
+      await restartAgentRunner(agentId, AI_ROUTER_BASE_URL, model, selfImprove === "1");
     })();
 
     return () => {
       cancelled = true;
     };
-    // Self-improvement now runs in the runner, which reads the flag from
-    // runner.json — restarting is how a flipped switch reaches it.
-  }, [state.activeAgentId, state.provider, state.providerConfigs, state.selfImprove]);
+  }, [runnerSignature]);
 
   const value = useMemo<AppStore>(
     () => ({
