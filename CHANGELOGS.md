@@ -3,6 +3,12 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+*   **Xiết quy chuẩn phát triển (`skills/v-assistant-dev-guidelines/SKILL.md`)**:
+    - Thêm **Luật số 1 — Bám idea gốc**: bắt buộc đọc `idea.md` trước khi đề xuất thay đổi về luồng người dùng/kiến trúc/xác thực; mâu thuẫn với idea thì DỪNG và hỏi PO thay vì tự quyết.
+    - Chốt **định danh**: `AI Router` là tên chính thức của tầng chung chuyển (local `127.0.0.1:20128`); `9router` chỉ là công nghệ nền; `OpenRouter` chỉ là một provider ngang hàng — **không phải** hạ tầng chung chuyển. Phần kết nối hiện tại đang đúng, cấm refactor/làm lại.
+    - Chốt **thứ tự ưu tiên kết nối**: Subscription (OAuth 1-click) trước → API key sau (Advanced Options).
+    - Thêm **3 mức kiểm chứng**: chỉ được báo "xong" sau khi chạy thật, không dừng ở `tsc`/`npm run check` — vì các lỗi nặng nhất (sidecar sai đường dẫn, runner crash loop, router không giám sát) đều xanh ở mức test nhưng app không dùng được.
+    - Bổ sung bài học vận hành: giám sát sidecar bắt buộc có cap + dump log; không `pkill` vô điều kiện; không `npm rebuild` bừa với native module; vòng chờ phải có điều kiện thoát; không sửa thứ đang chạy đúng.
 *   **Fix Image & PDF Reading in Chat (`src/pages/Chat.tsx`)**:
     - Khắc phục triệt để lỗi `Error: fetch failed` khi gửi đồng thời cả PDF và hình ảnh.
     - Sửa thứ tự gọi `removeKnowledgeFile`: Trích xuất đầy đủ dữ liệu Base64 Data URL (cho ảnh) và toàn bộ các văn bản/chuỗi ký tự trích xuất từ tệp PDF (`rec.chunks`) nhúng trực tiếp vào ngữ cảnh tin nhắn `userMessage` TRƯỚC KHI dọn dẹp state.
