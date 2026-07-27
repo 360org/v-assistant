@@ -171,6 +171,9 @@ export interface ScheduledTask {
   lastRun?: number;
 }
 
+/** History is unbounded otherwise; a scheduled task runs forever. */
+const MAX_TASK_RUN_LOGS = 200;
+
 export interface TaskRunLog {
   id: string;
   taskId: string;
@@ -673,23 +676,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     const appendScheduled = (row: OutboundMessage) => {
-      setState((s) => ({
-        ...s,
-        messages: [
-          ...s.messages,
-          {
-            id: newMessageId(),
-            role: "assistant",
-            content: row.content,
-            createdAt: row.created_at * 1000,
-          },
-        ],
-        scheduledTasks: row.thread_id
-          ? s.scheduledTasks.map((task) =>
-              task.id === row.thread_id ? { ...task, lastRun: row.created_at * 1000 } : task,
-            )
-          : s.scheduledTasks,
-      }));
+      const runAt = row.created_at * 1000;
+      setState((s) => {
+        const task = s.scheduledTasks.find((item) => item.id === row.thread_id);
+        // Real history, written only when the Host Process actually ran the
+        // task. Nothing seeds this list any more.
+        const runLog: TaskRunLog = {
+          id: newMessageId(),
+          taskId: row.thread_id ?? "",
+          taskName: task?.name ?? row.thread_id ?? "",
+          runAt,
+          duration: row.duration_ms ?? 0,
+          status: row.status === "error" ? "error" : "success",
+          output: row.content,
+        };
+        return {
+          ...s,
+          messages: [
+            ...s.messages,
+            { id: newMessageId(), role: "assistant", content: row.content, createdAt: runAt },
+          ],
+          scheduledTasks: row.thread_id
+            ? s.scheduledTasks.map((item) =>
+                item.id === row.thread_id ? { ...item, lastRun: runAt } : item,
+              )
+            : s.scheduledTasks,
+          taskRunLogs: [runLog, ...(s.taskRunLogs ?? [])].slice(0, MAX_TASK_RUN_LOGS),
+        };
+      });
     };
 
     const drain = async () => {
@@ -888,27 +902,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (task: Omit<ScheduledTask, "id" | "createdAt">) => {
       const taskId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const createdAt = Date.now();
-      
-      const mockLogs: TaskRunLog[] = [
-        {
-          id: `log-${Date.now().toString(36)}-1`,
-          taskId,
-          taskName: task.name,
-          runAt: createdAt - 3600000 * 2,
-          duration: 4200,
-          status: "success",
-          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[INFO] Đang phân tích dữ liệu tri thức...\n[SUCCESS] Hoàn thành báo cáo tự động và gửi thành công đến Telegram bot.`,
-        },
-        {
-          id: `log-${Date.now().toString(36)}-2`,
-          taskId,
-          taskName: task.name,
-          runAt: createdAt - 3600000,
-          duration: 2500,
-          status: "error",
-          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[ERROR] Lỗi xác thực API: 401 Unauthorized khi gọi Webhook bên thứ 3. Vui lòng kiểm tra lại cấu hình thông tin kết nối trong Vault.`,
-        }
-      ];
+
+      // No seeded history. This used to inject two fabricated runs per task —
+      // a "success" claiming a report had been sent to Telegram and a "401
+      // Unauthorized" failure — neither of which ever happened. Real history is
+      // written when the Host Process actually runs the task.
 
       setState((s) => ({
         ...s,
@@ -921,7 +919,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
           ...s.scheduledTasks,
         ],
-        taskRunLogs: [...mockLogs, ...(s.taskRunLogs ?? [])],
       }));
     },
     [],

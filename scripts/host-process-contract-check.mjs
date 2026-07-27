@@ -88,6 +88,51 @@ assert(
   "A recorded pid must be verified before it is killed — pids get reused",
 );
 
+// --- the model gets no shell, and no file access outside its workspace -------
+// idea.md §22 and §92. The runner never offered a shell; the webview agent path
+// did, and its file tools took any absolute path.
+const tools = read("src", "runtime", "tools.ts");
+assert(
+  !/name:\s*"execute_cli"/.test(tools),
+  "The model must not be given a host shell (idea.md §22, §92)",
+);
+assert(
+  !read("src-tauri", "src", "lib.rs").includes("fn execute_cli_command"),
+  "The shell command must not exist at all, not merely go uncalled",
+);
+for (const [tool, command] of [
+  ["file_read", "agent_read_file"],
+  ["file_write", "agent_write_file"],
+  ["file_list", "agent_list_dir"],
+]) {
+  assert(
+    tools.includes(`"${command}"`),
+    `${tool} must go through the workspace-scoped ${command}, not an unrestricted host command`,
+  );
+}
+assert(
+  !/invoke<[^>]*>\("(read|write)_host_file"|invoke<[^>]*>\("list_host_dir"/.test(tools),
+  "Agent file tools must not call the app's unrestricted host file commands",
+);
+
+// --- nothing fabricated is shown to the user --------------------------------
+// Every scheduled task used to be seeded with two invented runs, one of them a
+// 401 failure that never happened; `execute_mcp_tool` reported success without
+// doing anything.
+assert(!store.includes("mockLogs"), "Run history must never be seeded with invented runs");
+assert(
+  !/name:\s*"execute_mcp_tool"/.test(tools),
+  "A tool must not report success for work it did not do",
+);
+assert(
+  read("agent-runner", "src", "scheduler", "index.ts").includes("durationMs"),
+  "A scheduled run must report how long it took",
+);
+assert(
+  store.includes("taskRunLogs: [runLog"),
+  "Run history must be written from real runs reported by the Host Process",
+);
+
 // --- the agent can reach its own memory --------------------------------------
 assert(
   read("agent-runner", "src", "native-tools", "index.ts").includes("ALLOWED_ROOTS"),

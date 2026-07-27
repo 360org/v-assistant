@@ -79,6 +79,20 @@ webview. Đã di trú: Scheduler, Telegram. Còn lại: selfImprove, Knowledge/R
   Telegram nên mỗi lần respawn là tháo long-poll và bắn lại tick khởi động.
   Luật: gom thứ runner thực sự cần thành **một chuỗi primitive**
   (`runnerSignature`) rồi key effect vào đó.
+- **Không bao giờ hiển thị dữ liệu bịa cho user, và không bao giờ trả kết quả
+  giả cho model.** Đã từng có: mỗi nhiệm vụ mới bị chèn 2 bản ghi lịch sử giả
+  (kèm lỗi 401 không có thật), và `execute_mcp_tool` trả `"✅ … thành công"` mà
+  không làm gì — model tin rồi báo cáo lại với user như việc đã xong. Nếu một
+  đường dẫn chưa làm được việc gì thì **đừng cung cấp tool đó**, đừng giả vờ.
+- **Sandbox phải cưỡng chế ở phía có quyền, không phải phía bị hạn chế.**
+  File tool của webview từng gọi thẳng `read_host_file`/`write_host_file` với
+  đường dẫn tuỳ ý. Giờ đi qua `agent_read_file`/`agent_write_file`/
+  `agent_list_dir` — Rust kiểm containment. Lệnh `*_host_file` vẫn tự do vì
+  phục vụ UI, không phục vụ model.
+- **Khử `..` TRƯỚC khi resolve.** `Path::starts_with` của Rust so sánh thuần
+  từ vựng, và việc đi ngược lên tổ tiên làm rơi mất `..` (`file_name()` trả
+  None) — `notes/../../secrets.txt` từng bị âm thầm viết lại thành
+  `notes/secrets.txt`.
 - **Có `scripts/host-process-contract-check.mjs`** khoá các luật trên. Nó bắt
   đúng những lỗi biên dịch sạch nhưng chạy sai. Đừng nới lỏng assertion để cho
   qua — sửa code.

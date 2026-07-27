@@ -21,6 +21,9 @@ export interface OutboundMessage {
   thread_id: string | null;
   /** `user` or `assistant` for channels that mirror both sides of a turn. */
   role: string | null;
+  /** `success` or `error` for a scheduled run. */
+  status: string | null;
+  duration_ms: number | null;
 }
 
 const POLL_INTERVAL_MS = 500;

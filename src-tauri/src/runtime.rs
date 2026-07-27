@@ -52,6 +52,10 @@ pub struct OutboundMessage {
     pub thread_id: Option<String>,
     /// `user` or `assistant` for channels that mirror both sides of a turn.
     pub role: Option<String>,
+    /// `success` or `error` for a scheduled run, so the UI shows what happened
+    /// instead of the seeded history it used to invent.
+    pub status: Option<String>,
+    pub duration_ms: Option<i64>,
 }
 
 /// One agent definition.
@@ -643,6 +647,8 @@ impl Runtime {
 
                 let mut text = content.clone();
                 let mut role = None;
+                let mut status = None;
+                let mut duration_ms = None;
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(t) = parsed.get("text").and_then(|x| x.as_str()) {
                         text = t.to_string();
@@ -651,6 +657,11 @@ impl Runtime {
                         .get("role")
                         .and_then(|x| x.as_str())
                         .map(|x| x.to_string());
+                    status = parsed
+                        .get("status")
+                        .and_then(|x| x.as_str())
+                        .map(|x| x.to_string());
+                    duration_ms = parsed.get("durationMs").and_then(|x| x.as_i64());
                 }
 
                 Ok(OutboundMessage {
@@ -661,6 +672,8 @@ impl Runtime {
                     channel_type,
                     thread_id,
                     role,
+                    status,
+                    duration_ms,
                 })
             })
             .map_err(err)?;

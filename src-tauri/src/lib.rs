@@ -6,6 +6,7 @@
 //! channels) so the UI never deals with engines, containers or config
 //! files.
 
+pub mod agent_fs;
 pub mod auth;
 pub mod knowledge;
 pub mod runtime;
@@ -280,71 +281,35 @@ fn list_host_dir(path: String) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
+// --- Agent file tools ------------------------------------------------------
+//
+// The webview keeps its own agent path for when the runner is down and for
+// providers that bypass it. These are the only file operations that path may
+// perform: every one is confined to the granted workspace. `execute_cli_command`
+// used to sit here and ran `sh -c <anything>` for the model — idea.md §22 and
+// §92 forbid giving the model a host shell, so it is gone rather than guarded.
+
+fn agent_workspace(state: &tauri::State<Runtime>) -> std::path::PathBuf {
+    state.dir.join("workspace")
+}
+
 #[tauri::command]
-async fn execute_cli_command(command: String, cwd: Option<String>) -> Result<String, String> {
-    use std::process::{Command, Stdio};
-    use std::path::PathBuf;
-    use std::time::Duration;
+fn agent_read_file(state: tauri::State<Runtime>, path: String) -> Result<String, String> {
+    agent_fs::read(&agent_workspace(&state), &path)
+}
 
-    let shell = if cfg!(target_os = "windows") { "cmd" } else { "sh" };
-    let shell_arg = if cfg!(target_os = "windows") { "/C" } else { "-c" };
+#[tauri::command]
+fn agent_write_file(
+    state: tauri::State<Runtime>,
+    path: String,
+    content: String,
+) -> Result<String, String> {
+    agent_fs::write(&agent_workspace(&state), &path, &content)
+}
 
-    let mut cmd = Command::new(shell);
-    cmd.arg(shell_arg)
-        .arg(&command)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    if let Some(ref dir) = cwd {
-        if !dir.trim().is_empty() {
-            let mut path = PathBuf::from(dir);
-            if dir.starts_with("~/") {
-                if let Ok(home) = std::env::var("HOME") {
-                    path = PathBuf::from(home).join(dir.trim_start_matches("~/"));
-                }
-            }
-            cmd.current_dir(path);
-        }
-    }
-
-    let mut child = cmd.spawn().map_err(|e| format!("Lỗi khởi tạo lệnh CLI: {}", e))?;
-
-    let timeout = Duration::from_secs(30);
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                if let Some(mut out) = child.stdout.take() {
-                    let _ = std::io::Read::read_to_end(&mut out, &mut stdout);
-                }
-                if let Some(mut err_out) = child.stderr.take() {
-                    let _ = std::io::Read::read_to_end(&mut err_out, &mut stderr);
-                }
-                let stdout_str = String::from_utf8_lossy(&stdout).to_string();
-                let stderr_str = String::from_utf8_lossy(&stderr).to_string();
-                let exit_code = status.code().unwrap_or(-1);
-                if exit_code == 0 {
-                    if stdout_str.trim().is_empty() && !stderr_str.trim().is_empty() {
-                        return Ok(format!("[CLI stdout (rỗng)]\n[stderr]\n{}", stderr_str));
-                    } else {
-                        return Ok(stdout_str);
-                    }
-                } else {
-                    return Err(format!("Lỗi thực thi lệnh CLI (Mã lỗi {}):\n{}", exit_code, stderr_str));
-                }
-            }
-            Ok(None) => {
-                if start.elapsed() >= timeout {
-                    let _ = child.kill();
-                    return Err("Lệnh CLI bị hủy do quá thời gian chờ (Timeout 30s).".to_string());
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(e) => return Err(format!("Lỗi khi chờ lệnh CLI: {}", e)),
-        }
-    }
+#[tauri::command]
+fn agent_list_dir(state: tauri::State<Runtime>, path: String) -> Result<Vec<String>, String> {
+    agent_fs::list(&agent_workspace(&state), &path)
 }
 
 #[tauri::command]
@@ -472,7 +437,9 @@ pub fn run() {
             read_host_file,
             write_host_file,
             list_host_dir,
-            execute_cli_command,
+            agent_read_file,
+            agent_write_file,
+            agent_list_dir,
             set_autostart
         ])
         .build(tauri::generate_context!())

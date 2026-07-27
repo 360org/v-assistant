@@ -110,6 +110,7 @@ export async function runDueTasks(config: PollLoopConfig, now = new Date()): Pro
     setLastRun(task.id, now.getTime());
     fired.push(task.id);
     log(`Running "${task.name || task.id}"`);
+    const startedAt = Date.now();
 
     try {
       const result = await executeAgentLoop(
@@ -126,7 +127,13 @@ export async function runDueTasks(config: PollLoopConfig, now = new Date()): Pro
           platform_id: CHANNEL,
           channel_type: CHANNEL,
           thread_id: task.id,
-          content: JSON.stringify({ text: result.text, scheduledTaskId: task.id, scheduledTaskName: task.name }),
+          content: JSON.stringify({
+            text: result.text,
+            scheduledTaskId: task.id,
+            scheduledTaskName: task.name,
+            status: 'success',
+            durationMs: Date.now() - startedAt,
+          }),
         });
         // The point of a schedule is that it reaches the user with the app
         // closed, so push it to Telegram too when a bot is connected.
@@ -144,6 +151,9 @@ export async function runDueTasks(config: PollLoopConfig, now = new Date()): Pro
         content: JSON.stringify({
           text: `⚠️ Scheduled task "${task.name || task.id}" failed: ${message}`,
           scheduledTaskId: task.id,
+          scheduledTaskName: task.name,
+          status: 'error',
+          durationMs: Date.now() - startedAt,
         }),
       });
     }
