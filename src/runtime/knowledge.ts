@@ -491,6 +491,30 @@ export async function clearKnowledge(): Promise<void> {
   else memory.clear();
 }
 
+export async function getAllKnowledgeRecords(agentId?: string | null): Promise<Array<{ id: string; name: string; size: number; status: "ready"; addedAt: number }>> {
+  const bucket = bucketOf(agentId ?? null);
+  const imgExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "ico"]);
+  const files: FileChunks[] = hasIdb
+    ? (await withStore<FileChunks[]>("readonly", (s) => s.getAll())).filter(
+        (f) => f.bucket === bucket,
+      )
+    : [...memory.values()].filter((f) => f.bucket === bucket);
+
+  // Lọc bỏ file ảnh — Knowledge base chỉ lưu document (pdf, docx, xlsx, md, txt, csv, html...)
+  return files
+    .filter((f) => {
+      const ext = f.name.toLowerCase().split(".").pop() ?? "";
+      return !imgExtensions.has(ext);
+    })
+    .map((f) => ({
+      id: f.fileId,
+      name: f.name,
+      size: f.chunks ? f.chunks.join("").length : 0,
+      status: "ready" as const,
+      addedAt: Date.now(),
+    }));
+}
+
 export async function getAllImageRecords(): Promise<Array<{ id: string; name: string; dataUrl?: string }>> {
   const files: FileChunks[] = hasIdb
     ? await withStore<FileChunks[]>("readonly", (s) => s.getAll())

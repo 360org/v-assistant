@@ -1021,7 +1021,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
           const { invoke } = await import("@tauri-apps/api/core");
-          const content = await invoke<string>("read_data_file", { relativePath: "scheduled_tasks.json" }).catch(() => null);
+          const content = await invoke<string>("read_host_file", { path: "~/.v-assistant/data/scheduled_tasks.json" }).catch(() => null);
           if (content) {
             const parsed = JSON.parse(content) as ScheduledTask[];
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1029,9 +1029,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const existingIds = new Set(s.scheduledTasks.map((t) => t.id));
                 const newItems = parsed.filter((item) => !existingIds.has(item.id));
                 if (newItems.length === 0) return s;
+                const updated = [...newItems, ...s.scheduledTasks];
+                try {
+                  localStorage.setItem("vua_scheduled_tasks", JSON.stringify(updated));
+                } catch {
+                  /* ignore */
+                }
                 return {
                   ...s,
-                  scheduledTasks: [...newItems, ...s.scheduledTasks],
+                  scheduledTasks: updated,
                 };
               });
             }

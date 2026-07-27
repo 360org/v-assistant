@@ -53,12 +53,7 @@ export const nanoclawEngine: Engine = {
 
     let fullContent = lastUser.content || "";
     if (lastUser.attachments && lastUser.attachments.length > 0) {
-      const attLines = lastUser.attachments.map((att) => {
-        if (att.dataUrl && att.dataUrl.startsWith("data:image/")) {
-          return `![${att.name}](${att.dataUrl})`;
-        }
-        return `[Tệp đính kèm: ${att.name}${att.dataUrl ? ` (${att.dataUrl.slice(0, 100)}...)` : ""}]`;
-      });
+      const attLines = lastUser.attachments.map((att) => `[Tệp đính kèm: ${att.name}]`);
       fullContent = `${fullContent}\n\n${attLines.join("\n")}`.trim();
     }
 

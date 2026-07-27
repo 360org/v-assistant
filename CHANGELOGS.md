@@ -3,6 +3,10 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+*   **Fix Image & PDF Reading in Chat (`src/pages/Chat.tsx`)**:
+    - Khắc phục triệt để lỗi `Error: fetch failed` khi gửi đồng thời cả PDF và hình ảnh.
+    - Sửa thứ tự gọi `removeKnowledgeFile`: Trích xuất đầy đủ dữ liệu Base64 Data URL (cho ảnh) và toàn bộ các văn bản/chuỗi ký tự trích xuất từ tệp PDF (`rec.chunks`) nhúng trực tiếp vào ngữ cảnh tin nhắn `userMessage` TRƯỚC KHI dọn dẹp state.
+    - Loại bỏ hoàn toàn các chuỗi tạm `blob:http://...` vốn khiến máy chủ AI Vision từ chối kết nối.
 *   **Persistent Background Chat & Task Execution (`src/App.tsx`)**:
     - Khắc phục triệt để lỗi khi Agent đang xử lý tác vụ mà người dùng chuyển qua menu/trang khác (như Lịch & Nhiệm vụ, Kho Media, Cài đặt...) thì tiến trình bị hủy và bắt thử lại (Retry).
     - Giữ trang **Trò chuyện (`Chat`)** luôn mounted ngầm trong DOM (`hidden` khi ở trang khác), đảm bảo tiến trình streaming, gọi tool, đọc/ghi tệp và thực thi tác vụ chạy xuyên suốt đến khi hoàn tất mà không bao giờ bị dừng giữa chừng.
