@@ -6,6 +6,7 @@ import { ensureIpcDir, setMaxMessagesPerPrompt } from './db/index.js';
 import './providers/index.js';
 import { createProvider, type ProviderName } from './providers/factory.js';
 import { runPollLoop } from './poll-loop.js';
+import { startScheduler } from './scheduler/index.js';
 import { mcpManager } from './mcp-client/index.js';
 import { ensureMemoryScaffold } from './memory/memory-scaffold.js';
 
@@ -52,15 +53,22 @@ async function main(): Promise<void> {
   const instructions = buildSystemPrompt(config.assistantName, config.agentName, agentDir);
 
   log(`Provider created: ${provider.name}`);
-  log('Entering poll loop...');
 
-  // Enter main poll loop (runs forever)
-  await runPollLoop({
+  const loopConfig = {
     provider,
     providerName,
     agentId: config.agentName,
     systemContext: { instructions },
-  });
+  };
+
+  // Scheduled tasks live here, not in the webview: closing the app window must
+  // not stop a schedule (idea.md §1.3 — the brain runs in the Host Process).
+  startScheduler(loopConfig);
+
+  log('Entering poll loop...');
+
+  // Enter main poll loop (runs forever)
+  await runPollLoop(loopConfig);
 }
 
 /**

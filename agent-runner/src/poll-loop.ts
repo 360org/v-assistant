@@ -239,7 +239,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   }
 }
 
-interface AgentLoopResult {
+export interface AgentLoopResult {
   text: string | null;
   continuation?: string;
 }
@@ -248,7 +248,15 @@ interface AgentLoopResult {
  * Execute the full agentic loop for a single query:
  * prompt → LLM → tool calls → LLM → tool calls → ... → final answer
  */
-async function executeAgentLoop(
+/**
+ * Run one full agent turn: prompt → model → tools → … → answer.
+ *
+ * Exported so the scheduler can reuse the exact same agent machinery instead
+ * of duplicating provider and tool plumbing. The scheduler cannot enqueue into
+ * inbound.db (host-owned, opened read-only here), so it drives a turn directly
+ * and writes the result to messages_out.
+ */
+export async function executeAgentLoop(
   config: PollLoopConfig,
   prompt: string,
   continuation: string | undefined,
