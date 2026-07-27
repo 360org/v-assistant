@@ -59,6 +59,7 @@ async function main(): Promise<void> {
     provider,
     providerName,
     agentId: config.agentName,
+    agentDir,
     systemContext: { instructions },
   };
 

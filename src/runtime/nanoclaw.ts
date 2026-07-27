@@ -156,6 +156,7 @@ export async function restartAgentRunner(
   agentName: string,
   baseUrl?: string | null,
   model?: string | null,
+  selfImprove?: boolean,
 ): Promise<boolean> {
   if (!inDesktopShell()) return false;
   try {
@@ -163,6 +164,7 @@ export async function restartAgentRunner(
       agentName,
       baseUrl: baseUrl || null,
       model: model || null,
+      selfImprove: selfImprove ?? true,
     });
   } catch (err) {
     console.error("Failed to restart agent runner:", err);

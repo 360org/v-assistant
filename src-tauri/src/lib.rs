@@ -67,12 +67,14 @@ fn runtime_restart_runner(
     agent_name: String,
     base_url: Option<String>,
     model: Option<String>,
+    self_improve: Option<bool>,
     app: tauri::AppHandle,
 ) -> Result<bool, String> {
     state.spawn_engine_with_config(
         &agent_name,
         base_url.as_deref(),
         model.as_deref(),
+        self_improve.unwrap_or(true),
         Some(&app),
     )
 }

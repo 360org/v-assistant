@@ -32,6 +32,7 @@ import {
   type RoutingContext,
 } from './formatter.js';
 import { getToolDefinitions, executeTool } from './native-tools/index.js';
+import { learnFromExchange } from './memory/self-improve.js';
 import { mcpManager } from './mcp-client/index.js';
 import { clearBuiltinToolContext, executeBuiltinTool, getBuiltinToolDefinitions, hasBuiltinTool, setBuiltinToolContext } from './mcp-tools/index.js';
 import type { AgentProvider, ProviderEvent, ChatMessage, ToolCall, ToolResult } from './providers/types.js';
@@ -57,6 +58,8 @@ export interface PollLoopConfig {
   providerName: string;
   /** Stable agent identity used to isolate conversations. */
   agentId?: string;
+  /** This role's own directory, holding its instructions, soul and memory. */
+  agentDir?: string;
   systemContext: {
     instructions: string;
   };
@@ -196,6 +199,12 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
       }
 
       markCompleted(ids.filter((id) => !commandIds.includes(id)));
+
+      // Reflect only after the answer has been delivered, so learning can never
+      // delay or break a reply.
+      if (config.agentDir && result.text) {
+        void learnFromExchange(config, config.agentDir, { user: prompt, assistant: result.text });
+      }
 
       // Notify exchange complete
       config.provider.onExchangeComplete?.({

@@ -17,6 +17,7 @@
  */
 import { getContinuation, setContinuation, getTranscript, setTranscript, sessionIdFor, writeMessageOut } from '../db/index.js';
 import { executeAgentLoop, type PollLoopConfig } from '../poll-loop.js';
+import { learnFromExchange } from '../memory/self-improve.js';
 import type { RoutingContext } from '../formatter.js';
 
 const ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
@@ -164,6 +165,10 @@ export async function handleMessage(config: PollLoopConfig, chatId: number, text
     ]);
     recordTurn(chatId, 'assistant', reply);
     await sendMessage(chatId, reply);
+    // A Telegram conversation teaches the role as much as one in the app.
+    if (config.agentDir) {
+      void learnFromExchange(config, config.agentDir, { user: text, assistant: reply });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log(`Turn failed for chat ${chatId}: ${message}`);

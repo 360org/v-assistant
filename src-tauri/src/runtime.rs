@@ -713,6 +713,8 @@ impl Runtime {
         agent_name: &str,
         base_url: Option<&str>,
         model: Option<&str>,
+        // User setting: let the role learn durable facts from conversations.
+        self_improve: bool,
         app: Option<&tauri::AppHandle>,
     ) -> Result<bool, String> {
         self.stop_runner();
@@ -725,7 +727,8 @@ impl Runtime {
             "maxMessagesPerPrompt": 10,
             "mcpServers": {},
             "model": model.unwrap_or("auto"),
-            "baseUrl": base_url.unwrap_or("http://127.0.0.1:20128/v1")
+            "baseUrl": base_url.unwrap_or("http://127.0.0.1:20128/v1"),
+            "selfImprove": self_improve
         });
         std::fs::write(&config_path, serde_json::to_string_pretty(&config_json).map_err(err)?)
             .map_err(err)?;
@@ -764,11 +767,12 @@ impl Runtime {
                     let agent_name = parsed.get("agentName").and_then(|x| x.as_str()).unwrap_or("default");
                     let base_url = parsed.get("baseUrl").and_then(|x| x.as_str());
                     let model = parsed.get("model").and_then(|x| x.as_str());
-                    return self.spawn_engine_with_config(agent_name, base_url, model, app);
+                    let self_improve = parsed.get("selfImprove").and_then(|x| x.as_bool()).unwrap_or(true);
+                    return self.spawn_engine_with_config(agent_name, base_url, model, self_improve, app);
                 }
             }
         }
-        self.spawn_engine_with_config("default", None, Some("auto"), app)
+        self.spawn_engine_with_config("default", None, Some("auto"), true, app)
     }
 
     /// Respawn the AI Router now, killing any process still attached.

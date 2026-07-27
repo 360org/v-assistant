@@ -9,7 +9,6 @@ import {
   type ProviderConfig,
 } from "@/runtime/providers";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
-import { reflectAndLearn } from "@/runtime/selfImprove";
 import {
   AI_ROUTER_BASE_URL,
   deleteAiRouterPack,
@@ -64,8 +63,6 @@ export function Chat() {
     knowledgeFiles,
     addKnowledgeFiles,
     removeKnowledgeFile,
-    selfImprove,
-    addAgentMemory,
     agents,
     activeBackgroundTasks,
     stopBackgroundTask,
@@ -587,15 +584,9 @@ export function Chat() {
           ),
         );
       }
-      const replyText = visibleAssistantText(rawReplyText);
-      if (selfImprove && activeAgent && replyText && !controller.signal.aborted) {
-        void reflectAndLearn(
-          { user: content, assistant: replyText },
-          "openrouter",
-          routerConfig,
-          agentConfigs[activeAgent.id]?.memory ?? [],
-        ).then((notes) => addAgentMemory(activeAgent.id, notes));
-      }
+      // Reflection now runs in the Host Process (agent-runner/src/memory/
+      // self-improve.ts) so a Telegram conversation teaches the role too, and
+      // so closing the window does not stop it.
     } catch (error) {
       if (!controller.signal.aborted) {
         const note = `⚠️ ${error instanceof Error ? error.message : String(error)}`;

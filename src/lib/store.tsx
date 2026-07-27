@@ -1481,13 +1481,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeId,
         AI_ROUTER_BASE_URL,
         cfg.model || "auto",
+        state.selfImprove,
       );
     })();
-    
+
     return () => {
       cancelled = true;
     };
-  }, [state.activeAgentId, state.provider, state.providerConfigs]);
+    // Self-improvement now runs in the runner, which reads the flag from
+    // runner.json — restarting is how a flipped switch reaches it.
+  }, [state.activeAgentId, state.provider, state.providerConfigs, state.selfImprove]);
 
   const value = useMemo<AppStore>(
     () => ({
