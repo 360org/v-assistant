@@ -1,10 +1,14 @@
 name: Production Release
 
-# Main commits build macOS installers first. Windows and Linux are built only
-# after manual approval through workflow_dispatch. Docker is not part of this path.
+# Releases are deliberate. Pushing a `v*` tag builds the macOS installers;
+# Windows and Linux are built after manual approval through workflow_dispatch.
+#
+# This used to run on every push to main and mint its own tag, which is how the
+# repository ended up with 233 tags for a handful of real releases. A commit
+# belongs in CHANGELOGS.md; only an explicit tag is a release.
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       targets:
@@ -39,28 +43,27 @@ jobs:
           node-version: 24
 
       - id: release
-        name: Tag the next patch release for this main commit
+        name: Take the version from the tag that triggered this run
         shell: bash
         run: |
-          git fetch --tags --force
-          latest_tag="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)"
-          if [[ -z "$latest_tag" ]]; then
-            version="$(node -p "require('./package.json').version")"
+          # The tag is the decision. Nothing here invents one.
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            tag="${{ github.ref_name }}"
           else
-            base_version="${latest_tag#v}"
-            if [[ ! "$base_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              echo "Latest release tag is not a semantic version: $latest_tag" >&2
-              exit 1
-            fi
-            version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+            tag="v$(node -p "require('./package.json').version")"
           fi
-          tag="v$version"
+          version="${tag#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must be a semantic version, got: $tag" >&2
+            exit 1
+          fi
+          manifest="$(node -p "require('./package.json').version")"
+          if [[ "$version" != "$manifest" ]]; then
+            echo "Tag $tag does not match package.json ($manifest). Bump the version first." >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Release $tag"
-          git push origin "$tag"
 
   build_macos:
     needs: version
@@ -150,6 +153,14 @@ jobs:
           # no per-architecture .node file to verify.
           ! grep -rq "better-sqlite3" agent-runner/dist
           test ! -d agent-runner/node_modules/better-sqlite3
+
+      # tauri-action picks its package manager from the lockfile. This repo has
+      # pnpm-lock.yaml, so it runs `pnpm tauri build` — which failed instantly
+      # on a runner that only had npm, with no compiler output to explain it.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
 
       - name: Build installers and upload to draft release
         uses: tauri-apps/tauri-action@v0
@@ -241,6 +252,11 @@ jobs:
         run: |
           npm ci --prefix agent-runner
           ./agent-runner/node_modules/.bin/tsc --project agent-runner/tsconfig.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
 
       - name: Build remaining installers and upload to draft release
         uses: tauri-apps/tauri-action@v0

@@ -2,7 +2,18 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
-## [Unreleased]
+## [1.1.3] — 2026-07-27
+
+### Quy trình phát hành
+
+*   **Bỏ tự động tag.** Workflow trước đây tag một bản patch mới cho **mọi** lần push lên
+    `main`, nên kho có **233 tag** cho vài lần phát hành thật. Nay chỉ chạy khi có tag `v*`
+    được đẩy lên, và tag phải khớp `package.json` — nếu lệch thì dừng ngay.
+    Commit chỉ đi vào CHANGELOGS; tag là quyết định của PO.
+*   **Sửa lỗi build im lặng.** `tauri-action` chọn trình quản lý gói theo lockfile; kho có
+    `pnpm-lock.yaml` nên nó chạy `pnpm tauri build`, trong khi runner chỉ có npm — job chết
+    sau 1 giây, không một dòng lỗi biên dịch nào. Hai bản phát hành gần nhất đều hỏng vì
+    chuỗi lỗi này (bản trước nữa hỏng ở bước kiểm chứng `better_sqlite3.node`, nay đã gỡ).
 
 ### Bộ não chuyển hẳn sang Host Process (idea.md §1.3)
 
