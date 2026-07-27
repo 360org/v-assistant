@@ -307,7 +307,14 @@ export function Chat() {
   const openPackEditor = (pack?: AiRouterModel) => {
     setEditingPackId(pack?.id.startsWith("pack:") ? pack.id.slice(5) : null);
     setPackName(pack?.name ?? "");
-    setPackModels(pack?.models ?? []);
+    // Only keep ids a checkbox can represent. A pack saved against an account
+    // that has since gone away would otherwise load ids with no matching row:
+    // they stayed in the selection invisibly, no amount of clicking removed
+    // them, and every save was refused for "a model without a Verified
+    // connection". The router re-binds stale pins, so anything still unmatched
+    // here is genuinely gone.
+    const selectable = new Set(individualModels.map((model) => model.id));
+    setPackModels((pack?.models ?? []).filter((id) => selectable.has(id)));
     setPackStrategy(pack?.strategy ?? "fallback");
     setPackAccountFilters(connectedModelAccounts.map((account) => account.id));
     setPackError(null);

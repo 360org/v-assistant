@@ -332,15 +332,31 @@ function modelAccount(modelId) {
   }
 }
 
+/**
+ * Bind each model in a pack to a live account.
+ *
+ * A pinned `?account=` used to be returned untouched, so signing in again —
+ * which mints a new connection id and removes the old one — orphaned every
+ * saved pack: the editor showed nothing selected, and the ids it had loaded
+ * matched no checkbox, so the user could not clear them and saving always
+ * failed with "model without a Verified connection". A pin to an account that
+ * no longer exists is stale, not a preference, so it is re-bound here.
+ */
 function packModelsForConnections(models, connections) {
+  const live = connections.filter(
+    (item) => item.isActive !== false && item.testStatus === "Verified",
+  );
   return models.map((modelId) => {
-    if (modelId.includes("?account=")) return modelId;
-    const separator = modelId.indexOf("/");
-    const provider = separator > 0 ? modelId.slice(0, separator) : "";
-    const connection = connections.find((item) =>
-      item.provider === provider && item.isActive !== false && item.testStatus === "Verified"
-    );
-    return connection ? `${modelId}?account=${encodeURIComponent(connection.id)}` : modelId;
+    const pinIndex = modelId.indexOf("?account=");
+    const bare = pinIndex < 0 ? modelId : modelId.slice(0, pinIndex);
+    if (pinIndex >= 0) {
+      const pinned = decodeURIComponent(modelId.slice(pinIndex + "?account=".length));
+      if (live.some((item) => item.id === pinned)) return modelId;
+    }
+    const separator = bare.indexOf("/");
+    const provider = separator > 0 ? bare.slice(0, separator) : "";
+    const connection = live.find((item) => item.provider === provider);
+    return connection ? `${bare}?account=${encodeURIComponent(connection.id)}` : bare;
   });
 }
 
