@@ -3,6 +3,98 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+
+### Bộ não chuyển hẳn sang Host Process (idea.md §1.3)
+
+Đóng cửa sổ app thì lịch vẫn phải chạy, Telegram vẫn phải trả lời. Trước đây cả bốn
+hệ con đều nằm trong webview nên đóng app là tắt hết. Nay đã di trú xong toàn bộ:
+
+*   **Scheduler** → `agent-runner/src/scheduler/`. App sở hữu danh sách nhiệm vụ,
+    runner sở hữu việc thực thi và ghi `lastRun` vào `session_state` — không bên nào
+    ghi vào kho của bên kia.
+*   **Telegram** → `agent-runner/src/channels/telegram.ts`. Telegram nhét bot token
+    trong URL path, mà Connector Gateway cấm credential trong URL, nên **AI Router giữ
+    token** và mở 3 endpoint không lộ token (`/v1/channels/telegram/{status,updates,send}`);
+    runner chỉ điều khiển. Token không bao giờ rời router.
+*   **selfImprove** → `agent-runner/src/memory/self-improve.ts`. Ghi vào cây memory của
+    chính role (`agents/<tên>/memory/memories/learned.md`), áp dụng cho cả hội thoại
+    Telegram. Công tắc đi qua `runner.json`, đọc lại mỗi lượt.
+*   **Knowledge/RAG** → `knowledge.db` (app ghi, runner đọc read-only). **RAG trước đây
+    chết hẳn trên đường runner**: webview truy xuất excerpt rồi nhét vào
+    `options.knowledgeExcerpts`, nhưng bản tin gửi sang runner chỉ mang text nên excerpt
+    bị bỏ. Giờ runner tự truy xuất trong `executeAgentLoop` — chat, Telegram và lịch đều
+    được grounding.
+
+Webview chỉ còn hiển thị. Đã xoá `src/runtime/{telegram,scheduler,schedule,selfImprove,nanoclawSessions}.ts`.
+
+### Build 1 chạy 3
+
+*   Thay `better-sqlite3` bằng **`node:sqlite`** (SQLite dựng sẵn trong Node 24). Runner
+    còn **0 runtime dependency**, thuần JS — một `dist/index.js` chạy cả macOS/Windows/Linux.
+    Trước đây addon native phải biên dịch theo từng nền tảng *và* từng Node ABI; lệch ABI
+    là runner chết vòng lặp và UI chỉ hiện "Load failed".
+
+### An toàn — model từng có shell trên máy host
+
+*   **Gỡ `execute_cli`** và lệnh Rust `execute_cli_command`. Nó đưa cho model
+    `sh -c <bất kỳ>`, trái idea.md §22 và §92. Runner chưa bao giờ có shell, nhưng đường
+    agent trong webview thì có — và đường đó chạy mỗi khi runner chết, luôn chạy với
+    provider bỏ qua runner. Rủi ro thật là prompt injection: trang web hay tài liệu agent
+    đọc bảo nó chạy lệnh.
+*   **File tool của webview vào sandbox**: đi qua `agent_read_file`/`agent_write_file`/
+    `agent_list_dir`, containment cưỡng chế trong Rust. Trước đó nhận đường dẫn tuyệt đối
+    bất kỳ (`~/Desktop/output.txt` ghi được thẳng ra đĩa).
+*   **Sandbox của runner có 2 gốc**: workspace và thư mục riêng của agent — trước đó agent
+    bị chặn đọc chính cái memory mà system prompt bảo nó đọc.
+
+### Dữ liệu bịa — đã gỡ
+
+*   **Lịch sử chạy nhiệm vụ**: mỗi nhiệm vụ mới bị chèn sẵn 2 bản ghi giả, gồm một lỗi
+    "401 Unauthorized khi gọi Webhook" chưa từng xảy ra, trong khi lần chạy thật không ghi
+    gì cả. Nay lịch sử được ghi từ việc Host Process thực sự làm, kèm trạng thái và thời lượng thật.
+*   **`execute_mcp_tool`** không làm gì nhưng trả `"✅ … thực thi thành công"`, model tin rồi
+    báo cáo lại với người dùng như việc đã xong. **`mcp_status`** khai khống danh sách MCP
+    server và quảng cáo shell. Cả hai đã gỡ — MCP thuộc về runner, đường fallback không có.
+
+### Lịch & Nhiệm vụ — agent đặt lịch thật
+
+*   `schedule_task` nhận **cả kế hoạch trong một lệnh gọi** qua mảng `tasks`. Trước đây mỗi
+    lần gọi chỉ được 1 nhiệm vụ nên kế hoạch 7 ngày cần 7 lệnh gọi, và model chọn tóm tắt
+    bằng lời — người dùng được báo "đã đặt lịch" trong khi Lịch & Nhiệm vụ trống trơn.
+*   **Bộ khớp lịch hiểu tiếng Việt**: `lúc HH:MM`, `9h30`, `HH:MM` trần, thứ hai–chủ nhật,
+    hàng giờ/hàng tháng. Trước đó chỉ hiểu `at HH:MM` tiếng Anh, trong khi mô tả tool lại
+    bảo model viết `"Hàng ngày lúc 09:30"` — chuỗi đó im lặng rơi về 9:00.
+*   **Lịch một lần theo ngày**: `26/07`, `26/07/2026`, `2026-07-26` chạy đúng một lần.
+    Trước đó rơi vào nhánh mặc định thành chạy hàng ngày lúc 9:00 vĩnh viễn.
+*   System prompt siết lại: kế hoạch viết trong tin nhắn hay tài liệu **không phải** là đã
+    đặt lịch; không được nói đã đặt lịch trừ khi tool đã trả về trong lượt đó.
+
+### Sửa lỗi khác
+
+*   **Pack hỏng sau khi đăng nhập lại**: đăng nhập lại cấp id kết nối mới, nhưng model đã
+    ghim `?account=<id cũ>` được trả về nguyên xi. Mọi pack đã lưu thành mồ côi — mở ra
+    không ô nào được tick, tick lại cả loạt thì id chết vẫn nằm trong danh sách mà không ô
+    nào đại diện, nên lưu luôn bị chặn và **không thao tác nào trên UI gỡ được**. Nay ghim
+    chết được nối lại vào kết nối đang sống, và trình sửa pack không nạp id nó không hiển thị được.
+*   **Runner bị respawn 177 lần/phiên**: effect restart bị key vào `providerConfigs` — object
+    đổi identity mỗi `setState`. Runner giờ ôm scheduler + Telegram nên mỗi lần respawn là
+    tháo long-poll và bắn lại tick khởi động. Nay key bằng chuỗi primitive.
+*   **Runner mồ côi**: app ghi `runner.pid` và dừng tiến trình cũ trước khi spawn mới, có
+    xác minh pid đúng là runner (pid bị tái sử dụng).
+*   **Hàng đợi outbound dùng chung 3 kênh** nay bắt buộc gắn `channel_type` — thiếu thì câu
+    trả lời Telegram nhảy vào ô chat như thể là câu trả lời của người dùng.
+*   **Khôi phục Grok Web session capture** bị mất khi tách god file.
+*   **File chia sẻ với runner** phải nằm ở `runtime_status().dir`, không phải
+    `~/.v-assistant/data` — hai đường dẫn này khác nhau.
+
+### Kiểm chứng
+
+Thêm `scripts/host-process-contract-check.mjs` và `scripts/pack-rebind-check.mjs`; suite của
+runner tăng lên 5 nhóm test (scheduler, Telegram, self-improve, knowledge, native tools).
+
+---
+
+## [1.1.2] và trước đó
 *   **Bỏ Docker khỏi quy trình test (`skills/v-assistant-dev-guidelines/SKILL.md` §5)**:
     - Từ 2026-07-27, **không dùng Docker/Colima** để test nữa. Quy trình chuẩn: `npm run tauri dev` cho vòng lặp sửa nhanh, `npm run build:local` cho bản cài thật vào `/Applications/V Assistant.app`, rồi **thao tác thật trên UI**.
     - `./dev up|ui|all` chỉ còn dành cho profile server nếu được yêu cầu rõ.
