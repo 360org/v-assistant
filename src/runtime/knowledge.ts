@@ -338,33 +338,29 @@ interface FileChunks {
 
 const bucketOf = (agentId: string | null | undefined): string => agentId ?? "general";
 
+/**
+ * Storage lives in the runtime's `knowledge.db`, not IndexedDB: the Agent
+ * Runner has to read these chunks to ground its answers, and it cannot reach
+ * browser storage. The in-memory map is the fallback for the browser preview,
+ * where there is no Tauri runtime at all.
+ */
 const memory = new Map<string, FileChunks>();
-const hasIdb = typeof indexedDB !== "undefined";
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open("v-assistant-knowledge", 1);
-    req.onupgradeneeded = () =>
-      req.result.createObjectStore("chunks", { keyPath: "fileId" });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+interface KnowledgeRow {
+  file_id: string;
+  bucket: string;
+  name: string;
+  data_url?: string | null;
+  added_at: number;
+  size: number;
 }
 
-async function withStore<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const db = await openDb();
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const req = run(db.transaction("chunks", mode).objectStore("chunks"));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  } finally {
-    db.close();
-  }
+const inDesktop = (): boolean =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+async function command<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(name, args);
 }
 
 /** Extract + chunk + persist one file into a role's bucket. Returns chunk count. */
@@ -449,8 +445,17 @@ export async function indexKnowledgeFile(
     }
 
     const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
-    if (hasIdb) await withStore("readwrite", (s) => s.put(rec));
-    else memory.set(fileId, rec);
+    if (inDesktop()) {
+      await command("knowledge_put", {
+        fileId,
+        bucket: rec.bucket,
+        name: rec.name,
+        chunks,
+        dataUrl: dataUrl ?? null,
+      });
+    } else {
+      memory.set(fileId, rec);
+    }
     return chunks.length;
   };
 
@@ -466,71 +471,76 @@ export async function indexKnowledgeFile(
 }
 
 export async function deleteKnowledgeFile(fileId: string): Promise<void> {
-  if (hasIdb) await withStore("readwrite", (s) => s.delete(fileId));
+  if (inDesktop()) await command("knowledge_delete", { fileId });
   else memory.delete(fileId);
 }
 
 export async function getFileContent(fileId: string): Promise<string | null> {
-  const rec = hasIdb
-    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
-    : memory.get(fileId);
+  const rec = await getKnowledgeFileRecord(fileId);
   return rec ? rec.chunks.join("\n\n") : null;
 }
 
 export async function getKnowledgeFileRecord(
   fileId: string,
 ): Promise<{ name: string; chunks: string[]; dataUrl?: string } | null> {
-  const rec = hasIdb
-    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
-    : memory.get(fileId);
+  if (inDesktop()) {
+    const row = await command<{ name: string; chunks: string[]; dataUrl?: string | null } | null>(
+      "knowledge_get",
+      { fileId },
+    ).catch(() => null);
+    return row ? { name: row.name, chunks: row.chunks, dataUrl: row.dataUrl ?? undefined } : null;
+  }
+  const rec = memory.get(fileId);
   return rec ? { name: rec.name, chunks: rec.chunks, dataUrl: rec.dataUrl } : null;
 }
 
 export async function clearKnowledge(): Promise<void> {
-  if (hasIdb) await withStore("readwrite", (s) => s.clear());
+  if (inDesktop()) await command("knowledge_clear", {});
   else memory.clear();
 }
 
-export async function getAllKnowledgeRecords(agentId?: string | null): Promise<Array<{ id: string; name: string; size: number; status: "ready"; addedAt: number }>> {
-  const bucket = bucketOf(agentId ?? null);
-  const imgExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "ico"]);
-  const files: FileChunks[] = hasIdb
-    ? (await withStore<FileChunks[]>("readonly", (s) => s.getAll())).filter(
-        (f) => f.bucket === bucket,
-      )
-    : [...memory.values()].filter((f) => f.bucket === bucket);
-
-  // Lọc bỏ file ảnh — Knowledge base chỉ lưu document (pdf, docx, xlsx, md, txt, csv, html...)
-  return files
-    .filter((f) => {
-      const ext = f.name.toLowerCase().split(".").pop() ?? "";
-      return !imgExtensions.has(ext);
-    })
+/** Every stored document, as flat rows. Bucket-scoped when `bucket` is given. */
+async function listRecords(bucket?: string): Promise<KnowledgeRow[]> {
+  if (inDesktop()) {
+    return command<KnowledgeRow[]>("knowledge_list", { bucket: bucket ?? null }).catch(() => []);
+  }
+  return [...memory.values()]
+    .filter((f) => bucket === undefined || f.bucket === bucket)
     .map((f) => ({
-      id: f.fileId,
+      file_id: f.fileId,
+      bucket: f.bucket,
       name: f.name,
-      size: f.chunks ? f.chunks.join("").length : 0,
+      data_url: f.dataUrl,
+      added_at: Date.now(),
+      size: f.chunks.join("").length,
+    }));
+}
+
+const extensionOf = (name: string): string => name.toLowerCase().split(".").pop() ?? "";
+
+const IMAGE_EXTENSIONS = new Set([
+  "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "ico", "heic", "heif",
+]);
+
+export async function getAllKnowledgeRecords(agentId?: string | null): Promise<Array<{ id: string; name: string; size: number; status: "ready"; addedAt: number }>> {
+  const files = await listRecords(bucketOf(agentId ?? null));
+  // Knowledge base chỉ hiển thị document (pdf, docx, xlsx, md, txt, csv, html…).
+  return files
+    .filter((f) => !IMAGE_EXTENSIONS.has(extensionOf(f.name)))
+    .map((f) => ({
+      id: f.file_id,
+      name: f.name,
+      size: f.size,
       status: "ready" as const,
-      addedAt: Date.now(),
+      addedAt: f.added_at,
     }));
 }
 
 export async function getAllImageRecords(): Promise<Array<{ id: string; name: string; dataUrl?: string }>> {
-  const files: FileChunks[] = hasIdb
-    ? await withStore<FileChunks[]>("readonly", (s) => s.getAll())
-    : [...memory.values()];
-
-  const imageFiles = files.filter((f) => {
-    const ext = f.name.toLowerCase().split(".").pop() ?? "";
-    const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"].includes(ext);
-    return isImg || Boolean(f.dataUrl) || f.chunks?.[0]?.startsWith("data:image/");
-  });
-
-  return imageFiles.map((f) => ({
-    id: f.fileId,
-    name: f.name,
-    dataUrl: f.dataUrl || (f.chunks?.[0]?.startsWith("data:image/") ? f.chunks[0] : undefined),
-  }));
+  const files = await listRecords();
+  return files
+    .filter((f) => IMAGE_EXTENSIONS.has(extensionOf(f.name)) || Boolean(f.data_url))
+    .map((f) => ({ id: f.file_id, name: f.name, dataUrl: f.data_url ?? undefined }));
 }
 
 // ---------------------------------------------------------------------------
@@ -548,6 +558,10 @@ const tokenize = (s: string): string[] =>
 /**
  * Top chunks from THIS role's documents for a question — tf-idf scored,
  * capped so the excerpts never flood the prompt.
+ *
+ * The Agent Runner does its own retrieval straight from `knowledge.db`
+ * (agent-runner/src/knowledge). This copy only serves the fallback path, where
+ * the runner is unavailable and the webview talks to the provider itself.
  */
 export async function retrieveKnowledge(
   agentId: string | null,
@@ -555,17 +569,20 @@ export async function retrieveKnowledge(
   k = 4,
   maxChars = 6000,
 ): Promise<KnowledgeExcerpt[]> {
-  const bucket = bucketOf(agentId);
-  const files = hasIdb
-    ? (await withStore<FileChunks[]>("readonly", (s) => s.getAll())).filter(
-        (f) => f.bucket === bucket,
-      )
-    : [...memory.values()].filter((f) => f.bucket === bucket);
-  const all = files.flatMap((f) =>
+  const qTerms = [...new Set(tokenize(query))];
+  if (!qTerms.length) return [];
+
+  const files = await listRecords(bucketOf(agentId));
+  const loaded = await Promise.all(
+    files.map(async (f) => ({
+      name: f.name,
+      chunks: (await getKnowledgeFileRecord(f.file_id))?.chunks ?? [],
+    })),
+  );
+  const all = loaded.flatMap((f) =>
     f.chunks.map((text) => ({ name: f.name, text, terms: tokenize(text) })),
   );
-  const qTerms = [...new Set(tokenize(query))];
-  if (!all.length || !qTerms.length) return [];
+  if (!all.length) return [];
 
   const df = new Map<string, number>();
   for (const q of qTerms)

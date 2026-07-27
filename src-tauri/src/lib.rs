@@ -7,11 +7,13 @@
 //! files.
 
 pub mod auth;
+pub mod knowledge;
 pub mod runtime;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;
 pub mod vault;
 
+use knowledge::{KnowledgeContent, KnowledgeRecord};
 use runtime::{AgentConfig, OutboundMessage, Runtime, RuntimeStatus};
 use tauri::Manager;
 
@@ -77,6 +79,50 @@ fn runtime_restart_runner(
         self_improve.unwrap_or(true),
         Some(&app),
     )
+}
+
+// --- Knowledge store -------------------------------------------------------
+//
+// The app owns the writes: it holds the picked file and does the extraction
+// (pdfjs and the Office formats are browser code). The runner opens the same
+// database read-only to ground its answers.
+
+#[tauri::command]
+fn knowledge_put(
+    state: tauri::State<Runtime>,
+    file_id: String,
+    bucket: String,
+    name: String,
+    chunks: Vec<String>,
+    data_url: Option<String>,
+) -> Result<(), String> {
+    knowledge::put(&state.dir, &file_id, &bucket, &name, &chunks, data_url.as_deref())
+}
+
+#[tauri::command]
+fn knowledge_delete(state: tauri::State<Runtime>, file_id: String) -> Result<(), String> {
+    knowledge::delete(&state.dir, &file_id)
+}
+
+#[tauri::command]
+fn knowledge_clear(state: tauri::State<Runtime>) -> Result<(), String> {
+    knowledge::clear(&state.dir)
+}
+
+#[tauri::command]
+fn knowledge_get(
+    state: tauri::State<Runtime>,
+    file_id: String,
+) -> Result<Option<KnowledgeContent>, String> {
+    knowledge::get(&state.dir, &file_id)
+}
+
+#[tauri::command]
+fn knowledge_list(
+    state: tauri::State<Runtime>,
+    bucket: Option<String>,
+) -> Result<Vec<KnowledgeRecord>, String> {
+    knowledge::list(&state.dir, bucket.as_deref())
 }
 
 /// Execute a credentialed connector call without exposing the gateway
@@ -408,6 +454,11 @@ pub fn run() {
             runtime_restart_runner,
             runtime_restart_ai_router,
             runtime_connector_request,
+            knowledge_put,
+            knowledge_delete,
+            knowledge_clear,
+            knowledge_get,
+            knowledge_list,
             auth::oauth_listen,
             auth::open_external,
             auth::capture_grok_sso_cookie,

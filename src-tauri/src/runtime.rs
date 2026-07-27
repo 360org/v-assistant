@@ -420,6 +420,7 @@ impl Runtime {
         // Initialize schema for both DBs
         runtime.init_inbound_schema()?;
         runtime.init_outbound_schema()?;
+        crate::knowledge::init_schema(&runtime.dir)?;
 
         // Spawning background process monitor (health check & auto-restart)
         let dir_clone = dir;

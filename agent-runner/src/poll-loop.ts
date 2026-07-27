@@ -33,6 +33,7 @@ import {
 } from './formatter.js';
 import { getToolDefinitions, executeTool } from './native-tools/index.js';
 import { learnFromExchange } from './memory/self-improve.js';
+import { retrieveKnowledge, formatExcerpts } from './knowledge/index.js';
 import { mcpManager } from './mcp-client/index.js';
 import { clearBuiltinToolContext, executeBuiltinTool, getBuiltinToolDefinitions, hasBuiltinTool, setBuiltinToolContext } from './mcp-tools/index.js';
 import type { AgentProvider, ProviderEvent, ChatMessage, ToolCall, ToolResult } from './providers/types.js';
@@ -278,6 +279,23 @@ export async function executeAgentLoop(
   let finalText: string | null = null;
   let sessionContinuation = continuation;
 
+  // RAG: ground the answer in this role's own documents. Done here rather than
+  // in the webview so chat, Telegram and scheduled tasks all get it — the
+  // webview could only ever ground the turns it handled itself.
+  let groundedContext = systemContext;
+  try {
+    const excerpts = retrieveKnowledge(config.agentId, prompt);
+    if (excerpts.length > 0) {
+      log(`Grounding on ${excerpts.length} excerpt(s) from the role's documents`);
+      groundedContext = {
+        ...systemContext,
+        instructions: systemContext.instructions + formatExcerpts(excerpts),
+      };
+    }
+  } catch (error) {
+    log(`Knowledge lookup skipped: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const mcpTools = await mcpManager.listAllTools();
     const allTools = [...getToolDefinitions(), ...getBuiltinToolDefinitions(), ...mcpTools];
@@ -286,7 +304,7 @@ export async function executeAgentLoop(
       prompt: currentPrompt,
       messages: conversationHistory,
       continuation: sessionContinuation,
-      systemContext,
+      systemContext: groundedContext,
       tools: allTools.length > 0 ? allTools : undefined,
     });
 

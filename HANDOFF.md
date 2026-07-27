@@ -22,12 +22,17 @@
 |---|---|---|---|
 | 1 | **Scheduler** | ✅ **XONG** | `agent-runner/src/scheduler/` · 18 test · bản webview đã gỡ |
 | 2 | **Telegram** | ✅ **XONG** | Router giữ token + Runner long-poll · 16 test · bản webview đã gỡ |
-| 3 | selfImprove | ⬜ Chưa | `src/runtime/selfImprove.ts`, 87 dòng, gọi từ `src/pages/Chat.tsx` |
-| 4 | Knowledge/RAG | ⬜ Chưa | `src/runtime/knowledge.ts`, 592 dòng, phải chuyển IndexedDB → SQLite |
+| 3 | **selfImprove** | ✅ **XONG** | `agent-runner/src/memory/self-improve.ts` · 22 test · bản webview đã gỡ |
+| 4 | **Knowledge/RAG** | ✅ **XONG** | `knowledge.db` (app ghi, runner đọc) · 14 test · IndexedDB đã gỡ |
 
-Webview giờ **không còn chạy bộ não nào** cho 2 hệ đã xong — nó chỉ hiển thị.
-Đã xoá: `src/runtime/telegram.ts`, `scheduler.ts`, `schedule.ts`, `nanoclawSessions.ts`
-và 2 script test tương ứng ở root. Tổng cộng **-636 dòng**.
+**Cả 4 hệ con đã nằm trong Host Process.** Webview chỉ còn hiển thị.
+Đã xoá: `src/runtime/telegram.ts`, `scheduler.ts`, `schedule.ts`, `nanoclawSessions.ts`,
+`selfImprove.ts` và 3 script test tương ứng ở root.
+
+**RAG trước đây chết hẳn trên đường runner** — webview truy xuất excerpt rồi nhét vào
+`options.knowledgeExcerpts`, nhưng `nanoclawEngine.chat` chỉ gửi text sang runner nên
+excerpt bị bỏ. Giờ runner tự truy xuất trong `executeAgentLoop`, nên chat + Telegram +
+lịch đều được grounding.
 
 ---
 
@@ -70,12 +75,9 @@ Commit `2950b10` sửa `.github/workflows/release.yml`. Không tách được v�
 git push origin dev
 ```
 
-### 🟡 Danh sách lịch cũ — chờ anh quyết
-Trong lúc test live, code (bản chưa có guard) đã ghi `[]` đè lên
-`scheduled_tasks.json`, xoá 33 nhiệm vụ. **Đã dựng lại đủ 33** từ nhật ký
-`workspace/.audit/tool_calls.log`, để sẵn ở scratchpad
-(`scheduled_tasks_recovered.json`), `enabled: false` để không tự chạy.
-Guard chống lặp lại đã có (`tasksLoadedRef` trong `store.tsx`).
+### ⬜ Kiểm chứng vòng cuối Telegram
+Runner báo `[telegram] Connected — listening for messages`. Cần PO nhắn thử bot từ
+điện thoại để xác nhận đầu-cuối (phần này không tự test được).
 
 ---
 
@@ -89,5 +91,9 @@ Guard chống lặp lại đã có (`tasksLoadedRef` trong `store.tsx`).
   scheduler + Telegram, để sót 2 tiến trình là trả lời trùng.
 - **File chia sẻ với runner phải nằm ở `runtime_status().dir`**, không phải
   `~/.v-assistant/data`. Hai chỗ này khác nhau.
+- **`knowledge.db`**: app ghi (nó giữ File + pdfjs để trích text), runner mở
+  read-only để truy xuất. Cùng mô hình sở hữu với `inbound.db`.
+- **Chỉ ghi đè file dữ liệu sống sau khi đã đọc nó ít nhất một lần** —
+  `tasksLoadedRef` trong `store.tsx` là mẫu tham chiếu.
 - Quy trình test: **không Docker**. `npm run tauri dev`, rồi thao tác thật trên UI.
 - Đọc `skills/v-assistant-dev-guidelines/SKILL.md` trước khi sửa — **Luật số 1: bám idea.md**.
