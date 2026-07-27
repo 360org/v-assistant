@@ -9,7 +9,6 @@ import {
   type ProviderConfig,
 } from "@/runtime/providers";
 import { createEngine, newMessageId, type ChatMessage } from "@/runtime/engine";
-import { reflectAndLearn } from "@/runtime/selfImprove";
 import {
   AI_ROUTER_BASE_URL,
   deleteAiRouterPack,
@@ -64,8 +63,6 @@ export function Chat() {
     knowledgeFiles,
     addKnowledgeFiles,
     removeKnowledgeFile,
-    selfImprove,
-    addAgentMemory,
     agents,
     activeBackgroundTasks,
     stopBackgroundTask,
@@ -310,7 +307,14 @@ export function Chat() {
   const openPackEditor = (pack?: AiRouterModel) => {
     setEditingPackId(pack?.id.startsWith("pack:") ? pack.id.slice(5) : null);
     setPackName(pack?.name ?? "");
-    setPackModels(pack?.models ?? []);
+    // Only keep ids a checkbox can represent. A pack saved against an account
+    // that has since gone away would otherwise load ids with no matching row:
+    // they stayed in the selection invisibly, no amount of clicking removed
+    // them, and every save was refused for "a model without a Verified
+    // connection". The router re-binds stale pins, so anything still unmatched
+    // here is genuinely gone.
+    const selectable = new Set(individualModels.map((model) => model.id));
+    setPackModels((pack?.models ?? []).filter((id) => selectable.has(id)));
     setPackStrategy(pack?.strategy ?? "fallback");
     setPackAccountFilters(connectedModelAccounts.map((account) => account.id));
     setPackError(null);
@@ -472,16 +476,65 @@ export function Chat() {
     const textContent = typeof customText === "string" ? customText.trim() : input.trim();
     if ((!textContent && readyFiles.length === 0) || streaming || !activeModel) return;
 
+    setInput("");
+
+    // 1. Trích xuất bản ghi (b64 dataUrl cho ảnh & text chunks cho PDF/văn bản) TRƯỚC KHI dọn dẹp readyFiles
+    const fileRecords = await Promise.all(
+      readyFiles.map(async (f) => {
+        let b64 = "";
+        let chunks: string[] = [];
+        try {
+          const rec = await getKnowledgeFileRecord(f.id);
+          if (rec) {
+            b64 = rec.dataUrl || "";
+            chunks = rec.chunks || [];
+          }
+        } catch {
+          /* ignore */
+        }
+
+        // Nếu fileObjectURLs đã lưu sẵn base64 data:image
+        const storedUrl = fileObjectURLs.get(f.id);
+        if (!b64 && storedUrl && storedUrl.startsWith("data:")) {
+          b64 = storedUrl;
+        }
+
+        return { file: f, b64, chunks };
+      }),
+    );
+
+    // 2. Xây dựng nội dung văn bản kèm nội dung trích xuất từ PDF / tệp văn bản (loại trừ tệp ảnh)
+    const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];
+    const attachedTexts: string[] = [];
+    fileRecords.forEach(({ file, chunks }) => {
+      const ext = file.name.toLowerCase().split(".").pop() ?? "";
+      if (!imgExtensions.includes(ext) && chunks && chunks.length > 0) {
+        const fullText = chunks.join("\n").trim();
+        if (fullText) {
+          attachedTexts.push(`--- [Nội dung tệp: ${file.name}] ---\n${fullText}`);
+        }
+      }
+    });
+
     let content = textContent;
     if (readyFiles.length > 0) {
       const fileNames = readyFiles.map((f) => f.name).join(", ");
-      content = textContent
-        ? `${textContent}\n\n📎 Đã gửi tệp: ${fileNames}`
-        : `📎 Đã gửi tệp: ${fileNames}`;
+      const header = textContent ? `${textContent}\n\n📎 Đã gửi tệp: ${fileNames}` : `📎 Đã gửi tệp: ${fileNames}`;
+      if (attachedTexts.length > 0) {
+        content = `${header}\n\n${attachedTexts.join("\n\n")}`;
+      } else {
+        content = header;
+      }
     }
 
-    setInput("");
+    // 3. Đính kèm danh sách tệp với Base64 Data URL hợp lệ (chỉ chấp nhận data:, loại bỏ hoàn toàn blob:)
+    const resolvedAttachments = fileRecords.map(({ file, b64 }) => ({
+      id: file.id,
+      name: file.name,
+      dataUrl: b64.startsWith("data:") ? b64 : undefined,
+    }));
 
+    // 4. Sau khi trích xuất dữ liệu xong mới đánh dấu đã gửi & dọn dẹp state
     if (readyFiles.length > 0) {
       setSentFileIds((prev) => new Set([...prev, ...readyFiles.map((f) => f.id)]));
       readyFiles.forEach((f) => removeKnowledgeFile(f.id));
@@ -492,11 +545,7 @@ export function Chat() {
       role: "user",
       content,
       createdAt: Date.now(),
-      attachments: readyFiles.map((f) => ({
-        id: f.id,
-        name: f.name,
-        dataUrl: fileObjectURLs.get(f.id) || undefined,
-      })),
+      attachments: resolvedAttachments,
     };
     const assistantId = newMessageId();
     const history = [...messages, userMessage];
@@ -542,15 +591,9 @@ export function Chat() {
           ),
         );
       }
-      const replyText = visibleAssistantText(rawReplyText);
-      if (selfImprove && activeAgent && replyText && !controller.signal.aborted) {
-        void reflectAndLearn(
-          { user: content, assistant: replyText },
-          "openrouter",
-          routerConfig,
-          agentConfigs[activeAgent.id]?.memory ?? [],
-        ).then((notes) => addAgentMemory(activeAgent.id, notes));
-      }
+      // Reflection now runs in the Host Process (agent-runner/src/memory/
+      // self-improve.ts) so a Telegram conversation teaches the role too, and
+      // so closing the window does not stop it.
     } catch (error) {
       if (!controller.signal.aborted) {
         const note = `⚠️ ${error instanceof Error ? error.message : String(error)}`;

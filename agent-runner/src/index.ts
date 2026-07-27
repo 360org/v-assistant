@@ -6,6 +6,8 @@ import { ensureIpcDir, setMaxMessagesPerPrompt } from './db/index.js';
 import './providers/index.js';
 import { createProvider, type ProviderName } from './providers/factory.js';
 import { runPollLoop } from './poll-loop.js';
+import { startScheduler } from './scheduler/index.js';
+import { startTelegramChannel } from './channels/telegram.js';
 import { mcpManager } from './mcp-client/index.js';
 import { ensureMemoryScaffold } from './memory/memory-scaffold.js';
 
@@ -52,15 +54,27 @@ async function main(): Promise<void> {
   const instructions = buildSystemPrompt(config.assistantName, config.agentName, agentDir);
 
   log(`Provider created: ${provider.name}`);
-  log('Entering poll loop...');
 
-  // Enter main poll loop (runs forever)
-  await runPollLoop({
+  const loopConfig = {
     provider,
     providerName,
     agentId: config.agentName,
+    agentDir,
     systemContext: { instructions },
-  });
+  };
+
+  // Scheduled tasks live here, not in the webview: closing the app window must
+  // not stop a schedule (idea.md §1.3 — the brain runs in the Host Process).
+  startScheduler(loopConfig);
+
+  // Same reason for Telegram: the bot must answer with the window closed. The
+  // AI Router holds the bot token; this only drives its token-free endpoints.
+  startTelegramChannel(loopConfig);
+
+  log('Entering poll loop...');
+
+  // Enter main poll loop (runs forever)
+  await runPollLoop(loopConfig);
 }
 
 /**
@@ -81,6 +95,16 @@ function buildSystemPrompt(assistantName: string, agentName: string, agentDir: s
   parts.push('- http_request: Make unauthenticated HTTP requests');
   parts.push('- web_search: Search the public web, then use http_request to read a result');
   parts.push('- connector_request: Use an opaque connector reference through the trusted gateway');
+  parts.push('- schedule_task: Register one or many tasks in V-Assistant "Lịch & Nhiệm vụ" (Scheduled Tasks)');
+  parts.push('');
+  parts.push('=== MANDATORY SCHEDULING RULE ===');
+  parts.push('Whenever you plan, agree to, or promise anything that happens at a time — a posting plan, a recurring report, a reminder, a daily summary — you MUST call "schedule_task" before you say it is scheduled.');
+  parts.push('Pass the WHOLE plan in one call using the "tasks" array: a seven-day posting plan is one call with seven entries, not seven calls and not a written summary.');
+  parts.push('A plan written in a message, a document, or a file is NOT scheduled. Only a task registered through this tool will ever run.');
+  parts.push('NEVER tell the user something is scheduled, will be posted automatically, or will run on time unless "schedule_task" returned successfully in this turn. If you did not call it, say plainly that nothing is scheduled yet.');
+  parts.push('Each task\'s "prompt" must stand on its own — the scheduled run does not see this conversation.');
+  parts.push('Schedule strings may be English or Vietnamese, recurring ("Hàng ngày lúc 09:30", "Every Monday at 08:00", "Weekdays at 08:30") or one-off ("27/07 08:30", "2026-07-27 08:30").');
+  parts.push('Schedule inside V-Assistant, not on external websites, unless the user explicitly asks otherwise.');
   parts.push('');
   parts.push('=== MANDATORY WORKSPACE & FILE STORAGE RULE ===');
   parts.push('- All created or generated files MUST be saved inside your active workspace directory.');

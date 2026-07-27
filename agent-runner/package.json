@@ -8,15 +8,11 @@
     "dev": "bun run src/index.ts",
     "dev:node": "npx tsx src/index.ts",
     "mcp:serve": "tsx src/mcp-tools/server.ts",
-    "test": "tsx scripts/e2e-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
-    "check": "tsc --noEmit && tsx scripts/e2e-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
+    "test": "tsx scripts/e2e-check.mjs && tsx scripts/scheduler-check.mjs && tsx scripts/telegram-check.mjs && tsx scripts/self-improve-check.mjs && tsx scripts/knowledge-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
+    "check": "tsc --noEmit && tsx scripts/e2e-check.mjs && tsx scripts/scheduler-check.mjs && tsx scripts/telegram-check.mjs && tsx scripts/self-improve-check.mjs && tsx scripts/knowledge-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "better-sqlite3": "^13.0.1"
-  },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0"

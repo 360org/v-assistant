@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState, useEffect, type DragEvent } from "react";
 import { FileText, Loader2, Trash2, UploadCloud, X } from "lucide-react";
-import { useApp, fileObjectURLs } from "@/lib/store";
+import { useApp, fileObjectURLs, type KnowledgeStatus } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, formatBytes } from "@/lib/utils";
-import { getKnowledgeFileRecord } from "@/runtime/knowledge";
+import { getKnowledgeFileRecord, getAllKnowledgeRecords } from "@/runtime/knowledge";
 
 export function Knowledge() {
   const {
@@ -17,6 +17,30 @@ export function Knowledge() {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
+  const [persistedFiles, setPersistedFiles] = useState<Array<{ id: string; name: string; size: number; status: "ready"; addedAt: number }>>([]);
+
+  useEffect(() => {
+    let active = true;
+    void getAllKnowledgeRecords(activeAgentId).then((recs) => {
+      if (active && recs) setPersistedFiles(recs);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeAgentId, knowledgeFiles]);
+
+  const imgExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "ico"]);
+
+  const displayFiles = useMemo(() => {
+    const fileMap = new Map<string, { id: string; name: string; size: number; status: KnowledgeStatus; chunks?: number; error?: string; addedAt?: number }>();
+    persistedFiles.forEach((f) => fileMap.set(f.id, { ...f, status: f.status as KnowledgeStatus }));
+    knowledgeFiles.forEach((f) => fileMap.set(f.id, f));
+    // Lọc bỏ file ảnh — Knowledge base chỉ lưu tài liệu (pdf, docx, xlsx, md...)
+    return Array.from(fileMap.values()).filter((f) => {
+      const ext = f.name.toLowerCase().split(".").pop() ?? "";
+      return !imgExtensions.has(ext);
+    });
+  }, [persistedFiles, knowledgeFiles]);
 
   // Knowledge belongs to the active role, so switching roles never mixes it.
   const roleName = useMemo(
@@ -78,13 +102,13 @@ export function Knowledge() {
         />
       </div>
 
-      {knowledgeFiles.length > 0 && (
+      {displayFiles.length > 0 && (
         <div className="mt-8">
           <h2 className="text-sm font-semibold text-neutral-300">
-            Your knowledge ({knowledgeFiles.length})
+            Your knowledge ({displayFiles.length})
           </h2>
           <ul className="mt-3 flex flex-col gap-2">
-            {knowledgeFiles.map((f) => (
+            {displayFiles.map((f) => (
               <li
                 key={f.id}
                 className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-3"

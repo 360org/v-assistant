@@ -3,6 +3,133 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+
+### Bộ não chuyển hẳn sang Host Process (idea.md §1.3)
+
+Đóng cửa sổ app thì lịch vẫn phải chạy, Telegram vẫn phải trả lời. Trước đây cả bốn
+hệ con đều nằm trong webview nên đóng app là tắt hết. Nay đã di trú xong toàn bộ:
+
+*   **Scheduler** → `agent-runner/src/scheduler/`. App sở hữu danh sách nhiệm vụ,
+    runner sở hữu việc thực thi và ghi `lastRun` vào `session_state` — không bên nào
+    ghi vào kho của bên kia.
+*   **Telegram** → `agent-runner/src/channels/telegram.ts`. Telegram nhét bot token
+    trong URL path, mà Connector Gateway cấm credential trong URL, nên **AI Router giữ
+    token** và mở 3 endpoint không lộ token (`/v1/channels/telegram/{status,updates,send}`);
+    runner chỉ điều khiển. Token không bao giờ rời router.
+*   **selfImprove** → `agent-runner/src/memory/self-improve.ts`. Ghi vào cây memory của
+    chính role (`agents/<tên>/memory/memories/learned.md`), áp dụng cho cả hội thoại
+    Telegram. Công tắc đi qua `runner.json`, đọc lại mỗi lượt.
+*   **Knowledge/RAG** → `knowledge.db` (app ghi, runner đọc read-only). **RAG trước đây
+    chết hẳn trên đường runner**: webview truy xuất excerpt rồi nhét vào
+    `options.knowledgeExcerpts`, nhưng bản tin gửi sang runner chỉ mang text nên excerpt
+    bị bỏ. Giờ runner tự truy xuất trong `executeAgentLoop` — chat, Telegram và lịch đều
+    được grounding.
+
+Webview chỉ còn hiển thị. Đã xoá `src/runtime/{telegram,scheduler,schedule,selfImprove,nanoclawSessions}.ts`.
+
+### Build 1 chạy 3
+
+*   Thay `better-sqlite3` bằng **`node:sqlite`** (SQLite dựng sẵn trong Node 24). Runner
+    còn **0 runtime dependency**, thuần JS — một `dist/index.js` chạy cả macOS/Windows/Linux.
+    Trước đây addon native phải biên dịch theo từng nền tảng *và* từng Node ABI; lệch ABI
+    là runner chết vòng lặp và UI chỉ hiện "Load failed".
+
+### An toàn — model từng có shell trên máy host
+
+*   **Gỡ `execute_cli`** và lệnh Rust `execute_cli_command`. Nó đưa cho model
+    `sh -c <bất kỳ>`, trái idea.md §22 và §92. Runner chưa bao giờ có shell, nhưng đường
+    agent trong webview thì có — và đường đó chạy mỗi khi runner chết, luôn chạy với
+    provider bỏ qua runner. Rủi ro thật là prompt injection: trang web hay tài liệu agent
+    đọc bảo nó chạy lệnh.
+*   **File tool của webview vào sandbox**: đi qua `agent_read_file`/`agent_write_file`/
+    `agent_list_dir`, containment cưỡng chế trong Rust. Trước đó nhận đường dẫn tuyệt đối
+    bất kỳ (`~/Desktop/output.txt` ghi được thẳng ra đĩa).
+*   **Sandbox của runner có 2 gốc**: workspace và thư mục riêng của agent — trước đó agent
+    bị chặn đọc chính cái memory mà system prompt bảo nó đọc.
+
+### Dữ liệu bịa — đã gỡ
+
+*   **Lịch sử chạy nhiệm vụ**: mỗi nhiệm vụ mới bị chèn sẵn 2 bản ghi giả, gồm một lỗi
+    "401 Unauthorized khi gọi Webhook" chưa từng xảy ra, trong khi lần chạy thật không ghi
+    gì cả. Nay lịch sử được ghi từ việc Host Process thực sự làm, kèm trạng thái và thời lượng thật.
+*   **`execute_mcp_tool`** không làm gì nhưng trả `"✅ … thực thi thành công"`, model tin rồi
+    báo cáo lại với người dùng như việc đã xong. **`mcp_status`** khai khống danh sách MCP
+    server và quảng cáo shell. Cả hai đã gỡ — MCP thuộc về runner, đường fallback không có.
+
+### Lịch & Nhiệm vụ — agent đặt lịch thật
+
+*   `schedule_task` nhận **cả kế hoạch trong một lệnh gọi** qua mảng `tasks`. Trước đây mỗi
+    lần gọi chỉ được 1 nhiệm vụ nên kế hoạch 7 ngày cần 7 lệnh gọi, và model chọn tóm tắt
+    bằng lời — người dùng được báo "đã đặt lịch" trong khi Lịch & Nhiệm vụ trống trơn.
+*   **Bộ khớp lịch hiểu tiếng Việt**: `lúc HH:MM`, `9h30`, `HH:MM` trần, thứ hai–chủ nhật,
+    hàng giờ/hàng tháng. Trước đó chỉ hiểu `at HH:MM` tiếng Anh, trong khi mô tả tool lại
+    bảo model viết `"Hàng ngày lúc 09:30"` — chuỗi đó im lặng rơi về 9:00.
+*   **Lịch một lần theo ngày**: `26/07`, `26/07/2026`, `2026-07-26` chạy đúng một lần.
+    Trước đó rơi vào nhánh mặc định thành chạy hàng ngày lúc 9:00 vĩnh viễn.
+*   System prompt siết lại: kế hoạch viết trong tin nhắn hay tài liệu **không phải** là đã
+    đặt lịch; không được nói đã đặt lịch trừ khi tool đã trả về trong lượt đó.
+
+### Sửa lỗi khác
+
+*   **Pack hỏng sau khi đăng nhập lại**: đăng nhập lại cấp id kết nối mới, nhưng model đã
+    ghim `?account=<id cũ>` được trả về nguyên xi. Mọi pack đã lưu thành mồ côi — mở ra
+    không ô nào được tick, tick lại cả loạt thì id chết vẫn nằm trong danh sách mà không ô
+    nào đại diện, nên lưu luôn bị chặn và **không thao tác nào trên UI gỡ được**. Nay ghim
+    chết được nối lại vào kết nối đang sống, và trình sửa pack không nạp id nó không hiển thị được.
+*   **Runner bị respawn 177 lần/phiên**: effect restart bị key vào `providerConfigs` — object
+    đổi identity mỗi `setState`. Runner giờ ôm scheduler + Telegram nên mỗi lần respawn là
+    tháo long-poll và bắn lại tick khởi động. Nay key bằng chuỗi primitive.
+*   **Runner mồ côi**: app ghi `runner.pid` và dừng tiến trình cũ trước khi spawn mới, có
+    xác minh pid đúng là runner (pid bị tái sử dụng).
+*   **Hàng đợi outbound dùng chung 3 kênh** nay bắt buộc gắn `channel_type` — thiếu thì câu
+    trả lời Telegram nhảy vào ô chat như thể là câu trả lời của người dùng.
+*   **Khôi phục Grok Web session capture** bị mất khi tách god file.
+*   **File chia sẻ với runner** phải nằm ở `runtime_status().dir`, không phải
+    `~/.v-assistant/data` — hai đường dẫn này khác nhau.
+
+### Kiểm chứng
+
+Thêm `scripts/host-process-contract-check.mjs` và `scripts/pack-rebind-check.mjs`; suite của
+runner tăng lên 5 nhóm test (scheduler, Telegram, self-improve, knowledge, native tools).
+
+---
+
+## [1.1.2] và trước đó
+*   **Bỏ Docker khỏi quy trình test (`skills/v-assistant-dev-guidelines/SKILL.md` §5)**:
+    - Từ 2026-07-27, **không dùng Docker/Colima** để test nữa. Quy trình chuẩn: `npm run tauri dev` cho vòng lặp sửa nhanh, `npm run build:local` cho bản cài thật vào `/Applications/V Assistant.app`, rồi **thao tác thật trên UI**.
+    - `./dev up|ui|all` chỉ còn dành cho profile server nếu được yêu cầu rõ.
+*   **Xiết quy chuẩn phát triển (`skills/v-assistant-dev-guidelines/SKILL.md`)**:
+    - Thêm **Luật số 1 — Bám idea gốc**: bắt buộc đọc `idea.md` trước khi đề xuất thay đổi về luồng người dùng/kiến trúc/xác thực; mâu thuẫn với idea thì DỪNG và hỏi PO thay vì tự quyết.
+    - Chốt **định danh**: `AI Router` là tên chính thức của tầng chung chuyển (local `127.0.0.1:20128`); `9router` chỉ là công nghệ nền; `OpenRouter` chỉ là một provider ngang hàng — **không phải** hạ tầng chung chuyển. Phần kết nối hiện tại đang đúng, cấm refactor/làm lại.
+    - Chốt **thứ tự ưu tiên kết nối**: Subscription (OAuth 1-click) trước → API key sau (Advanced Options).
+    - Thêm **3 mức kiểm chứng**: chỉ được báo "xong" sau khi chạy thật, không dừng ở `tsc`/`npm run check` — vì các lỗi nặng nhất (sidecar sai đường dẫn, runner crash loop, router không giám sát) đều xanh ở mức test nhưng app không dùng được.
+    - Bổ sung bài học vận hành: giám sát sidecar bắt buộc có cap + dump log; không `pkill` vô điều kiện; không `npm rebuild` bừa với native module; vòng chờ phải có điều kiện thoát; không sửa thứ đang chạy đúng.
+*   **Fix Image & PDF Reading in Chat (`src/pages/Chat.tsx`)**:
+    - Khắc phục triệt để lỗi `Error: fetch failed` khi gửi đồng thời cả PDF và hình ảnh.
+    - Sửa thứ tự gọi `removeKnowledgeFile`: Trích xuất đầy đủ dữ liệu Base64 Data URL (cho ảnh) và toàn bộ các văn bản/chuỗi ký tự trích xuất từ tệp PDF (`rec.chunks`) nhúng trực tiếp vào ngữ cảnh tin nhắn `userMessage` TRƯỚC KHI dọn dẹp state.
+    - Loại bỏ hoàn toàn các chuỗi tạm `blob:http://...` vốn khiến máy chủ AI Vision từ chối kết nối.
+*   **Persistent Background Chat & Task Execution (`src/App.tsx`)**:
+    - Khắc phục triệt để lỗi khi Agent đang xử lý tác vụ mà người dùng chuyển qua menu/trang khác (như Lịch & Nhiệm vụ, Kho Media, Cài đặt...) thì tiến trình bị hủy và bắt thử lại (Retry).
+    - Giữ trang **Trò chuyện (`Chat`)** luôn mounted ngầm trong DOM (`hidden` khi ở trang khác), đảm bảo tiến trình streaming, gọi tool, đọc/ghi tệp và thực thi tác vụ chạy xuyên suốt đến khi hoàn tất mà không bao giờ bị dừng giữa chừng.
+*   **Fix File Upload Hanging & PDF Worker Timeout (`src/runtime/knowledge.ts`)**:
+    - Khắc phục triệt để lỗi tệp tin tải lên (PDF, DOCX, XLSX, hình ảnh) bị kẹt ở trạng thái **"Processing" quay hoài 10 phút**:
+      - Thêm cơ chế `Promise.race` với **Hard Timeout 4 giây** cho hàm trích xuất `extractPdf`: Nếu PDF worker của Webview bị kẹt, hệ thống sẽ giải phóng và tự động trả về thông tin tệp tin nguyên bản.
+      - Thêm cơ chế **Hard Timeout 6 giây** cho hàm `indexKnowledgeFile`: Đảm bảo mọi tệp tin tải lên đều hoàn tất xử lý và chuyển sang trạng thái **"Ready"** trong tối đa vài giây, tuyệt đối không bị treo.
+      - Thêm cơ chế `FileReader` timeout 2.5s khi nạp ảnh base64.
+*   **Backup Timestamp & Success Banner (`WorkspaceSettingsSection.tsx`)**:
+    - Mỗi khi nhấn **Xuất dữ liệu Sao lưu (.json)**, ứng dụng sẽ tự động sinh tệp tin kèm timestamp đầy đủ dạng `v-assistant-backup-YYYY-MM-DD_HHmmss.json`.
+    - Hiển thị thông báo `Backup success` trực quan kèm thời gian xuất dữ liệu chính xác dạng `HH:mm:ss ngày DD/MM/YYYY`.
+*   **Run on Startup Option (`GeneralSettings.tsx`, `src-tauri/src/lib.rs`)**:
+    - Thêm công tắc **Tự động chạy cùng hệ thống (Run on Startup)** trong Cài đặt hệ thống.
+    - Tích hợp lệnh Rust native `set_autostart` tự động đăng ký/gỡ bỏ daemon khởi động ngầm (`LaunchAgents` trên macOS).
+*   **Claude Desktop App Capabilities Roadmap (`CHECKLIST.md`)**:
+    - Bổ sung mục 13 chi tiết các tiêu chuẩn điều khiển máy tính nâng cao: Native Computer Use & OS Control (chuột, phím, màn hình), Interactive Browser Automation (Playwright/Puppeteer MCP & CDP bridge), Live Artifacts Sandbox Previewer, và Code Execution Sandbox.
+*   **Renamed Sidebar Menu & i18n (`i18n.ts`, `Scheduled.tsx`)**:
+    - Đổi tên nhãn menu hiển thị ở Sidebar từ "Lịch đăng bài & Tác vụ" thành **"Lịch & Nhiệm vụ"** theo đúng yêu cầu người dùng.
+*   **Native Tool `schedule_task` & Automatic UI Sync (`agent-runner`, `store.tsx`)**:
+    - Trang bị công cụ native `schedule_task` cho Agent Runner: Khi người dùng yêu cầu "đặt lịch đăng bài", "lên lịch tự động", "nhắc nhở"... Agent tự động gọi `schedule_task` để tạo tác vụ lên lịch trực tiếp trong mục **Lịch & Nhiệm vụ** của ứng dụng V-Assistant thay vì thao tác sai trên website đích.
+    - Tự động đồng bộ các tác vụ đặt lịch từ `scheduled_tasks.json` lên màn hình **Lịch & Nhiệm vụ (Scheduled Tasks)** của giao diện 2 giây/lần.
+    - Bổ sung quy định bắt buộc `MANDATORY SCHEDULING RULE` vào System Prompt để Agent không còn nhầm lẫn địa điểm lên lịch.
 *   **Mandatory Workspace File Storage Rule (`agent-runner/src/index.ts`)**:
     - Bổ sung quy định nghiêm ngặt trong System Prompt của Agent Runner: Tất cả các tệp tài liệu, kế hoạch, bài viết tạo ra từ công cụ (`file_write`,...) **BẮT BUỘC phải được lưu trữ bên trong thư mục Workspace active của hệ thống**. Tuyệt đối không lưu tệp ra `~/Desktop` hay các đường dẫn bên ngoài trừ khi người dùng yêu cầu đích danh đường dẫn tuyệt đối.
 *   **Fix Reset & Delete Account Card Button in Desktop Webview (`ModelSettings.tsx`)**:

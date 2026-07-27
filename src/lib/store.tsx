@@ -17,7 +17,7 @@ import {
 } from "react";
 import type { ProviderId } from "@/lib/catalog";
 import type { Theme } from "@/lib/i18n";
-import type { ChatMessage, ChatOptions } from "@/runtime/engine";
+import type { ChatMessage } from "@/runtime/engine";
 import type { ProviderConfig } from "@/runtime/providers";
 import {
   completeOAuthReturn,
@@ -32,23 +32,22 @@ import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
 import {
-  notifyTelegram,
-  startTelegram,
-  stopTelegram,
-  telegramConfiguredChatId,
-} from "@/runtime/telegram";
-import {
   clearKnowledge,
   indexKnowledgeFile,
   savePhysicalDataFile,
   syncAllKnowledgeFilesToDisk,
 } from "@/runtime/knowledge";
-import { runDueTasks } from "@/runtime/scheduler";
 import { newMessageId } from "@/runtime/engine";
 import { AGENT_STORE, getProvider, PROVIDERS, type AgentTemplate } from "@/lib/catalog";
 import type { ImportedAgent } from "@/runtime/agentImport";
-import { syncAgents, restartAgentRunner } from "@/runtime/nanoclaw";
-import { fetchNanoClawSessions } from "@/runtime/nanoclawSessions";
+import {
+  syncAgents,
+  restartAgentRunner,
+  receiveOutbound,
+  latestOutboundSeq,
+  runtimeDir,
+  type OutboundMessage,
+} from "@/runtime/nanoclaw";
 import { AI_ROUTER_BASE_URL } from "@/runtime/aiRouter";
 
 /** Vault key holding a provider's secret (API key / router token). */
@@ -171,6 +170,9 @@ export interface ScheduledTask {
   /** When the task last ran (ms), so it isn't fired twice. */
   lastRun?: number;
 }
+
+/** History is unbounded otherwise; a scheduled task runs forever. */
+const MAX_TASK_RUN_LOGS = 200;
 
 export interface TaskRunLog {
   id: string;
@@ -552,6 +554,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const consumeChatDraft = useCallback(() => setChatDraft(null), []);
 
+  /**
+   * True once the scheduled-task file has been read at least once. Until then
+   * the app must not write the list back, or a cold start would overwrite tasks
+   * the agent scheduled for itself with an empty array.
+   */
+  const tasksLoadedRef = useRef(false);
+
   useEffect(() => {
     if (!hasHydratedCredentials) return;
 
@@ -592,6 +601,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
               content: JSON.stringify(safe.chatSessions, null, 2),
             }).catch(() => {});
 
+            // The Host Process scheduler reads this file — it is how a task
+            // created here reaches the runner that actually fires it. It has to
+            // land in the runner's own data dir, not the default one.
+            //
+            // Held back until the file has been read once, so a cold start
+            // cannot overwrite the agent's own tasks with an empty array.
+            if (tasksLoadedRef.current || safe.scheduledTasks.length > 0) {
+              void runtimeDir().then((dir) => {
+                if (!dir) return;
+                void invoke("write_host_file", {
+                  path: `${dir}/scheduled_tasks.json`,
+                  content: JSON.stringify(safe.scheduledTasks, null, 2),
+                }).catch(() => {});
+              });
+            }
+
             void syncAllKnowledgeFilesToDisk();
           }).catch(() => {});
         }
@@ -603,199 +628,116 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [state, hasHydratedCredentials]);
 
-  // Telegram channel: while it's connected, run the 2-way bridge so the user
-  // can chat with their assistant from Telegram. It resolves the current
-  // provider/agent per message from a ref, so switches take effect live and
-  // the service itself never needs restarting.
   const stateRef = useRef(state);
   stateRef.current = state;
-  const resolveChatOptions = useCallback((): ChatOptions | null => {
-    const s = stateRef.current;
-    if (!s.provider) return null;
-    const config = s.providerConfigs[s.provider];
-    if (!config) return null;
-    const agent =
-      [...AGENT_STORE, ...s.customAgents].find((a) => a.id === s.activeAgentId) ??
-      null;
-    const agentCfg = agent ? s.agentConfigs[agent.id] : undefined;
-    return {
-      provider: s.provider,
-      config,
-      providerConfigs: s.providerConfigs,
-      agentName: agent?.name,
-      agentDescription: agent?.description,
-      agentInstructions: agentCfg?.instructions,
-      agentSoul: agentCfg?.soul,
-      agentMemory: agentCfg?.memory,
-      agentKnowledge: (s.knowledgeByAgent[knowledgeBucket(s.activeAgentId)] ?? [])
-        .filter((f) => f.status === "ready")
-        .map((f) => f.name),
-      agentId: agent?.id,
-    };
-  }, []);
 
-  const resolveTelegramConversation = useCallback((chatId: number) => {
-    const options = resolveChatOptions();
-    if (!options) return null;
-    const sessionId = `telegram:${chatId}`;
-    const session = stateRef.current.chatSessions.find((item) => item.id === sessionId);
-    return {
-      options: { ...options, sessionId },
-      messages: session?.messages ?? [],
-    };
-  }, [resolveChatOptions]);
+  // Telegram and the scheduler live in the Host Process (idea.md §1.3): both
+  // have to keep working with this window closed, so neither runs here any
+  // more. What is left is the display side — poll the runner's outbound queue
+  // and file each turn into the session it belongs to.
+  useEffect(() => {
+    const WATERMARK = "vua:host-outbound-seq";
+    const POLL_MS = 2_000;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let after = Number(localStorage.getItem(WATERMARK));
 
-  const recordTelegramExchange = useCallback(
-    (chatId: number, userMessage: ChatMessage, assistantMessage: ChatMessage) => {
+    const appendTelegram = (chatId: string, row: OutboundMessage) => {
+      const message: ChatMessage = {
+        id: newMessageId(),
+        role: row.role === "user" ? "user" : "assistant",
+        content: row.content,
+        createdAt: row.created_at * 1000,
+      };
       setState((s) => {
         const sessionId = `telegram:${chatId}`;
         const existing = s.chatSessions.find((session) => session.id === sessionId);
-        const messages = [...(existing?.messages ?? []), userMessage, assistantMessage];
+        const messages = [...(existing?.messages ?? []), message];
         const updated: ChatSession = existing
-          ? { ...existing, messages, updatedAt: Date.now() }
+          ? { ...existing, messages, updatedAt: message.createdAt }
           : {
               id: sessionId,
               title: `Telegram ${chatId}`,
               agentId: s.activeAgentId,
               channel: "telegram",
-              externalId: String(chatId),
+              externalId: chatId,
               messages,
-              createdAt: userMessage.createdAt,
-              updatedAt: assistantMessage.createdAt,
+              createdAt: message.createdAt,
+              updatedAt: message.createdAt,
             };
         return {
           ...s,
           chatSessions: existing
-            ? s.chatSessions.map((session) => session.id === sessionId ? updated : session)
+            ? s.chatSessions.map((session) => (session.id === sessionId ? updated : session))
             : [updated, ...s.chatSessions],
           messages: s.activeSessionId === sessionId ? messages : s.messages,
         };
       });
-    },
-    [],
-  );
+    };
 
-  const telegramOn = state.connectedIntegrations.includes("telegram");
-  useEffect(() => {
-    let cancelled = false;
-    let syncTimer: ReturnType<typeof setInterval> | undefined;
-    if (telegramOn) {
-      void telegramConfiguredChatId().then((chatId) => {
-        if (chatId == null) return;
-        setState((s) => {
-          const sessionId = `telegram:${chatId}`;
-          if (s.chatSessions.some((session) => session.id === sessionId)) return s;
-          const now = Date.now();
-          return {
-            ...s,
-            chatSessions: [
-              {
-                id: sessionId,
-                title: `Telegram ${chatId}`,
-                agentId: s.activeAgentId,
-                channel: "telegram",
-                externalId: String(chatId),
-                messages: [],
-                createdAt: now,
-                updatedAt: now,
-              },
-              ...s.chatSessions,
-            ],
-          };
-        });
-      });
-      // Codex's in-app browser may expose Tauri-like globals of its own. Use
-      // the served app URL as the source of truth: localhost/127.0.0.1 is the
-      // Docker demo and must sync NanoClaw's read-only session store.
-      const browserDev = typeof window !== "undefined" &&
-        ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
-        !("__TAURI_INTERNALS__" in window);
-      if (browserDev) {
-        // NanoClaw owns Telegram updates in the Docker demo. Read its store
-        // instead of starting a competing getUpdates poller in each tab.
-        stopTelegram();
-        const sync = async () => {
-          try {
-            const remoteSessions = await fetchNanoClawSessions();
-            if (cancelled || remoteSessions.length === 0) return;
-            setState((s) => {
-              const remoteIds = new Set(remoteSessions.map((session) => session.id));
-              const synced: ChatSession[] = remoteSessions.map((session) => ({
-                ...session,
-                agentId: s.chatSessions.find((item) => item.id === session.id)?.agentId ?? s.activeAgentId,
-              }));
-              const chatSessions = [
-                ...synced,
-                ...s.chatSessions.filter((session) => !remoteIds.has(session.id)),
-              ].sort((a, b) => b.updatedAt - a.updatedAt);
-              const active = synced.find((session) => session.id === s.activeSessionId);
-              return { ...s, chatSessions, messages: active?.messages ?? s.messages };
-            });
-          } catch {
-            // NanoClaw may be stopped independently; retain the last snapshot.
-          }
+    const appendScheduled = (row: OutboundMessage) => {
+      const runAt = row.created_at * 1000;
+      setState((s) => {
+        const task = s.scheduledTasks.find((item) => item.id === row.thread_id);
+        // Real history, written only when the Host Process actually ran the
+        // task. Nothing seeds this list any more.
+        const runLog: TaskRunLog = {
+          id: newMessageId(),
+          taskId: row.thread_id ?? "",
+          taskName: task?.name ?? row.thread_id ?? "",
+          runAt,
+          duration: row.duration_ms ?? 0,
+          status: row.status === "error" ? "error" : "success",
+          output: row.content,
         };
-        void sync();
-        syncTimer = setInterval(() => void sync(), 2_000);
-      } else {
-        startTelegram(resolveTelegramConversation, recordTelegramExchange);
-      }
-    } else stopTelegram();
-    return () => {
-      cancelled = true;
-      if (syncTimer) clearInterval(syncTimer);
-      stopTelegram();
+        return {
+          ...s,
+          messages: [
+            ...s.messages,
+            { id: newMessageId(), role: "assistant", content: row.content, createdAt: runAt },
+          ],
+          scheduledTasks: row.thread_id
+            ? s.scheduledTasks.map((item) =>
+                item.id === row.thread_id ? { ...item, lastRun: runAt } : item,
+              )
+            : s.scheduledTasks,
+          taskRunLogs: [runLog, ...(s.taskRunLogs ?? [])].slice(0, MAX_TASK_RUN_LOGS),
+        };
+      });
     };
-  }, [telegramOn, resolveTelegramConversation, recordTelegramExchange]);
 
-  // Scheduled tasks: tick once a minute and run whatever is due. Results show
-  // up in chat and, when Telegram is connected, are pushed there too.
-  useEffect(() => {
-    let ticking = false;
-    const tick = async () => {
-      if (ticking) return;
-      ticking = true;
-      try {
-        await runDueTasks(stateRef.current.scheduledTasks, new Date(), {
-          resolveOptions: resolveChatOptions,
-          markRun: (id, at) =>
-            setState((s) => ({
-              ...s,
-              scheduledTasks: s.scheduledTasks.map((t) =>
-                t.id === id ? { ...t, lastRun: at } : t,
-              ),
-            })),
-          deliver: async (task, result) => {
-            setState((s) => ({
-              ...s,
-              messages: [
-                ...s.messages,
-                {
-                  id: newMessageId(),
-                  role: "assistant",
-                  content: `⏰ ${task.name}\n\n${result}`,
-                  createdAt: Date.now(),
-                },
-              ],
-            }));
-            void notifyTelegram(`⏰ ${task.name}\n\n${result}`);
-          },
-        });
-      } finally {
-        ticking = false;
+    const drain = async () => {
+      const rows = await receiveOutbound(after);
+      for (const row of rows) {
+        after = Math.max(after, row.id);
+        if (row.channel_type === "telegram" && row.thread_id) appendTelegram(row.thread_id, row);
+        else if (row.channel_type === "scheduled") appendScheduled(row);
       }
+      if (rows.length > 0) localStorage.setItem(WATERMARK, String(after));
     };
-    const timer = setInterval(() => void tick(), 60_000);
-    // A short initial delay lets sign-in/rehydration settle before the first
-    // check, so a task due "now" fires soon after launch.
-    const warmup = setTimeout(() => void tick(), 5_000);
+
+    const tick = async () => {
+      try {
+        await drain();
+      } catch {
+        // The runner may be restarting; the watermark keeps our place.
+      }
+      if (!stopped) timer = setTimeout(() => void tick(), POLL_MS);
+    };
+
+    void (async () => {
+      // On a first ever launch, start from the end so an existing queue is not
+      // replayed into the UI. Afterwards the stored watermark wins, which is
+      // what surfaces a conversation that happened while the app was closed.
+      if (!Number.isFinite(after)) after = await latestOutboundSeq().catch(() => 0);
+      if (!stopped) await tick();
+    })();
+
     return () => {
-      clearInterval(timer);
-      clearTimeout(warmup);
+      stopped = true;
+      if (timer) clearTimeout(timer);
     };
-    // resolveChatOptions is stable; the tick reads live state from the ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolveChatOptions]);
+  }, []);
 
   const completeOnboarding = useCallback(
     (provider: ProviderId, integrations: string[]) => {
@@ -960,27 +902,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (task: Omit<ScheduledTask, "id" | "createdAt">) => {
       const taskId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const createdAt = Date.now();
-      
-      const mockLogs: TaskRunLog[] = [
-        {
-          id: `log-${Date.now().toString(36)}-1`,
-          taskId,
-          taskName: task.name,
-          runAt: createdAt - 3600000 * 2,
-          duration: 4200,
-          status: "success",
-          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[INFO] Đang phân tích dữ liệu tri thức...\n[SUCCESS] Hoàn thành báo cáo tự động và gửi thành công đến Telegram bot.`,
-        },
-        {
-          id: `log-${Date.now().toString(36)}-2`,
-          taskId,
-          taskName: task.name,
-          runAt: createdAt - 3600000,
-          duration: 2500,
-          status: "error",
-          output: `[INFO] Bắt đầu thực thi tác vụ: "${task.name}"\n[INFO] Thực hiện câu lệnh: "${task.prompt}"\n[ERROR] Lỗi xác thực API: 401 Unauthorized khi gọi Webhook bên thứ 3. Vui lòng kiểm tra lại cấu hình thông tin kết nối trong Vault.`,
-        }
-      ];
+
+      // No seeded history. This used to inject two fabricated runs per task —
+      // a "success" claiming a report had been sent to Telegram and a "401
+      // Unauthorized" failure — neither of which ever happened. Real history is
+      // written when the Host Process actually runs the task.
 
       setState((s) => ({
         ...s,
@@ -993,7 +919,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
           ...s.scheduledTasks,
         ],
-        taskRunLogs: [...mockLogs, ...(s.taskRunLogs ?? [])],
       }));
     },
     [],
@@ -1014,6 +939,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener("vua:create-schedule", handleCreateSchedule);
     return () => window.removeEventListener("vua:create-schedule", handleCreateSchedule);
   }, [addScheduledTask]);
+
+  useEffect(() => {
+    // Pick up tasks the agent created for itself through the schedule_task tool.
+    // Same file the effect above writes, in the runner's own data dir.
+    const interval = setInterval(async () => {
+      try {
+        if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const dir = await runtimeDir();
+          if (!dir) return;
+          const content = await invoke<string>("read_host_file", {
+            path: `${dir}/scheduled_tasks.json`,
+          }).catch(() => null);
+          if (content) {
+            const parsed = JSON.parse(content) as ScheduledTask[];
+            // Read at least once — the app may now write the list back, even
+            // when the user has emptied it.
+            if (Array.isArray(parsed)) tasksLoadedRef.current = true;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setState((s) => {
+                const existingIds = new Set(s.scheduledTasks.map((t) => t.id));
+                const newItems = parsed.filter((item) => !existingIds.has(item.id));
+                if (newItems.length === 0) return s;
+                const updated = [...newItems, ...s.scheduledTasks];
+                try {
+                  localStorage.setItem("vua_scheduled_tasks", JSON.stringify(updated));
+                } catch {
+                  /* ignore */
+                }
+                return {
+                  ...s,
+                  scheduledTasks: updated,
+                };
+              });
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const handleCreateSkill = (e: Event) => {
@@ -1495,28 +1463,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void syncAgents(agentsToSync);
   }, [state.installedAgents, state.agentConfigs]);
 
-  // Restart the Agent Runner whenever active agent, active provider, or provider config changes
+  // Everything the runner is actually configured with, as one primitive.
+  //
+  // Keying the restart on `providerConfigs` restarted it on *every* store
+  // update, because that object gets a new identity each time — one dev session
+  // respawned the runner 177 times. That is no longer merely wasteful: the
+  // runner owns the scheduler and the Telegram channel, so each respawn tore
+  // down the long-poll and re-fired the scheduler's start-up tick.
+  const runnerAgentId = state.activeAgentId || "default";
+  const runnerModel =
+    (state.provider ? state.providerConfigs[state.provider]?.model : undefined) || "auto";
+  const runnerSignature = `${runnerAgentId}|${runnerModel}|${state.selfImprove ? "1" : "0"}`;
+
   useEffect(() => {
     let cancelled = false;
-    const activeId = state.activeAgentId || "default";
-    const cfg =
-      (state.provider ? state.providerConfigs[state.provider] : undefined) ?? {};
+    const [agentId, model, selfImprove] = runnerSignature.split("|");
 
     (async () => {
       if (cancelled) return;
-
-      console.log(`[store] Syncing & starting runner: agent=${activeId}, provider=ai-router`);
-      await restartAgentRunner(
-        activeId,
-        AI_ROUTER_BASE_URL,
-        cfg.model || "auto",
-      );
+      console.log(`[store] Syncing & starting runner: agent=${agentId}, model=${model}`);
+      // Self-improvement runs in the runner, which reads the flag from
+      // runner.json — restarting is how a flipped switch reaches it.
+      await restartAgentRunner(agentId, AI_ROUTER_BASE_URL, model, selfImprove === "1");
     })();
-    
+
     return () => {
       cancelled = true;
     };
-  }, [state.activeAgentId, state.provider, state.providerConfigs]);
+  }, [runnerSignature]);
 
   const value = useMemo<AppStore>(
     () => ({

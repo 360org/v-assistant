@@ -7,22 +7,97 @@
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { loadConfig } from '../config.js';
 import type { ToolDefinition, ToolResult } from '../providers/types.js';
 
 function log(msg: string): void {
   console.error(`[native-tools] ${msg}`);
 }
 
-const WORKSPACE_ROOT = path.resolve(
-  process.env.VUA_AGENT_WORKSPACE || path.join(process.env.VUA_DATA_DIR || '/tmp/v-assistant', 'workspace'),
+/**
+ * Resolve a root through symlinks so containment checks compare real paths.
+ * On macOS `/tmp` is itself a symlink to `/private/tmp`, so a lexical-only
+ * comparison would reject the agent's own workspace.
+ */
+function realRoot(configured: string): string {
+  const resolved = path.resolve(configured);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved; // not created yet
+  }
+}
+
+const DATA_DIR = process.env.VUA_DATA_DIR || '/tmp/v-assistant';
+
+const WORKSPACE_ROOT = realRoot(
+  process.env.VUA_AGENT_WORKSPACE || path.join(DATA_DIR, 'workspace'),
 );
+
+/**
+ * The agent's own directory — instructions, soul and the persistent memory tree
+ * the system prompt tells it to read and update. It sits beside the workspace
+ * rather than inside it, so it needs its own grant; without one the agent is
+ * told about a memory it is not allowed to open.
+ */
+const AGENT_ROOT = realRoot(path.join(DATA_DIR, 'agents', loadConfig().agentName));
+
+const ALLOWED_ROOTS = [WORKSPACE_ROOT, AGENT_ROOT];
 const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
 
-function workspacePath(input: string): string {
-  if (path.isAbsolute(input)) {
-    return path.normalize(input);
+const ACCESS_DENIED = 'Access denied: agent tools are restricted to the assigned workspace';
+
+function isInside(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
+  // "" is the root itself (allowed, e.g. glob over the whole workspace).
+  // ".." or "../…" escapes upward; an absolute rel means a different volume.
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+/** Reject anything that resolves outside every granted root. */
+function assertInsideWorkspace(target: string): void {
+  if (!ALLOWED_ROOTS.some((root) => isInside(root, target))) {
+    throw new Error(ACCESS_DENIED);
   }
-  return path.resolve(WORKSPACE_ROOT, input);
+}
+
+/**
+ * Resolve symlinks as far as the path actually exists, keeping the not-yet-
+ * created tail. `file_write` targets a file that is missing by definition, so
+ * plain `realpathSync` cannot be used; both sides of the containment check
+ * still have to be real paths, because `/tmp` and `/var/folders` are symlinks
+ * on macOS and a lexical comparison would reject the agent's own workspace.
+ */
+function realpathBestEffort(target: string): string {
+  const pending: string[] = [];
+  let current = path.resolve(target);
+  for (;;) {
+    try {
+      const real = fs.realpathSync(current);
+      return pending.length ? path.join(real, ...pending.reverse()) : real;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return path.resolve(target); // nothing on this path exists
+      pending.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * Map a tool-supplied path into the agent workspace, refusing anything that
+ * points outside it.
+ *
+ * This previously returned absolute inputs untouched and never checked where a
+ * relative path landed, so `../vault.key` — or any absolute path at all —
+ * reached the real filesystem. idea.md is explicit that file tools only operate
+ * inside the granted workspace, so both holes are closed here, symlinks
+ * included.
+ */
+function workspacePath(input: string): string {
+  const resolved = realpathBestEffort(path.resolve(WORKSPACE_ROOT, input));
+  assertInsideWorkspace(resolved);
+  return resolved;
 }
 
 /** A native tool with its definition and executor */
@@ -450,6 +525,110 @@ const vaultListTool: NativeTool = {
   },
 };
 
+// --- Schedule Task Tool ---
+//
+// Takes a whole plan in one call. A single-task tool meant a seven-day posting
+// schedule needed seven separate calls, and the model reliably summarised the
+// plan in prose instead — telling the user their posts were scheduled while
+// "Lịch & Nhiệm vụ" stayed empty.
+interface ScheduleInput {
+  name?: unknown;
+  prompt?: unknown;
+  schedule?: unknown;
+  enabled?: unknown;
+}
+
+const scheduleTaskTool: NativeTool = {
+  definition: {
+    name: 'schedule_task',
+    description:
+      'Register one or more recurring or dated tasks in V-Assistant "Lịch & Nhiệm vụ" (Scheduled Tasks). ' +
+      'Pass the whole plan at once in `tasks`. You MUST call this whenever you plan, agree, or promise any ' +
+      'schedule, posting plan, report, or reminder — a plan is not scheduled until this tool has returned. ' +
+      'Never tell the user something is scheduled without calling it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          description: 'Every task in the plan. Use one entry per occurrence or per recurrence.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Title, e.g. "Đăng bài Blog Ngày 2"' },
+              prompt: { type: 'string', description: 'What the assistant should do at that time, in full — it will not have this conversation for context.' },
+              schedule: {
+                type: 'string',
+                description:
+                  'When to run. Recurring: "Every day at 09:00", "Hàng ngày lúc 09:30", "Every Monday at 08:00", ' +
+                  '"Thứ hai lúc 08:00", "Weekdays at 08:30", "Every hour", "Hàng tháng lúc 09:00". ' +
+                  'One-off: "27/07 08:30", "27/07/2026 08:30", "2026-07-27 08:30".',
+              },
+              enabled: { type: 'boolean', description: 'Active immediately (default true)' },
+            },
+            required: ['name', 'prompt', 'schedule'],
+          },
+        },
+        name: { type: 'string', description: 'Single-task shorthand; prefer `tasks`.' },
+        prompt: { type: 'string', description: 'Single-task shorthand; prefer `tasks`.' },
+        schedule: { type: 'string', description: 'Single-task shorthand; prefer `tasks`.' },
+        enabled: { type: 'boolean', description: 'Single-task shorthand; prefer `tasks`.' },
+      },
+    },
+  },
+  async execute(args): Promise<string> {
+    const raw = Array.isArray(args.tasks) && args.tasks.length > 0
+      ? (args.tasks as ScheduleInput[])
+      : [args as ScheduleInput];
+
+    const incoming = raw
+      .map((item) => ({
+        name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : '',
+        prompt: typeof item.prompt === 'string' ? item.prompt.trim() : '',
+        schedule: typeof item.schedule === 'string' && item.schedule.trim() ? item.schedule.trim() : '',
+        enabled: item.enabled !== false,
+      }))
+      .filter((item) => item.name && item.prompt && item.schedule);
+
+    if (incoming.length === 0) {
+      return 'Error: each task needs name, prompt and schedule. Nothing was scheduled.';
+    }
+
+    const dataDir = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '', '.v-assistant/data');
+    fs.mkdirSync(dataDir, { recursive: true });
+    const tasksFile = path.join(dataDir, 'scheduled_tasks.json');
+
+    let tasks: Record<string, unknown>[] = [];
+    try {
+      const parsed = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
+      if (Array.isArray(parsed)) tasks = parsed;
+    } catch {
+      tasks = [];
+    }
+
+    const created: string[] = [];
+    for (const item of incoming) {
+      // Re-running the same plan updates it rather than piling up duplicates.
+      tasks = tasks.filter((t) => !(t.name === item.name && t.schedule === item.schedule));
+      tasks.unshift({
+        id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        ...item,
+        createdAt: Date.now(),
+        // Stops a recurring task whose time already passed today from firing the
+        // instant it is created. A dated one-off compares against its own target,
+        // so this stamp does not suppress it.
+        lastRun: Date.now(),
+      });
+      created.push(`- "${item.name}" — ${item.schedule}`);
+    }
+
+    fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2), 'utf8');
+    log(`Scheduled ${created.length} task(s)`);
+
+    return `✅ Đã đưa ${created.length} nhiệm vụ vào "Lịch & Nhiệm vụ":\n${created.join('\n')}`;
+  },
+};
+
 // --- Registry ---
 
 /** All built-in native tools */
@@ -463,6 +642,7 @@ export const NATIVE_TOOLS: NativeTool[] = [
   webSearchTool,
   connectorRequestTool,
   vaultListTool,
+  scheduleTaskTool,
 ];
 
 /** Get tool definitions for all native tools (for sending to LLM) */

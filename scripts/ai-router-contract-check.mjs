@@ -7,7 +7,9 @@ const registry = path.join(core, "open-sse", "providers", "registry");
 const runnerAdapter = path.join(root, "agent-runner", "src", "providers", "adapters", "openai.ts");
 const sidecar = path.join(root, "ai-router", "src", "sidecar.mjs");
 const devCompose = path.join(root, "docker-compose.dev.yml");
-const settingsPage = path.join(root, "src", "pages", "Settings.tsx");
+// Provider sign-in moved out of the Settings page during the module split;
+// the account-connection rules now live in the Model settings component.
+const settingsPage = path.join(root, "src", "components", "settings", "ModelSettings.tsx");
 const chatPage = path.join(root, "src", "pages", "Chat.tsx");
 const authRust = path.join(root, "src-tauri", "src", "auth.rs");
 const tauriLib = path.join(root, "src-tauri", "src", "lib.rs");
@@ -48,7 +50,19 @@ const chatSource = fs.readFileSync(chatPage, "utf8");
 const aiRouterClient = fs.readFileSync(path.join(root, "src", "runtime", "aiRouter.ts"), "utf8");
 const authRustSource = fs.readFileSync(authRust, "utf8");
 const tauriLibSource = fs.readFileSync(tauriLib, "utf8");
-assert(settingsSource.includes("crypto?.randomUUID?.()"), "Provider login does not create a unique account connection ID");
+// Each sign-in must land on its own connection. Identity now comes from the
+// account itself: an existing connection is reused when the email or
+// credential matches, otherwise a fresh per-provider id is minted. That keeps
+// two accounts of the same vendor apart without minting duplicates for the
+// same account on every login.
+assert(
+  settingsSource.includes("existingConn ? existingConn.id : `${providerId}_${Date.now()}`"),
+  "Provider login does not derive a stable per-account connection ID",
+);
+assert(
+  settingsSource.includes("saveConnectionAndCleanupDuplicates"),
+  "Provider login does not de-duplicate connections for the same account",
+);
 assert(!settingsSource.includes('`${selectedProvider.id}:default`'), "Provider login still overwrites the default account");
 assert(sidecarSource.includes("const models = new Map()"), "Multiple accounts can duplicate models in the catalog");
 assert(sidecarSource.includes('from "../core/open-sse/services/combo.js"'), "AI Router must reuse the inherited Combo service");
@@ -73,7 +87,9 @@ assert(sidecarSource.includes('cookie: entry.authType === "cookie"'), "Cookie su
 assert(sidecarSource.includes('authModes.includes("apikey")'), "Dual-mode providers must preserve their API-key option");
 assert(aiRouterClient.includes('authorize.flowType === "device_code"'), "Frontend must support inherited device-code providers");
 assert(aiRouterClient.includes("capture_grok_sso_cookie"), "Grok Web needs a native cookie capture bridge");
-assert(settingsSource.includes("Open Grok & capture session"), "Grok Web UI must offer direct session capture");
+// Asserted on the wiring, not the button label — the UI copy is Vietnamese.
+assert(settingsSource.includes("captureGrokWebSsoCookie()"), "Grok Web UI must offer direct session capture");
+assert(settingsSource.includes('"subscription",'), "A captured Grok session must be stored as a subscription, not an API key");
 assert(
   authRustSource.includes("capture_grok_sso_cookie")
     && authRustSource.includes("read_grok_sso_from_chrome_cookie_store")

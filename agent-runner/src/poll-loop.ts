@@ -32,6 +32,8 @@ import {
   type RoutingContext,
 } from './formatter.js';
 import { getToolDefinitions, executeTool } from './native-tools/index.js';
+import { learnFromExchange } from './memory/self-improve.js';
+import { retrieveKnowledge, formatExcerpts } from './knowledge/index.js';
 import { mcpManager } from './mcp-client/index.js';
 import { clearBuiltinToolContext, executeBuiltinTool, getBuiltinToolDefinitions, hasBuiltinTool, setBuiltinToolContext } from './mcp-tools/index.js';
 import type { AgentProvider, ProviderEvent, ChatMessage, ToolCall, ToolResult } from './providers/types.js';
@@ -57,6 +59,8 @@ export interface PollLoopConfig {
   providerName: string;
   /** Stable agent identity used to isolate conversations. */
   agentId?: string;
+  /** This role's own directory, holding its instructions, soul and memory. */
+  agentDir?: string;
   systemContext: {
     instructions: string;
   };
@@ -197,6 +201,12 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
 
       markCompleted(ids.filter((id) => !commandIds.includes(id)));
 
+      // Reflect only after the answer has been delivered, so learning can never
+      // delay or break a reply.
+      if (config.agentDir && result.text) {
+        void learnFromExchange(config, config.agentDir, { user: prompt, assistant: result.text });
+      }
+
       // Notify exchange complete
       config.provider.onExchangeComplete?.({
         prompt,
@@ -239,7 +249,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   }
 }
 
-interface AgentLoopResult {
+export interface AgentLoopResult {
   text: string | null;
   continuation?: string;
 }
@@ -248,7 +258,15 @@ interface AgentLoopResult {
  * Execute the full agentic loop for a single query:
  * prompt → LLM → tool calls → LLM → tool calls → ... → final answer
  */
-async function executeAgentLoop(
+/**
+ * Run one full agent turn: prompt → model → tools → … → answer.
+ *
+ * Exported so the scheduler can reuse the exact same agent machinery instead
+ * of duplicating provider and tool plumbing. The scheduler cannot enqueue into
+ * inbound.db (host-owned, opened read-only here), so it drives a turn directly
+ * and writes the result to messages_out.
+ */
+export async function executeAgentLoop(
   config: PollLoopConfig,
   prompt: string,
   continuation: string | undefined,
@@ -261,6 +279,23 @@ async function executeAgentLoop(
   let finalText: string | null = null;
   let sessionContinuation = continuation;
 
+  // RAG: ground the answer in this role's own documents. Done here rather than
+  // in the webview so chat, Telegram and scheduled tasks all get it — the
+  // webview could only ever ground the turns it handled itself.
+  let groundedContext = systemContext;
+  try {
+    const excerpts = retrieveKnowledge(config.agentId, prompt);
+    if (excerpts.length > 0) {
+      log(`Grounding on ${excerpts.length} excerpt(s) from the role's documents`);
+      groundedContext = {
+        ...systemContext,
+        instructions: systemContext.instructions + formatExcerpts(excerpts),
+      };
+    }
+  } catch (error) {
+    log(`Knowledge lookup skipped: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     const mcpTools = await mcpManager.listAllTools();
     const allTools = [...getToolDefinitions(), ...getBuiltinToolDefinitions(), ...mcpTools];
@@ -269,7 +304,7 @@ async function executeAgentLoop(
       prompt: currentPrompt,
       messages: conversationHistory,
       continuation: sessionContinuation,
-      systemContext,
+      systemContext: groundedContext,
       tools: allTools.length > 0 ? allTools : undefined,
     });
 

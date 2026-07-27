@@ -332,15 +332,31 @@ function modelAccount(modelId) {
   }
 }
 
+/**
+ * Bind each model in a pack to a live account.
+ *
+ * A pinned `?account=` used to be returned untouched, so signing in again —
+ * which mints a new connection id and removes the old one — orphaned every
+ * saved pack: the editor showed nothing selected, and the ids it had loaded
+ * matched no checkbox, so the user could not clear them and saving always
+ * failed with "model without a Verified connection". A pin to an account that
+ * no longer exists is stale, not a preference, so it is re-bound here.
+ */
 function packModelsForConnections(models, connections) {
+  const live = connections.filter(
+    (item) => item.isActive !== false && item.testStatus === "Verified",
+  );
   return models.map((modelId) => {
-    if (modelId.includes("?account=")) return modelId;
-    const separator = modelId.indexOf("/");
-    const provider = separator > 0 ? modelId.slice(0, separator) : "";
-    const connection = connections.find((item) =>
-      item.provider === provider && item.isActive !== false && item.testStatus === "Verified"
-    );
-    return connection ? `${modelId}?account=${encodeURIComponent(connection.id)}` : modelId;
+    const pinIndex = modelId.indexOf("?account=");
+    const bare = pinIndex < 0 ? modelId : modelId.slice(0, pinIndex);
+    if (pinIndex >= 0) {
+      const pinned = decodeURIComponent(modelId.slice(pinIndex + "?account=".length));
+      if (live.some((item) => item.id === pinned)) return modelId;
+    }
+    const separator = bare.indexOf("/");
+    const provider = separator > 0 ? bare.slice(0, separator) : "";
+    const connection = live.find((item) => item.provider === provider);
+    return connection ? `${bare}?account=${encodeURIComponent(connection.id)}` : bare;
   });
 }
 
@@ -620,6 +636,137 @@ function redactSecrets(text, fields) {
     redacted = redacted.split(value).join(`[REDACTED:${name}]`);
   }
   return redacted;
+}
+
+// ─── Telegram channel ────────────────────────────────────────────────────────
+//
+// Telegram carries the bot token in the URL path (`/bot<token>/getUpdates`),
+// which the connector gateway deliberately refuses — a credential must never
+// appear in a connector URL. So the channel lives here instead: the router is
+// the only component allowed to resolve Vault secrets, and it performs the
+// Telegram calls itself. Callers (the Agent Runner) drive the channel through
+// these endpoints and never see the token.
+
+const TELEGRAM_API = "https://api.telegram.org";
+const TELEGRAM_MAX = 4096;
+
+/** The Vault entry holding the bot token, plus its resolved fields. */
+async function telegramCredentials() {
+  const indexRaw = await readVaultValue("vault-index");
+  let index = [];
+  try {
+    index = typeof indexRaw === "string" ? JSON.parse(indexRaw) : [];
+  } catch {
+    index = [];
+  }
+  const meta = (Array.isArray(index) ? index : []).find(
+    (item) =>
+      typeof item?.id === "string" &&
+      /telegram/i.test(`${item.label ?? ""} ${item.service ?? ""}`),
+  );
+  if (!meta) return null;
+
+  const raw = await readVaultValue(`vault-entry:${meta.id}`);
+  let entry = null;
+  try {
+    entry = typeof raw === "string" ? JSON.parse(raw) : null;
+  } catch {
+    entry = null;
+  }
+  if (!entry) return null;
+
+  const fields = credentialFields(entry);
+  const pick = (...names) => {
+    for (const name of names) {
+      const value = fields.get(name);
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+  };
+  const token = pick("bot token", "bottoken", "token") ||
+    [...fields.entries()].find(([name]) => /token/i.test(name))?.[1] || null;
+  const chatId = pick("chat id", "chatid") ||
+    [...fields.entries()].find(([name]) => /chat/i.test(name))?.[1] || null;
+
+  return token ? { token, chatId, fields } : null;
+}
+
+function requireConnectorToken(request, response) {
+  if (!connectorToken || request.headers.authorization !== `Bearer ${connectorToken}`) {
+    sendJson(response, 401, { error: "Connector capability is invalid." });
+    return false;
+  }
+  return true;
+}
+
+/** Long-poll Telegram for updates. Returns messages only — never the token. */
+async function handleTelegramUpdates(request, response, input) {
+  if (!requireConnectorToken(request, response)) return;
+  const credentials = await telegramCredentials();
+  if (!credentials) {
+    sendJson(response, 404, { error: "No Telegram bot token is stored in the Vault." });
+    return;
+  }
+  const offset = Number.isFinite(Number(input?.offset)) ? Number(input.offset) : 0;
+  const timeout = Math.min(50, Math.max(0, Number(input?.timeout) || 0));
+  try {
+    const url =
+      `${TELEGRAM_API}/bot${credentials.token}/getUpdates?timeout=${timeout}` +
+      (offset ? `&offset=${offset}` : "");
+    const upstream = await fetch(url);
+    const data = await upstream.json();
+    if (!data.ok) throw new Error(data.description || "getUpdates failed");
+    const updates = (Array.isArray(data.result) ? data.result : []).map((update) => ({
+      updateId: update.update_id,
+      text: update.message?.text ?? null,
+      chatId: update.message?.chat?.id ?? null,
+    }));
+    sendJson(response, 200, { updates });
+  } catch (error) {
+    sendJson(response, 502, {
+      error: redactSecrets(error instanceof Error ? error.message : String(error), credentials.fields),
+    });
+  }
+}
+
+/** Send a message as the bot. The caller supplies text and chat id only. */
+async function handleTelegramSend(request, response, input) {
+  if (!requireConnectorToken(request, response)) return;
+  const credentials = await telegramCredentials();
+  if (!credentials) {
+    sendJson(response, 404, { error: "No Telegram bot token is stored in the Vault." });
+    return;
+  }
+  const chatId = input?.chatId ?? credentials.chatId;
+  const text = typeof input?.text === "string" ? input.text : "";
+  if (chatId == null || !text.trim()) {
+    sendJson(response, 400, { error: "chatId and text are required." });
+    return;
+  }
+  try {
+    const upstream = await fetch(`${TELEGRAM_API}/bot${credentials.token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: text.slice(0, TELEGRAM_MAX) }),
+    });
+    const data = await upstream.json();
+    if (!data.ok) throw new Error(data.description || "sendMessage failed");
+    sendJson(response, 200, { ok: true });
+  } catch (error) {
+    sendJson(response, 502, {
+      error: redactSecrets(error instanceof Error ? error.message : String(error), credentials.fields),
+    });
+  }
+}
+
+/** Whether a bot token is configured, without revealing it. */
+async function handleTelegramStatus(request, response) {
+  if (!requireConnectorToken(request, response)) return;
+  const credentials = await telegramCredentials();
+  sendJson(response, 200, {
+    configured: Boolean(credentials),
+    hasChatId: Boolean(credentials?.chatId),
+  });
 }
 
 async function handleVaultManifest(request, response) {
@@ -1084,6 +1231,22 @@ const server = createServer((request, response) => {
   }
   if (url.pathname === "/v1/vault/manifest" && request.method === "GET") {
     void handleVaultManifest(request, response);
+    return;
+  }
+  if (url.pathname === "/v1/channels/telegram/status" && request.method === "GET") {
+    void handleTelegramStatus(request, response);
+    return;
+  }
+  if (url.pathname === "/v1/channels/telegram/updates" && request.method === "POST") {
+    void readJson(request)
+      .then((input) => handleTelegramUpdates(request, response, input))
+      .catch((error) => sendJson(response, 400, { error: error.message }));
+    return;
+  }
+  if (url.pathname === "/v1/channels/telegram/send" && request.method === "POST") {
+    void readJson(request)
+      .then((input) => handleTelegramSend(request, response, input))
+      .catch((error) => sendJson(response, 400, { error: error.message }));
     return;
   }
   if (url.pathname === "/v1/chat/completions" || url.pathname === "/v1/responses") {

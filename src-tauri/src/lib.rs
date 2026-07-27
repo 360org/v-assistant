@@ -6,12 +6,15 @@
 //! channels) so the UI never deals with engines, containers or config
 //! files.
 
+pub mod agent_fs;
 pub mod auth;
+pub mod knowledge;
 pub mod runtime;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;
 pub mod vault;
 
+use knowledge::{KnowledgeContent, KnowledgeRecord};
 use runtime::{AgentConfig, OutboundMessage, Runtime, RuntimeStatus};
 use tauri::Manager;
 
@@ -67,14 +70,60 @@ fn runtime_restart_runner(
     agent_name: String,
     base_url: Option<String>,
     model: Option<String>,
+    self_improve: Option<bool>,
     app: tauri::AppHandle,
 ) -> Result<bool, String> {
     state.spawn_engine_with_config(
         &agent_name,
         base_url.as_deref(),
         model.as_deref(),
+        self_improve.unwrap_or(true),
         Some(&app),
     )
+}
+
+// --- Knowledge store -------------------------------------------------------
+//
+// The app owns the writes: it holds the picked file and does the extraction
+// (pdfjs and the Office formats are browser code). The runner opens the same
+// database read-only to ground its answers.
+
+#[tauri::command]
+fn knowledge_put(
+    state: tauri::State<Runtime>,
+    file_id: String,
+    bucket: String,
+    name: String,
+    chunks: Vec<String>,
+    data_url: Option<String>,
+) -> Result<(), String> {
+    knowledge::put(&state.dir, &file_id, &bucket, &name, &chunks, data_url.as_deref())
+}
+
+#[tauri::command]
+fn knowledge_delete(state: tauri::State<Runtime>, file_id: String) -> Result<(), String> {
+    knowledge::delete(&state.dir, &file_id)
+}
+
+#[tauri::command]
+fn knowledge_clear(state: tauri::State<Runtime>) -> Result<(), String> {
+    knowledge::clear(&state.dir)
+}
+
+#[tauri::command]
+fn knowledge_get(
+    state: tauri::State<Runtime>,
+    file_id: String,
+) -> Result<Option<KnowledgeContent>, String> {
+    knowledge::get(&state.dir, &file_id)
+}
+
+#[tauri::command]
+fn knowledge_list(
+    state: tauri::State<Runtime>,
+    bucket: Option<String>,
+) -> Result<Vec<KnowledgeRecord>, String> {
+    knowledge::list(&state.dir, bucket.as_deref())
 }
 
 /// Execute a credentialed connector call without exposing the gateway
@@ -232,71 +281,72 @@ fn list_host_dir(path: String) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
+// --- Agent file tools ------------------------------------------------------
+//
+// The webview keeps its own agent path for when the runner is down and for
+// providers that bypass it. These are the only file operations that path may
+// perform: every one is confined to the granted workspace. `execute_cli_command`
+// used to sit here and ran `sh -c <anything>` for the model — idea.md §22 and
+// §92 forbid giving the model a host shell, so it is gone rather than guarded.
+
+fn agent_workspace(state: &tauri::State<Runtime>) -> std::path::PathBuf {
+    state.dir.join("workspace")
+}
+
 #[tauri::command]
-async fn execute_cli_command(command: String, cwd: Option<String>) -> Result<String, String> {
-    use std::process::{Command, Stdio};
-    use std::path::PathBuf;
-    use std::time::Duration;
+fn agent_read_file(state: tauri::State<Runtime>, path: String) -> Result<String, String> {
+    agent_fs::read(&agent_workspace(&state), &path)
+}
 
-    let shell = if cfg!(target_os = "windows") { "cmd" } else { "sh" };
-    let shell_arg = if cfg!(target_os = "windows") { "/C" } else { "-c" };
+#[tauri::command]
+fn agent_write_file(
+    state: tauri::State<Runtime>,
+    path: String,
+    content: String,
+) -> Result<String, String> {
+    agent_fs::write(&agent_workspace(&state), &path, &content)
+}
 
-    let mut cmd = Command::new(shell);
-    cmd.arg(shell_arg)
-        .arg(&command)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+#[tauri::command]
+fn agent_list_dir(state: tauri::State<Runtime>, path: String) -> Result<Vec<String>, String> {
+    agent_fs::list(&agent_workspace(&state), &path)
+}
 
-    if let Some(ref dir) = cwd {
-        if !dir.trim().is_empty() {
-            let mut path = PathBuf::from(dir);
-            if dir.starts_with("~/") {
-                if let Ok(home) = std::env::var("HOME") {
-                    path = PathBuf::from(home).join(dir.trim_start_matches("~/"));
+#[tauri::command]
+fn set_autostart(enable: bool) -> Result<bool, String> {
+    if let Ok(home) = std::env::var("HOME") {
+        let plist_path = std::path::PathBuf::from(home).join("Library/LaunchAgents/net.vuaai.v-assistant.plist");
+        if enable {
+            if let Ok(exe_path) = std::env::current_exe() {
+                let plist_content = format!(
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>net.vuaai.v-assistant</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"#,
+                    exe_path.to_string_lossy()
+                );
+                if let Some(parent) = plist_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
                 }
+                let _ = std::fs::write(plist_path, plist_content);
             }
-            cmd.current_dir(path);
+        } else {
+            if plist_path.exists() {
+                let _ = std::fs::remove_file(plist_path);
+            }
         }
     }
-
-    let mut child = cmd.spawn().map_err(|e| format!("Lỗi khởi tạo lệnh CLI: {}", e))?;
-
-    let timeout = Duration::from_secs(30);
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                if let Some(mut out) = child.stdout.take() {
-                    let _ = std::io::Read::read_to_end(&mut out, &mut stdout);
-                }
-                if let Some(mut err_out) = child.stderr.take() {
-                    let _ = std::io::Read::read_to_end(&mut err_out, &mut stderr);
-                }
-                let stdout_str = String::from_utf8_lossy(&stdout).to_string();
-                let stderr_str = String::from_utf8_lossy(&stderr).to_string();
-                let exit_code = status.code().unwrap_or(-1);
-                if exit_code == 0 {
-                    if stdout_str.trim().is_empty() && !stderr_str.trim().is_empty() {
-                        return Ok(format!("[CLI stdout (rỗng)]\n[stderr]\n{}", stderr_str));
-                    } else {
-                        return Ok(stdout_str);
-                    }
-                } else {
-                    return Err(format!("Lỗi thực thi lệnh CLI (Mã lỗi {}):\n{}", exit_code, stderr_str));
-                }
-            }
-            Ok(None) => {
-                if start.elapsed() >= timeout {
-                    let _ = child.kill();
-                    return Err("Lệnh CLI bị hủy do quá thời gian chờ (Timeout 30s).".to_string());
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(e) => return Err(format!("Lỗi khi chờ lệnh CLI: {}", e)),
-        }
-    }
+    Ok(enable)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -369,6 +419,11 @@ pub fn run() {
             runtime_restart_runner,
             runtime_restart_ai_router,
             runtime_connector_request,
+            knowledge_put,
+            knowledge_delete,
+            knowledge_clear,
+            knowledge_get,
+            knowledge_list,
             auth::oauth_listen,
             auth::open_external,
             auth::capture_grok_sso_cookie,
@@ -382,7 +437,10 @@ pub fn run() {
             read_host_file,
             write_host_file,
             list_host_dir,
-            execute_cli_command
+            agent_read_file,
+            agent_write_file,
+            agent_list_dir,
+            set_autostart
         ])
         .build(tauri::generate_context!())
         .expect("error while building V Assistant")

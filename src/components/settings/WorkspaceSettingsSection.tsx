@@ -101,13 +101,18 @@ export function WorkspaceSettingsSection() {
       const blob = new Blob([jsonStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const pad = (n: number) => n.toString().padStart(2, "0");
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const filename = `v-assistant-backup-${dateStr}.json`;
+      const timeFormatted = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ngày ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+
       a.href = url;
-      a.download = `v_assistant_backup_${dateStr}.json`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      setBackupMsg("✅ Đã xuất tệp sao lưu dữ liệu thành công!");
-      setTimeout(() => setBackupMsg(null), 4000);
+      setBackupMsg(`✅ Backup success! Tệp [${filename}] đã được tạo và tải xuống thành công lúc ${timeFormatted}.`);
+      setTimeout(() => setBackupMsg(null), 8000);
     } catch (e) {
       console.error(e);
       setBackupMsg("❌ Lỗi xuất dữ liệu sao lưu.");

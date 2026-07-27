@@ -148,42 +148,55 @@ async function extractPptx(buf: ArrayBuffer): Promise<string> {
 
 /** PDF needs a real parser (fonts, CMaps) — lazy-load pdfjs on demand. */
 async function extractPdf(buf: ArrayBuffer): Promise<string> {
-  try {
-    const pdfjs = await import("pdfjs-dist");
-    if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
-      try {
-        // @ts-ignore
-        const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
-        // @ts-ignore
-        pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
-      } catch (e) {
-        console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+  const pdfPromise = async (): Promise<string> => {
+    try {
+      const pdfjs = await import("pdfjs-dist");
+      if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
         try {
-          const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-          pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-        } catch (err) {
-          console.warn("Worker URL fallback failed:", err);
+          // @ts-ignore
+          const PDFWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker");
+          // @ts-ignore
+          pdfjs.GlobalWorkerOptions.workerPort = new PDFWorker.default();
+        } catch (e) {
+          console.warn("Failed to load PDF worker as port, falling back to URL path", e);
+          try {
+            const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+            pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+          } catch (err) {
+            console.warn("Worker URL fallback failed:", err);
+          }
         }
       }
-    }
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: true, disableFontFace: true }).promise;
-    const pages: string[] = [];
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ");
-      if (pageText.trim()) {
-        pages.push(pageText);
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: true, disableFontFace: true }).promise;
+      const pages: string[] = [];
+      const maxPages = Math.min(doc.numPages, 50);
+      for (let p = 1; p <= maxPages; p++) {
+        const page = await doc.getPage(p);
+        const content = await page.getTextContent();
+        const pageText = content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ");
+        if (pageText.trim()) {
+          pages.push(pageText);
+        }
       }
+      await doc.destroy().catch(() => {});
+      return pages.join("\n\n");
+    } catch (err) {
+      console.warn("extractPdf failed:", err);
+      return "";
     }
-    await doc.destroy().catch(() => {});
-    return pages.join("\n\n");
-  } catch (err) {
-    console.warn("extractPdf failed:", err);
-    return "";
-  }
+  };
+
+  return Promise.race([
+    pdfPromise(),
+    new Promise<string>((resolve) => {
+      setTimeout(() => {
+        console.warn("extractPdf timed out after 4 seconds.");
+        resolve("");
+      }, 4000);
+    }),
+  ]);
 }
 
 async function extractZip(buf: ArrayBuffer): Promise<string> {
@@ -299,11 +312,18 @@ export function chunkText(text: string, size = 1200, overlap = 150): string[] {
 // unavailable: tests, private-mode webviews)
 // ---------------------------------------------------------------------------
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
+function fileToDataUrl(file: File, timeoutMs = 2500): Promise<string> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(""), timeoutMs);
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
+    reader.onload = () => {
+      clearTimeout(timer);
+      resolve((reader.result as string) || "");
+    };
+    reader.onerror = () => {
+      clearTimeout(timer);
+      resolve("");
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -318,33 +338,29 @@ interface FileChunks {
 
 const bucketOf = (agentId: string | null | undefined): string => agentId ?? "general";
 
+/**
+ * Storage lives in the runtime's `knowledge.db`, not IndexedDB: the Agent
+ * Runner has to read these chunks to ground its answers, and it cannot reach
+ * browser storage. The in-memory map is the fallback for the browser preview,
+ * where there is no Tauri runtime at all.
+ */
 const memory = new Map<string, FileChunks>();
-const hasIdb = typeof indexedDB !== "undefined";
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open("v-assistant-knowledge", 1);
-    req.onupgradeneeded = () =>
-      req.result.createObjectStore("chunks", { keyPath: "fileId" });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+interface KnowledgeRow {
+  file_id: string;
+  bucket: string;
+  name: string;
+  data_url?: string | null;
+  added_at: number;
+  size: number;
 }
 
-async function withStore<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const db = await openDb();
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const req = run(db.transaction("chunks", mode).objectStore("chunks"));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  } finally {
-    db.close();
-  }
+const inDesktop = (): boolean =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+async function command<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(name, args);
 }
 
 /** Extract + chunk + persist one file into a role's bucket. Returns chunk count. */
@@ -399,86 +415,132 @@ export async function indexKnowledgeFile(
   fileId: string,
   file: File,
 ): Promise<number> {
-  const ext = file.name.toLowerCase().split(".").pop() ?? "";
-  const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
-  const isImage = imgExtensions.includes(ext) || file.type.startsWith("image/");
+  const processFile = async (): Promise<number> => {
+    const ext = file.name.toLowerCase().split(".").pop() ?? "";
+    const imgExtensions = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic", "heif"];
+    const isImage = imgExtensions.includes(ext) || file.type.startsWith("image/");
 
-  let dataUrl: string | undefined = undefined;
-  if (isImage) {
+    let dataUrl: string | undefined = undefined;
+    if (isImage) {
+      try {
+        dataUrl = await fileToDataUrl(file, 2500);
+      } catch (e) {
+        console.warn("Failed to read image as data URL:", e);
+      }
+    }
+
+    // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
+    void savePhysicalDataFile(file.name, file, "uploads");
+
+    let text = "";
     try {
-      dataUrl = await fileToDataUrl(file);
+      text = await extractText(file);
     } catch (e) {
-      console.warn("Failed to read image as data URL:", e);
+      text = isImage || ext === "pdf" ? `[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]` : "";
     }
-  }
 
-  // Always save physical file to <DATA_DIR>/uploads/<filename> on disk!
-  void savePhysicalDataFile(file.name, file, "uploads");
-
-  let text = "";
-  try {
-    text = await extractText(file);
-  } catch (e) {
-    text = isImage || ext === "pdf" ? `[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]` : "";
-  }
-
-  let chunks = chunkText(text);
-  if (!chunks.length) {
-    if (isImage || ext === "pdf") {
+    let chunks = chunkText(text);
+    if (!chunks.length) {
       chunks = [`[Tệp ${ext.toUpperCase()}: ${file.name} | Dung lượng: ${(file.size / 1024).toFixed(1)} KB]\n(Tệp tin đã được tải lên làm tài liệu tri thức cho Agent.)`];
-    } else {
-      throw new Error("No readable text in this file");
     }
-  }
 
-  const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
-  if (hasIdb) await withStore("readwrite", (s) => s.put(rec));
-  else memory.set(fileId, rec);
-  return chunks.length;
+    const rec: FileChunks = { fileId, bucket: bucketOf(agentId), name: file.name, chunks, dataUrl };
+    if (inDesktop()) {
+      await command("knowledge_put", {
+        fileId,
+        bucket: rec.bucket,
+        name: rec.name,
+        chunks,
+        dataUrl: dataUrl ?? null,
+      });
+    } else {
+      memory.set(fileId, rec);
+    }
+    return chunks.length;
+  };
+
+  return Promise.race([
+    processFile(),
+    new Promise<number>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[Knowledge] Indexing timed out after 6s for ${file.name}, returning fallback.`);
+        resolve(1);
+      }, 6000);
+    }),
+  ]);
 }
 
 export async function deleteKnowledgeFile(fileId: string): Promise<void> {
-  if (hasIdb) await withStore("readwrite", (s) => s.delete(fileId));
+  if (inDesktop()) await command("knowledge_delete", { fileId });
   else memory.delete(fileId);
 }
 
 export async function getFileContent(fileId: string): Promise<string | null> {
-  const rec = hasIdb
-    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
-    : memory.get(fileId);
+  const rec = await getKnowledgeFileRecord(fileId);
   return rec ? rec.chunks.join("\n\n") : null;
 }
 
 export async function getKnowledgeFileRecord(
   fileId: string,
 ): Promise<{ name: string; chunks: string[]; dataUrl?: string } | null> {
-  const rec = hasIdb
-    ? await withStore<FileChunks | undefined>("readonly", (s) => s.get(fileId))
-    : memory.get(fileId);
+  if (inDesktop()) {
+    const row = await command<{ name: string; chunks: string[]; dataUrl?: string | null } | null>(
+      "knowledge_get",
+      { fileId },
+    ).catch(() => null);
+    return row ? { name: row.name, chunks: row.chunks, dataUrl: row.dataUrl ?? undefined } : null;
+  }
+  const rec = memory.get(fileId);
   return rec ? { name: rec.name, chunks: rec.chunks, dataUrl: rec.dataUrl } : null;
 }
 
 export async function clearKnowledge(): Promise<void> {
-  if (hasIdb) await withStore("readwrite", (s) => s.clear());
+  if (inDesktop()) await command("knowledge_clear", {});
   else memory.clear();
 }
 
+/** Every stored document, as flat rows. Bucket-scoped when `bucket` is given. */
+async function listRecords(bucket?: string): Promise<KnowledgeRow[]> {
+  if (inDesktop()) {
+    return command<KnowledgeRow[]>("knowledge_list", { bucket: bucket ?? null }).catch(() => []);
+  }
+  return [...memory.values()]
+    .filter((f) => bucket === undefined || f.bucket === bucket)
+    .map((f) => ({
+      file_id: f.fileId,
+      bucket: f.bucket,
+      name: f.name,
+      data_url: f.dataUrl,
+      added_at: Date.now(),
+      size: f.chunks.join("").length,
+    }));
+}
+
+const extensionOf = (name: string): string => name.toLowerCase().split(".").pop() ?? "";
+
+const IMAGE_EXTENSIONS = new Set([
+  "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "ico", "heic", "heif",
+]);
+
+export async function getAllKnowledgeRecords(agentId?: string | null): Promise<Array<{ id: string; name: string; size: number; status: "ready"; addedAt: number }>> {
+  const files = await listRecords(bucketOf(agentId ?? null));
+  // Knowledge base chỉ hiển thị document (pdf, docx, xlsx, md, txt, csv, html…).
+  return files
+    .filter((f) => !IMAGE_EXTENSIONS.has(extensionOf(f.name)))
+    .map((f) => ({
+      id: f.file_id,
+      name: f.name,
+      size: f.size,
+      status: "ready" as const,
+      addedAt: f.added_at,
+    }));
+}
+
 export async function getAllImageRecords(): Promise<Array<{ id: string; name: string; dataUrl?: string }>> {
-  const files: FileChunks[] = hasIdb
-    ? await withStore<FileChunks[]>("readonly", (s) => s.getAll())
-    : [...memory.values()];
-
-  const imageFiles = files.filter((f) => {
-    const ext = f.name.toLowerCase().split(".").pop() ?? "";
-    const isImg = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff"].includes(ext);
-    return isImg || Boolean(f.dataUrl) || f.chunks?.[0]?.startsWith("data:image/");
-  });
-
-  return imageFiles.map((f) => ({
-    id: f.fileId,
-    name: f.name,
-    dataUrl: f.dataUrl || (f.chunks?.[0]?.startsWith("data:image/") ? f.chunks[0] : undefined),
-  }));
+  const files = await listRecords();
+  return files
+    .filter((f) => IMAGE_EXTENSIONS.has(extensionOf(f.name)) || Boolean(f.data_url))
+    .map((f) => ({ id: f.file_id, name: f.name, dataUrl: f.data_url ?? undefined }));
 }
 
 // ---------------------------------------------------------------------------
@@ -496,6 +558,10 @@ const tokenize = (s: string): string[] =>
 /**
  * Top chunks from THIS role's documents for a question — tf-idf scored,
  * capped so the excerpts never flood the prompt.
+ *
+ * The Agent Runner does its own retrieval straight from `knowledge.db`
+ * (agent-runner/src/knowledge). This copy only serves the fallback path, where
+ * the runner is unavailable and the webview talks to the provider itself.
  */
 export async function retrieveKnowledge(
   agentId: string | null,
@@ -503,17 +569,20 @@ export async function retrieveKnowledge(
   k = 4,
   maxChars = 6000,
 ): Promise<KnowledgeExcerpt[]> {
-  const bucket = bucketOf(agentId);
-  const files = hasIdb
-    ? (await withStore<FileChunks[]>("readonly", (s) => s.getAll())).filter(
-        (f) => f.bucket === bucket,
-      )
-    : [...memory.values()].filter((f) => f.bucket === bucket);
-  const all = files.flatMap((f) =>
+  const qTerms = [...new Set(tokenize(query))];
+  if (!qTerms.length) return [];
+
+  const files = await listRecords(bucketOf(agentId));
+  const loaded = await Promise.all(
+    files.map(async (f) => ({
+      name: f.name,
+      chunks: (await getKnowledgeFileRecord(f.file_id))?.chunks ?? [],
+    })),
+  );
+  const all = loaded.flatMap((f) =>
     f.chunks.map((text) => ({ name: f.name, text, terms: tokenize(text) })),
   );
-  const qTerms = [...new Set(tokenize(query))];
-  if (!all.length || !qTerms.length) return [];
+  if (!all.length) return [];
 
   const df = new Map<string, number>();
   for (const q of qTerms)

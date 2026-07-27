@@ -1,14 +1,22 @@
 /**
  * SQLite database abstraction layer.
  *
- * Uses better-sqlite3 via createRequire (ESM → CJS interop).
- * better-sqlite3 is a native addon, dynamic import() doesn't work with it.
+ * Backed by `node:sqlite`, the SQLite that ships inside Node itself (stable
+ * since Node 23.4; the desktop app bundles Node 24). Deliberately NOT a native
+ * addon:
  *
- * @ref NanoClaw/container/agent-runner/src/db/connection.ts
+ *  - `better-sqlite3` had to be compiled per platform *and* per Node ABI, so
+ *    the release pipeline verified a matching `better_sqlite3.node` for every
+ *    target and could only produce macOS builds.
+ *  - When the host Node moved ahead of that compiled ABI the runner died on
+ *    boot with NODE_MODULE_VERSION mismatch and restarted forever, which the
+ *    UI could only surface as "Load failed".
+ *
+ * With `node:sqlite` the runner is pure JavaScript: one `dist/index.js` runs on
+ * macOS, Windows and Linux, and the only per-platform artefact left is the Node
+ * binary itself.
  */
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
+import { DatabaseSync } from 'node:sqlite';
 
 export interface PreparedStatement {
   run(...params: unknown[]): void;
@@ -22,20 +30,45 @@ export interface DatabaseHandle {
   close(): void;
 }
 
+/** The value types SQLite can bind directly. */
+type Bindable = null | number | bigint | string | Uint8Array;
+
 /**
- * Open a SQLite database using better-sqlite3.
+ * `node:sqlite` rejects anything outside its supported set, where
+ * better-sqlite3 quietly coerced booleans and `undefined`. Normalise here so
+ * call sites keep passing plain JS values.
  */
+function toBindable(value: unknown): Bindable {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'string') {
+    return value;
+  }
+  if (value instanceof Uint8Array) return value;
+  return String(value);
+}
+
+/**
+ * `node:sqlite` hands back rows with a null prototype. They compare unequal to
+ * plain object literals under `deepStrictEqual`, so give callers ordinary
+ * objects — the shape better-sqlite3 used to return.
+ */
+function toPlainObject<T>(row: T): T {
+  return row && typeof row === 'object' ? ({ ...row } as T) : row;
+}
+
 export function openDatabase(path: string, options?: { readonly?: boolean }): DatabaseHandle {
-  const BetterSqlite3 = require('better-sqlite3');
-  const db = new BetterSqlite3(path, { readonly: options?.readonly ?? false });
+  const db = new DatabaseSync(path, { readOnly: options?.readonly ?? false });
 
   return {
     prepare: (sql: string) => {
       const stmt = db.prepare(sql);
       return {
-        run: (...params: unknown[]) => stmt.run(...params),
-        get: (...params: unknown[]) => stmt.get(...params),
-        all: (...params: unknown[]) => stmt.all(...params),
+        run: (...params: unknown[]) => {
+          stmt.run(...params.map(toBindable));
+        },
+        get: (...params: unknown[]) => toPlainObject(stmt.get(...params.map(toBindable))),
+        all: (...params: unknown[]) => stmt.all(...params.map(toBindable)).map(toPlainObject),
       };
     },
     exec: (sql: string) => db.exec(sql),

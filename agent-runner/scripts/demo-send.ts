@@ -9,7 +9,7 @@
  * 3. Poll outbound.db chờ phản hồi
  * 4. In kết quả
  */
-import Database from 'better-sqlite3';
+import { DatabaseSync as Database } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
@@ -88,7 +88,7 @@ function sendMessage(text: string): void {
 
 function latestOutboundSeq(): number {
   if (!fs.existsSync(OUTBOUND_PATH)) return 0;
-  const db = new Database(OUTBOUND_PATH, { readonly: true });
+  const db = new Database(OUTBOUND_PATH, { readOnly: true });
   try {
     return (db.prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM messages_out').get() as { seq: number }).seq;
   } finally {
@@ -107,7 +107,7 @@ async function pollResponse(afterSeq: number, timeoutMs = 60000): Promise<string
         continue;
       }
 
-      const db = new Database(OUTBOUND_PATH, { readonly: true });
+      const db = new Database(OUTBOUND_PATH, { readOnly: true });
       const rows = db.prepare(`
         SELECT * FROM messages_out WHERE seq > ? ORDER BY seq ASC LIMIT 1
       `).all(afterSeq) as Array<{ content: string; seq: number; timestamp: string }>;

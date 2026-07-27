@@ -275,11 +275,11 @@ const fileReadTool: AgentTool = {
     type: "function",
     function: {
       name: "file_read",
-      description: "Đọc nội dung văn bản của một tệp tin trên hệ thống máy host.",
+      description: "Đọc nội dung văn bản của một tệp tin trong workspace được cấp.",
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "Đường dẫn tuyệt đối hoặc tương đối (ví dụ: ~/Desktop/test.txt hoặc /Volumes/DATA/file.txt)." },
+          path: { type: "string", description: "Đường dẫn trong workspace (ví dụ: ghi-chu/hom-nay.md). Không truy cập được ra ngoài workspace." },
         },
         required: ["path"],
       },
@@ -291,7 +291,7 @@ const fileReadTool: AgentTool = {
     try {
       if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
         const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<string>("read_host_file", { path });
+        return await invoke<string>("agent_read_file", { path });
       }
       return "Lỗi: Đọc tệp hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
     } catch (e) {
@@ -309,7 +309,7 @@ const fileWriteTool: AgentTool = {
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "Đường dẫn tệp cần ghi (ví dụ: ~/Desktop/output.txt hoặc /Volumes/DATA/WORK/file.json)." },
+          path: { type: "string", description: "Đường dẫn tệp trong workspace được cấp (ví dụ: bao-cao/thang-7.md)." },
           content: { type: "string", description: "Nội dung văn bản cần ghi vào tệp." },
         },
         required: ["path", "content"],
@@ -323,7 +323,7 @@ const fileWriteTool: AgentTool = {
     try {
       if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
         const { invoke } = await import("@tauri-apps/api/core");
-        return await invoke<string>("write_host_file", { path, content });
+        return await invoke<string>("agent_write_file", { path, content });
       }
       return "Lỗi: Ghi tệp hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
     } catch (e) {
@@ -337,11 +337,11 @@ const fileListTool: AgentTool = {
     type: "function",
     function: {
       name: "file_list",
-      description: "Liệt kê danh sách các tệp tin và thư mục con trong một đường dẫn trên máy host.",
+      description: "Liệt kê tệp và thư mục con bên trong workspace được cấp.",
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "Đường dẫn thư mục cần xem danh sách (ví dụ: ~/Desktop hoặc /Volumes/DATA/WORK)." },
+          path: { type: "string", description: "Thư mục trong workspace. Để trống hoặc \".\" để xem gốc workspace." },
         },
         required: ["path"],
       },
@@ -353,7 +353,7 @@ const fileListTool: AgentTool = {
     try {
       if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
         const { invoke } = await import("@tauri-apps/api/core");
-        const list = await invoke<string[]>("list_host_dir", { path });
+        const list = await invoke<string[]>("agent_list_dir", { path });
         return `Danh sách tệp/thư mục tại "${path}":\n` + list.map((item) => `- ${item}`).join("\n");
       }
       return "Lỗi: Liệt kê thư mục hệ thống chỉ hỗ trợ trên ứng dụng V Assistant Desktop.";
@@ -363,120 +363,15 @@ const fileListTool: AgentTool = {
   },
 };
 
-const mcpStatusTool: AgentTool = {
-  schema: {
-    type: "function",
-    function: {
-      name: "mcp_status",
-      description: "Kiểm tra trạng thái hệ thống MCP (Model Context Protocol) Server và CLI Executor.",
-      parameters: { type: "object", properties: {}, required: [] },
-    },
-  },
-  async run() {
-    return JSON.stringify(
-      {
-        mcpStatus: "active",
-        protocolVersion: "2025-06-18",
-        mcpClient: "v-assistant-mcp-client (Stdio Transport JSON-RPC 2.0)",
-        loadedServers: ["odoo-graph-mcp", "builtin-tools-mcp", "cli-executor-mcp"],
-        cliCapabilities: {
-          enabled: true,
-          supportedShells: ["sh", "zsh", "bash", "cmd"],
-          toolName: "execute_cli",
-        },
-        availableTools: [
-          "execute_cli",
-          "execute_mcp_tool",
-          "web_search",
-          "file_read",
-          "file_write",
-          "file_list",
-          "create_schedule",
-          "vault_list",
-          "connector_request",
-          "http_request",
-          "create_skill",
-        ],
-      },
-      null,
-      2,
-    );
-  },
-};
-
-const executeCliTool: AgentTool = {
-  schema: {
-    type: "function",
-    function: {
-      name: "execute_cli",
-      description: "Thực thi trực tiếp lệnh CLI / Terminal / Shell command (e.g. bash, zsh, git, npm, python, ls, curl, etc.) trên hệ thống Host.",
-      parameters: {
-        type: "object",
-        properties: {
-          command: {
-            type: "string",
-            description: "Lệnh CLI / Terminal cần thực thi (e.g. 'ls -la', 'git status', 'python script.py').",
-          },
-          cwd: {
-            type: "string",
-            description: "Tùy chọn: Thư mục làm việc (Working Directory). Hỗ trợ đường dẫn ~/",
-          },
-        },
-        required: ["command"],
-      },
-    },
-  },
-  async run(args) {
-    const command = (args.command as string) ?? "";
-    const cwd = (args.cwd as string) ?? undefined;
-    if (!command.trim()) return "Lỗi: Lệnh CLI không được để rỗng.";
-
-    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const output = await invoke<string>("execute_cli_command", { command, cwd });
-        return output || "✅ Lệnh CLI đã thực thi thành công (không có đầu ra).";
-      } catch (err) {
-        return `❌ Lỗi thực thi CLI: ${String(err)}`;
-      }
-    }
-    return `[Preview Mode] Lệnh CLI "${command}" đã được giả lập thành công.`;
-  },
-};
-
-const executeMcpTool: AgentTool = {
-  schema: {
-    type: "function",
-    function: {
-      name: "execute_mcp_tool",
-      description: "Thực thi một công cụ MCP (Model Context Protocol) Server bất kỳ.",
-      parameters: {
-        type: "object",
-        properties: {
-          serverName: {
-            type: "string",
-            description: "Tên MCP Server (e.g. 'odoo-graph-mcp', 'builtin-tools-mcp').",
-          },
-          toolName: {
-            type: "string",
-            description: "Tên công cụ MCP cần gọi.",
-          },
-          arguments: {
-            type: "object",
-            description: "Tham số truyền vào MCP Tool dưới dạng JSON Object.",
-          },
-        },
-        required: ["serverName", "toolName"],
-      },
-    },
-  },
-  async run(args) {
-    const serverName = (args.serverName as string) ?? "";
-    const toolName = (args.toolName as string) ?? "";
-    const toolArgs = (args.arguments as Record<string, unknown>) ?? {};
-    return `✅ [MCP Executor] Đã kết nối MCP Server "${serverName}" và thực thi tool "${toolName}" thành công với tham số: ${JSON.stringify(toolArgs)}`;
-  },
-};
+// `mcp_status` and `execute_mcp_tool` used to live here and both lied.
+// `mcp_status` reported a hardcoded "active" MCP client with a made-up server
+// list and advertised a shell capability; `execute_mcp_tool` did nothing at all
+// and returned "✅ … thực thi tool … thành công", which the model then reported
+// to the user as completed work.
+//
+// MCP belongs to the Agent Runner (agent-runner/src/mcp-client), which really
+// speaks the protocol. This fallback path does not, so it now says nothing
+// rather than something false.
 
 const createSkillTool: AgentTool = {
   schema: {
@@ -554,9 +449,6 @@ export function buildAgentTools(): AgentTool[] {
     fileReadTool,
     fileWriteTool,
     fileListTool,
-    mcpStatusTool,
-    executeCliTool,
-    executeMcpTool,
     createSkillTool,
   ];
 }

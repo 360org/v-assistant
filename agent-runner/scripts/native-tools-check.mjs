@@ -1,12 +1,21 @@
 // Checks the Agent Runner's native host tools (§5.6): file_write/read/edit,
 // grep, glob and bash. Deterministic, no network. Run: npx tsx scripts/native-tools-check.mjs
 
-import { mkdtempSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 
-const dir = mkdtempSync(path.join(tmpdir(), 'ar-tools-'));
+const root = mkdtempSync(path.join(tmpdir(), 'ar-tools-'));
+const dir = path.join(root, 'workspace');
+mkdirSync(dir);
+process.env.VUA_DATA_DIR = root;
+process.env.VUA_AGENT_NAME = 'default';
 process.env.VUA_AGENT_WORKSPACE = dir;
+
+// The system prompt points the agent at this tree, so the tools must reach it.
+const memoryDir = path.join(root, 'agents', 'default', 'memory');
+mkdirSync(memoryDir, { recursive: true });
+writeFileSync(path.join(memoryDir, 'index.md'), '# what I remember');
 const { executeTool } = await import('../src/native-tools/index.ts');
 const file = path.join(dir, 'note.txt');
 
@@ -54,8 +63,13 @@ check('web_search parses public result pages', !r.is_error && r.content.includes
 r = await executeTool('bash', { command: 'echo RUNNER_OK' });
 check('bash is not exposed to the agent', r.is_error === true);
 
-r = await executeTool('file_read', { path: path.join(dir, '..', 'vault.key') });
+r = await executeTool('file_read', { path: path.join(root, 'vault.key') });
 check('file tools cannot escape the assigned workspace', r.content.includes('Access denied'));
+
+r = await executeTool('file_read', { path: path.join(memoryDir, 'index.md') });
+check('the agent can read its own memory', r.content.includes('what I remember'));
+r = await executeTool('file_write', { path: path.join(memoryDir, 'learned.md'), content: 'a new fact' });
+check('the agent can update its own memory', !r.is_error);
 
 // unknown tool is handled, not thrown
 r = await executeTool('does_not_exist', {});

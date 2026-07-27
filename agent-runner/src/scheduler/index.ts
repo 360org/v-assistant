@@ -1,0 +1,179 @@
+/**
+ * Scheduled tasks, running in the Host Process.
+ *
+ * idea.md §1.3 puts the agent brain in the host daemon, and the product promise
+ * is that a scheduled task fires on time. Running the scheduler inside the
+ * webview broke that promise: closing the window stopped every schedule. This
+ * module ticks inside the runner, so schedules keep firing while the UI is shut.
+ *
+ * Ownership:
+ *  - The app owns the task list and writes it to `scheduled-tasks.json`.
+ *  - The runner owns execution and remembers `lastRun` in `session_state`,
+ *    so neither side writes the other's storage and there is no lost update.
+ *
+ * A due task runs through the very same agent loop the chat uses, and its reply
+ * is written to `messages_out` — the UI shows it exactly like any other answer.
+ */
+import fs from 'fs';
+import path from 'path';
+import { getSessionState, setSessionState, writeMessageOut } from '../db/index.js';
+import { executeAgentLoop, type PollLoopConfig } from '../poll-loop.js';
+import { notifyTelegram } from '../channels/telegram.js';
+import { isDue } from './schedule.js';
+
+const TICK_MS = 30_000;
+/**
+ * Tags every row this module writes, so the chat window — which polls the same
+ * outbound queue — never mistakes a scheduled result for its own answer.
+ */
+const CHANNEL = 'scheduled';
+
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  prompt: string;
+  /** Human recurrence, e.g. "Every day at 9:00". */
+  schedule: string;
+  enabled: boolean;
+  /** Written by whoever created the task; the runner tracks its own runs. */
+  lastRun?: number;
+}
+
+function log(msg: string): void {
+  console.error(`[scheduler] ${msg}`);
+}
+
+/**
+ * The same file the `schedule_task` tool and the app's Scheduled page use, so
+ * a task created from chat and one created in the UI are the same task.
+ */
+function tasksFile(): string {
+  const dataDir = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '', '.v-assistant/data');
+  return path.join(dataDir, 'scheduled_tasks.json');
+}
+
+/** Read the shared task list. Missing or malformed file → no tasks. */
+export function readTasks(): ScheduledTask[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(tasksFile(), 'utf8'));
+    const list = Array.isArray(parsed) ? parsed : parsed?.tasks;
+    if (!Array.isArray(list)) return [];
+    return list.filter(
+      (t): t is ScheduledTask =>
+        t && typeof t.id === 'string' && typeof t.prompt === 'string' && typeof t.schedule === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
+const lastRunKey = (taskId: string) => `scheduler:lastRun:${taskId}`;
+
+/**
+ * When the runner has never fired a task, fall back to the `lastRun` stamped
+ * into the file at creation time. Without that a task created minutes ago with
+ * a "daily at 09:00" schedule would fire immediately on the next tick.
+ */
+export function getLastRun(taskId: string, fallback?: number): number | undefined {
+  const raw = getSessionState(lastRunKey(taskId));
+  const value = raw === null ? NaN : Number(raw);
+  if (Number.isFinite(value)) return value;
+  return typeof fallback === 'number' && Number.isFinite(fallback) ? fallback : undefined;
+}
+
+export function setLastRun(taskId: string, at: number): void {
+  setSessionState(lastRunKey(taskId), String(at));
+}
+
+/** Tasks that should fire at `now`, honouring `enabled` and the last run. */
+export function dueTasks(tasks: ScheduledTask[], now: Date): ScheduledTask[] {
+  return tasks.filter(
+    (task) => task.enabled !== false && isDue(task.schedule, now, getLastRun(task.id, task.lastRun)),
+  );
+}
+
+function generateId(): string {
+  return `sched-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Run every task due at `now`. Returns the ids that fired.
+ *
+ * `lastRun` is recorded *before* the agent runs so a slow task cannot fire
+ * twice when the next tick arrives while it is still working.
+ */
+export async function runDueTasks(config: PollLoopConfig, now = new Date()): Promise<string[]> {
+  const due = dueTasks(readTasks(), now);
+  const fired: string[] = [];
+
+  for (const task of due) {
+    setLastRun(task.id, now.getTime());
+    fired.push(task.id);
+    log(`Running "${task.name || task.id}"`);
+    const startedAt = Date.now();
+
+    try {
+      const result = await executeAgentLoop(
+        config,
+        task.prompt,
+        undefined,
+        { platformId: null, channelType: null, threadId: null },
+        config.systemContext,
+      );
+      if (result.text) {
+        writeMessageOut({
+          id: generateId(),
+          kind: 'chat',
+          platform_id: CHANNEL,
+          channel_type: CHANNEL,
+          thread_id: task.id,
+          content: JSON.stringify({
+            text: result.text,
+            scheduledTaskId: task.id,
+            scheduledTaskName: task.name,
+            status: 'success',
+            durationMs: Date.now() - startedAt,
+          }),
+        });
+        // The point of a schedule is that it reaches the user with the app
+        // closed, so push it to Telegram too when a bot is connected.
+        void notifyTelegram(`⏰ ${task.name || task.id}\n\n${result.text}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`Task "${task.name || task.id}" failed: ${message}`);
+      writeMessageOut({
+        id: generateId(),
+        kind: 'chat',
+        platform_id: CHANNEL,
+        channel_type: CHANNEL,
+        thread_id: task.id,
+        content: JSON.stringify({
+          text: `⚠️ Scheduled task "${task.name || task.id}" failed: ${message}`,
+          scheduledTaskId: task.id,
+          scheduledTaskName: task.name,
+          status: 'error',
+          durationMs: Date.now() - startedAt,
+        }),
+      });
+    }
+  }
+
+  return fired;
+}
+
+/** Start the scheduler tick. Runs until the process exits. */
+export function startScheduler(config: PollLoopConfig): void {
+  log(`Started — checking every ${TICK_MS / 1000}s`);
+  const tick = async () => {
+    try {
+      await runDueTasks(config);
+    } catch (error) {
+      log(`Tick failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  // Fire soon after boot so a task whose time passed while the app was closed
+  // is not held back for a full interval.
+  setTimeout(() => void tick(), 5_000);
+  setInterval(() => void tick(), TICK_MS).unref?.();
+}
