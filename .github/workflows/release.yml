@@ -73,8 +73,9 @@ jobs:
             args: "--target aarch64-apple-darwin"
             target: "aarch64-apple-darwin"
             asset_suffix: "macOS-Apple-Silicon"
-          # Native Node modules such as better-sqlite3 must be compiled on an
-          # Intel runner for the Intel desktop bundle. macos-latest is ARM.
+          # The runner is pure JavaScript (SQLite comes from `node:sqlite`), so
+          # this runner only has to produce the Intel Tauri binary — there is no
+          # native Node addon left to compile per architecture.
           - platform: macos-15-intel
             args: "--target x86_64-apple-darwin"
             target: "x86_64-apple-darwin"
@@ -116,10 +117,20 @@ jobs:
       - name: Bundle Node runtime for AI Router
         shell: bash
         run: |
+          # Only the Node binary differs per platform now; the runner's own
+          # JavaScript is identical everywhere.
           case "${{ matrix.args }}" in
-            *aarch64-apple-darwin*) archive="node-v24.18.0-darwin-arm64" ;;
-            *x86_64-apple-darwin*) archive="node-v24.18.0-darwin-x64" ;;
-            *) echo "Unsupported macOS target: ${{ matrix.args }}" >&2; exit 1 ;;
+            *aarch64-apple-darwin*)  archive="node-v24.18.0-darwin-arm64" ;;
+            *x86_64-apple-darwin*)   archive="node-v24.18.0-darwin-x64" ;;
+            *aarch64-unknown-linux*) archive="node-v24.18.0-linux-arm64" ;;
+            *x86_64-unknown-linux*)  archive="node-v24.18.0-linux-x64" ;;
+            *)
+              case "$(uname -s)" in
+                Darwin) archive="node-v24.18.0-darwin-$(uname -m | sed 's/arm64/arm64/;s/x86_64/x64/')" ;;
+                Linux)  archive="node-v24.18.0-linux-$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/')" ;;
+                *) echo "Unsupported target: ${{ matrix.args }}" >&2; exit 1 ;;
+              esac
+              ;;
           esac
           curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o /tmp/node.tar.gz
           mkdir -p runtime/node
@@ -134,13 +145,11 @@ jobs:
           test -f ai-router/node_modules/uuid/package.json
           test -f ai-router/node_modules/node-machine-id/package.json
           test -f agent-runner/dist/index.js
-          test -f agent-runner/node_modules/better-sqlite3/package.json
-          test -f agent-runner/node_modules/better-sqlite3/build/Release/better_sqlite3.node
-          case "${{ matrix.target }}" in
-            aarch64-apple-darwin) expected_arch="arm64" ;;
-            x86_64-apple-darwin) expected_arch="x86_64" ;;
-          esac
-          file agent-runner/node_modules/better-sqlite3/build/Release/better_sqlite3.node | grep -q "$expected_arch"
+          # The runner must stay free of native addons: SQLite comes from
+          # `node:sqlite`, so the same dist/ runs on every platform and there is
+          # no per-architecture .node file to verify.
+          ! grep -rq "better-sqlite3" agent-runner/dist
+          test ! -d agent-runner/node_modules/better-sqlite3
 
       - name: Build installers and upload to draft release
         uses: tauri-apps/tauri-action@v0

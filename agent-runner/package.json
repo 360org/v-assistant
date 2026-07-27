@@ -12,11 +12,7 @@
     "check": "tsc --noEmit && tsx scripts/e2e-check.mjs && tsx scripts/session-management-check.mjs && tsx scripts/native-tools-check.mjs && tsx scripts/mcp-client-check.mjs && tsx scripts/builtin-mcp-check.mjs && tsx scripts/anthropic-retry-check.mjs && tsx scripts/openai-gemini-retry-check.mjs",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "better-sqlite3": "^13.0.1"
-  },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0"

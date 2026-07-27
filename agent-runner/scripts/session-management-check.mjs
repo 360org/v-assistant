@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync as Database } from 'node:sqlite';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -29,7 +29,7 @@ function send(id, threadId, text) {
 async function waitCompleted(id) {
   for (let i = 0; i < 80; i++) {
     await sleep(50);
-    const db = new Database(outboundPath, { readonly: true });
+    const db = new Database(outboundPath, { readOnly: true });
     const row = db.prepare("SELECT status FROM processing_ack WHERE message_id = ?").get(id);
     db.close();
     if (row?.status === 'completed') return;

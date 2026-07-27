@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 
-const [tauriConfig, runtime, workflow] = await Promise.all([
+const [tauriConfig, runtime, workflow, runner, runnerPackage] = await Promise.all([
   readFile("src-tauri/tauri.conf.json", "utf8"),
   readFile("src-tauri/src/runtime.rs", "utf8"),
   readFile(".github/workflows/release.yml", "utf8"),
+  readFile("agent-runner/src/db/sqlite.ts", "utf8"),
+  readFile("agent-runner/package.json", "utf8"),
 ]);
 
 const assertions = [
@@ -45,8 +47,18 @@ const assertions = [
   ],
   [
     workflow.includes("agent-runner/dist/index.js")
-      && workflow.includes("agent-runner/node_modules/better-sqlite3/package.json"),
+      && workflow.includes('! grep -rq "better-sqlite3" agent-runner/dist'),
     "macOS release workflow must verify the packaged Agent Runner runtime",
+  ],
+  [
+    // One build, three platforms: the runner may not regain a native addon,
+    // otherwise every target needs its own compiled binary again. Prose in
+    // comments is fine — what matters is the import and the dependency list.
+    runner.includes("from 'node:sqlite'") && !JSON.stringify({
+      ...JSON.parse(runnerPackage).dependencies,
+      ...JSON.parse(runnerPackage).devDependencies,
+    }).includes("better-sqlite3"),
+    "Agent Runner must stay free of native addons (use node:sqlite)",
   ],
 ];
 

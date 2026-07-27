@@ -7,7 +7,7 @@
 // This is the automated version of scripts/demo-send.ts (which needs a live
 // daemon + real key).
 
-import Database from 'better-sqlite3';
+import { DatabaseSync as Database } from 'node:sqlite';
 import { mkdtempSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -71,7 +71,7 @@ for (let i = 0; i < 50 && reply === null; i++) {
   await sleep(200);
   if (!existsSync(outboundPath)) continue;
   try {
-    const db = new Database(outboundPath, { readonly: true });
+    const db = new Database(outboundPath, { readOnly: true });
     const row = db
       .prepare('SELECT content FROM messages_out ORDER BY seq DESC LIMIT 1')
       .get();

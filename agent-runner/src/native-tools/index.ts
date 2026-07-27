@@ -13,16 +13,74 @@ function log(msg: string): void {
   console.error(`[native-tools] ${msg}`);
 }
 
-const WORKSPACE_ROOT = path.resolve(
-  process.env.VUA_AGENT_WORKSPACE || path.join(process.env.VUA_DATA_DIR || '/tmp/v-assistant', 'workspace'),
-);
+/**
+ * Resolve the workspace root through symlinks so containment checks compare
+ * real paths. On macOS `/tmp` is itself a symlink to `/private/tmp`, so a
+ * lexical-only comparison would reject the agent's own workspace.
+ */
+function resolveRoot(): string {
+  const configured = path.resolve(
+    process.env.VUA_AGENT_WORKSPACE || path.join(process.env.VUA_DATA_DIR || '/tmp/v-assistant', 'workspace'),
+  );
+  try {
+    return fs.realpathSync(configured);
+  } catch {
+    return configured; // not created yet
+  }
+}
+
+const WORKSPACE_ROOT = resolveRoot();
 const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
 
-function workspacePath(input: string): string {
-  if (path.isAbsolute(input)) {
-    return path.normalize(input);
+const ACCESS_DENIED = 'Access denied: agent tools are restricted to the assigned workspace';
+
+/** Reject anything that resolves outside the workspace root. */
+function assertInsideWorkspace(target: string): void {
+  const rel = path.relative(WORKSPACE_ROOT, target);
+  // "" is the root itself (allowed, e.g. glob over the whole workspace).
+  // ".." or "../…" escapes upward; an absolute rel means a different volume.
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+    throw new Error(ACCESS_DENIED);
   }
-  return path.resolve(WORKSPACE_ROOT, input);
+}
+
+/**
+ * Resolve symlinks as far as the path actually exists, keeping the not-yet-
+ * created tail. `file_write` targets a file that is missing by definition, so
+ * plain `realpathSync` cannot be used; both sides of the containment check
+ * still have to be real paths, because `/tmp` and `/var/folders` are symlinks
+ * on macOS and a lexical comparison would reject the agent's own workspace.
+ */
+function realpathBestEffort(target: string): string {
+  const pending: string[] = [];
+  let current = path.resolve(target);
+  for (;;) {
+    try {
+      const real = fs.realpathSync(current);
+      return pending.length ? path.join(real, ...pending.reverse()) : real;
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return path.resolve(target); // nothing on this path exists
+      pending.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * Map a tool-supplied path into the agent workspace, refusing anything that
+ * points outside it.
+ *
+ * This previously returned absolute inputs untouched and never checked where a
+ * relative path landed, so `../vault.key` — or any absolute path at all —
+ * reached the real filesystem. idea.md is explicit that file tools only operate
+ * inside the granted workspace, so both holes are closed here, symlinks
+ * included.
+ */
+function workspacePath(input: string): string {
+  const resolved = realpathBestEffort(path.resolve(WORKSPACE_ROOT, input));
+  assertInsideWorkspace(resolved);
+  return resolved;
 }
 
 /** A native tool with its definition and executor */
