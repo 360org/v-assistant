@@ -3,6 +3,9 @@
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
 ## [Unreleased]
+*   **Bỏ Docker khỏi quy trình test (`skills/v-assistant-dev-guidelines/SKILL.md` §5)**:
+    - Từ 2026-07-27, **không dùng Docker/Colima** để test nữa. Quy trình chuẩn: `npm run tauri dev` cho vòng lặp sửa nhanh, `npm run build:local` cho bản cài thật vào `/Applications/V Assistant.app`, rồi **thao tác thật trên UI**.
+    - `./dev up|ui|all` chỉ còn dành cho profile server nếu được yêu cầu rõ.
 *   **Xiết quy chuẩn phát triển (`skills/v-assistant-dev-guidelines/SKILL.md`)**:
     - Thêm **Luật số 1 — Bám idea gốc**: bắt buộc đọc `idea.md` trước khi đề xuất thay đổi về luồng người dùng/kiến trúc/xác thực; mâu thuẫn với idea thì DỪNG và hỏi PO thay vì tự quyết.
     - Chốt **định danh**: `AI Router` là tên chính thức của tầng chung chuyển (local `127.0.0.1:20128`); `9router` chỉ là công nghệ nền; `OpenRouter` chỉ là một provider ngang hàng — **không phải** hạ tầng chung chuyển. Phần kết nối hiện tại đang đúng, cấm refactor/làm lại.

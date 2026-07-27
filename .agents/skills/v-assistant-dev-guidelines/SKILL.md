@@ -66,7 +66,7 @@ Trước khi "sửa" một phần đang hoạt động: **hỏi PO xem nó có �
 |---|---|---|
 | 1. Biên dịch | `npx tsc --noEmit` · `cargo check` | Cú pháp/kiểu đúng |
 | 2. Test | `npm run check` | Logic đúng |
-| 3. **Chạy thật** | `npm run tauri dev` + gửi tin nhắn thật | **Sản phẩm dùng được** |
+| 3. **Chạy thật trên app macOS** | `npm run tauri dev` (nhanh) hoặc `npm run build:local` (bản cài) → **thao tác thật trên UI** | **Sản phẩm dùng được** |
 
 **Chỉ được báo "đã xong" sau khi qua mức 3.** Nhiều lỗi nghiêm trọng nhất (sidecar sai đường dẫn, runner crash loop, router không được giám sát) đều **xanh ở mức 1–2 nhưng app hoàn toàn không dùng được**.
 
@@ -105,9 +105,18 @@ Trước khi "sửa" một phần đang hoạt động: **hỏi PO xem nó có �
 
 ---
 
-## 5. Chạy dev trên máy PO
+## 5. Chạy & test trên máy PO — **KHÔNG DÙNG DOCKER**
 
-* Được phép chạy trực tiếp trên macOS host (`npm run tauri dev`); Docker **không bắt buộc**.
+> **Chốt 2026-07-27:** bỏ hẳn bước test qua Docker. Build bản **macOS local** và test **app live**.
+
+| Việc | Lệnh |
+|---|---|
+| Vòng lặp sửa nhanh (hot reload, cửa sổ native) | `npm run tauri dev` |
+| Bản cài thật vào `/Applications/V Assistant.app` | `npm run build:local` |
+| Chỉ biên dịch sidecar sau khi sửa `agent-runner/src` | `npm run build:runner` |
+
+* `./dev up|ui|all` (Docker/Colima) **không dùng nữa** — chỉ còn cho profile server nếu PO yêu cầu rõ.
+* Host đã có `node`/`npm` (`/usr/local/bin`) và `cargo` (`~/.cargo/bin`).
 * **Dev build và app release dùng chung** bundle id + Vault + port 20128 → chạy song song sẽ đá nhau. Chỉ chạy **một instance** khi test, và nói rõ đang test instance nào.
 * **Vòng chờ (`until … do sleep`) phải có điều kiện thoát khi tiến trình chết**, nếu không sẽ treo vĩnh viễn. Luôn dọn task nền đã xong.
 * Không thao tác UI khi PO đang dùng app.
