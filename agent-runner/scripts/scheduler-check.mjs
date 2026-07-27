@@ -34,6 +34,28 @@ check('hourly fires after an hour', isDue('Every hour', at9, at9.getTime() - 3_6
 check('named weekday only fires on that day', !isDue('Every Monday at 09:00', at9, undefined));
 check('weekdays skip the weekend', !isDue('Weekdays at 08:00', new Date('2026-03-08T09:00:00'), undefined));
 
+// --- the assistant writes these strings, in either language ------------------
+// The tool's own description suggests "Hàng ngày lúc 09:30"; that used to miss
+// the time entirely and silently become 09:00.
+check('Vietnamese daily honours its time', !isDue('Hàng ngày lúc 09:30', at9, undefined));
+check('Vietnamese daily fires once its time passes', isDue('Hàng ngày lúc 09:00', at9, undefined));
+check('a bare HH:MM is read as the time', !isDue('Đăng bài 23:00', at9, undefined));
+check('9h30 style is read as the time', !isDue('Hàng ngày 9h30', at9, undefined));
+check('Vietnamese weekday only fires on that day', !isDue('Thứ hai lúc 09:00', at9, undefined));
+check('Vietnamese hourly respects the gap', !isDue('Hàng giờ', at9, at9.getTime() - 60_000));
+
+// --- a dated one-off is not a daily job -------------------------------------
+// It used to fall through to "daily at 09:00" and run every day forever.
+const onDay = new Date('2026-03-10T09:05:00');
+check('a dated task fires once its moment arrives', isDue('10/03 08:30', onDay, undefined));
+check('a dated task waits for its time of day', !isDue('10/03 23:00', onDay, undefined));
+check('a dated task does not fire on another day', !isDue('11/03 08:30', onDay, undefined));
+check('a creation stamp does not suppress a future one-off', isDue('10/03 08:30', onDay, onDay.getTime() - 86_400_000));
+check('a dated task never fires twice', !isDue('10/03 08:30', onDay, onDay.getTime()));
+check('an ISO date works too', isDue('2026-03-10 08:30', onDay, undefined));
+check('a full dd/mm/yyyy works too', isDue('10/03/2026 08:30', onDay, undefined));
+check('the date is not mistaken for a time', !isDue('10/03 23:30', onDay, undefined));
+
 // --- reads the same file the schedule_task tool writes ------------------------
 const tasks = [
   { id: 't1', name: 'Daily report', prompt: 'Summarise today', schedule: 'Every day at 09:00', enabled: true },
@@ -90,6 +112,34 @@ check('the delivery names its task', delivered.includes('run1'));
 // Chat, Telegram and schedules share one outbound queue; without this tag the
 // chat window would show a scheduled result as the answer to its own question.
 check('the delivery is tagged as scheduled', rows.every((r) => r.channel_type === 'scheduled'));
+
+// --- the tool the assistant actually calls ----------------------------------
+// A seven-day plan has to be one call: when this took a single task, the model
+// summarised the plan in prose instead and nothing was ever scheduled.
+const { executeTool } = await import('../src/native-tools/index.ts');
+writeFileSync(path.join(dir, 'scheduled_tasks.json'), '[]');
+
+const plan = Array.from({ length: 7 }, (_, i) => ({
+  name: `Đăng bài Ngày ${i + 1}`,
+  prompt: `Đăng bài blog ngày ${i + 1} lên demo.vuahethong.com`,
+  schedule: `2${6 + i}/07 08:30`,
+}));
+let res = await executeTool('schedule_task', { tasks: plan });
+check('a whole plan is registered in one call', !res.is_error && readTasks().length === 7);
+check('the tool says how many it created', res.content.includes('7 nhiệm vụ'));
+check('each task keeps its own schedule', new Set(readTasks().map((t) => t.schedule)).size === 7);
+
+// Re-running the same plan must update, not duplicate.
+await executeTool('schedule_task', { tasks: plan });
+check('re-running a plan does not duplicate it', readTasks().length === 7);
+
+// The single-task shorthand still works.
+await executeTool('schedule_task', { name: 'Báo cáo tuần', prompt: 'Tổng hợp tuần', schedule: 'Hàng ngày lúc 18:00' });
+check('the single-task form still works', readTasks().length === 8);
+
+// A half-specified task must be refused, not silently stored.
+res = await executeTool('schedule_task', { tasks: [{ name: 'Thiếu prompt', schedule: 'Hàng ngày' }] });
+check('an incomplete task is refused', res.content.startsWith('Error') && readTasks().length === 8);
 
 closeAll();
 console.log(pass ? '\n✓ Host Process scheduler works' : '\n✗ FAILED');

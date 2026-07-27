@@ -526,59 +526,106 @@ const vaultListTool: NativeTool = {
 };
 
 // --- Schedule Task Tool ---
+//
+// Takes a whole plan in one call. A single-task tool meant a seven-day posting
+// schedule needed seven separate calls, and the model reliably summarised the
+// plan in prose instead — telling the user their posts were scheduled while
+// "Lịch & Nhiệm vụ" stayed empty.
+interface ScheduleInput {
+  name?: unknown;
+  prompt?: unknown;
+  schedule?: unknown;
+  enabled?: unknown;
+}
+
 const scheduleTaskTool: NativeTool = {
   definition: {
     name: 'schedule_task',
-    description: 'Create and add a new scheduled task directly into V-Assistant "Lịch & Nhiệm vụ" (Scheduled Tasks). ALWAYS use this tool whenever the user asks to schedule a task, post, report, or reminder in V-Assistant.',
+    description:
+      'Register one or more recurring or dated tasks in V-Assistant "Lịch & Nhiệm vụ" (Scheduled Tasks). ' +
+      'Pass the whole plan at once in `tasks`. You MUST call this whenever you plan, agree, or promise any ' +
+      'schedule, posting plan, report, or reminder — a plan is not scheduled until this tool has returned. ' +
+      'Never tell the user something is scheduled without calling it.',
     input_schema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Name/Title of the scheduled task (e.g. "Đăng bài Blog Hàng ngày")' },
-        prompt: { type: 'string', description: 'Action/Prompt that the assistant will execute on schedule (e.g. "Đăng bài Ngày 2 lên Odoo Blog")' },
-        schedule: { type: 'string', description: 'Schedule or recurrence string (e.g. "Every day at 9:00", "Hàng ngày lúc 09:30", "2026-07-27 09:30")' },
-        enabled: { type: 'boolean', description: 'Whether the scheduled task is enabled immediately (default true)' },
+        tasks: {
+          type: 'array',
+          description: 'Every task in the plan. Use one entry per occurrence or per recurrence.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Title, e.g. "Đăng bài Blog Ngày 2"' },
+              prompt: { type: 'string', description: 'What the assistant should do at that time, in full — it will not have this conversation for context.' },
+              schedule: {
+                type: 'string',
+                description:
+                  'When to run. Recurring: "Every day at 09:00", "Hàng ngày lúc 09:30", "Every Monday at 08:00", ' +
+                  '"Thứ hai lúc 08:00", "Weekdays at 08:30", "Every hour", "Hàng tháng lúc 09:00". ' +
+                  'One-off: "27/07 08:30", "27/07/2026 08:30", "2026-07-27 08:30".',
+              },
+              enabled: { type: 'boolean', description: 'Active immediately (default true)' },
+            },
+            required: ['name', 'prompt', 'schedule'],
+          },
+        },
+        name: { type: 'string', description: 'Single-task shorthand; prefer `tasks`.' },
+        prompt: { type: 'string', description: 'Single-task shorthand; prefer `tasks`.' },
+        schedule: { type: 'string', description: 'Single-task shorthand; prefer `tasks`.' },
+        enabled: { type: 'boolean', description: 'Single-task shorthand; prefer `tasks`.' },
       },
-      required: ['name', 'prompt', 'schedule'],
     },
   },
   async execute(args): Promise<string> {
-    const name = (args.name as string) || 'Tác vụ tự động';
-    const prompt = (args.prompt as string) || '';
-    const schedule = (args.schedule as string) || 'Hàng ngày';
-    const enabled = args.enabled !== false;
+    const raw = Array.isArray(args.tasks) && args.tasks.length > 0
+      ? (args.tasks as ScheduleInput[])
+      : [args as ScheduleInput];
+
+    const incoming = raw
+      .map((item) => ({
+        name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : '',
+        prompt: typeof item.prompt === 'string' ? item.prompt.trim() : '',
+        schedule: typeof item.schedule === 'string' && item.schedule.trim() ? item.schedule.trim() : '',
+        enabled: item.enabled !== false,
+      }))
+      .filter((item) => item.name && item.prompt && item.schedule);
+
+    if (incoming.length === 0) {
+      return 'Error: each task needs name, prompt and schedule. Nothing was scheduled.';
+    }
 
     const dataDir = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '', '.v-assistant/data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
+    fs.mkdirSync(dataDir, { recursive: true });
     const tasksFile = path.join(dataDir, 'scheduled_tasks.json');
 
-    let tasks: any[] = [];
+    let tasks: Record<string, unknown>[] = [];
     try {
-      if (fs.existsSync(tasksFile)) {
-        tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
-      }
+      const parsed = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
+      if (Array.isArray(parsed)) tasks = parsed;
     } catch {
       tasks = [];
     }
 
-    const newTask = {
-      id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      name,
-      prompt,
-      schedule,
-      enabled,
-      createdAt: Date.now(),
-      lastRun: Date.now(),
-    };
-
-    // Deduplicate by name & schedule if already exists
-    tasks = tasks.filter((t) => !(t.name === name && t.schedule === schedule));
-    tasks.unshift(newTask);
+    const created: string[] = [];
+    for (const item of incoming) {
+      // Re-running the same plan updates it rather than piling up duplicates.
+      tasks = tasks.filter((t) => !(t.name === item.name && t.schedule === item.schedule));
+      tasks.unshift({
+        id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        ...item,
+        createdAt: Date.now(),
+        // Stops a recurring task whose time already passed today from firing the
+        // instant it is created. A dated one-off compares against its own target,
+        // so this stamp does not suppress it.
+        lastRun: Date.now(),
+      });
+      created.push(`- "${item.name}" — ${item.schedule}`);
+    }
 
     fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2), 'utf8');
+    log(`Scheduled ${created.length} task(s)`);
 
-    return `✅ Đã tạo tác vụ lên lịch thành công trong Lịch & Nhiệm vụ:\n- Tên tác vụ: "${name}"\n- Lịch chạy: ${schedule}\n- Nội dung thực thi: "${prompt}"\nTác vụ đã được kích hoạt và xuất hiện trên giao diện ứng dụng.`;
+    return `✅ Đã đưa ${created.length} nhiệm vụ vào "Lịch & Nhiệm vụ":\n${created.join('\n')}`;
   },
 };
 
