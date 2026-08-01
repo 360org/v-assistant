@@ -71,7 +71,10 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - platform: macos-latest
+          # Runner ARM macos-latest treo ngắt quãng trong Tauri mà không flush log.
+          # Runner Intel có cross linker của Xcode; Rust và Node bên dưới vẫn chọn
+          # đúng target ARM64 nên installer tạo ra vẫn dành cho Apple Silicon.
+          - platform: macos-15-intel
             args: "--target aarch64-apple-darwin"
             target: "aarch64-apple-darwin"
             dmg_arch: "aarch64"
