@@ -1,4 +1,5 @@
-import machineId from "node-machine-id";
+import pkgNodeMachineId from "node-machine-id";
+const machineIdSync = pkgNodeMachineId.machineIdSync || pkgNodeMachineId;
 import crypto from "node:crypto";
 
 let cachedRawId = null;
@@ -6,7 +7,7 @@ let cachedRawId = null;
 function loadRawMachineId() {
   if (cachedRawId) return cachedRawId;
   try {
-    cachedRawId = machineId.machineIdSync();
+    cachedRawId = machineIdSync();
   } catch {
     cachedRawId = crypto.randomUUID();
   }

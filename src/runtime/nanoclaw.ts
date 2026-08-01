@@ -160,6 +160,7 @@ export async function restartAgentRunner(
   baseUrl?: string | null,
   model?: string | null,
   selfImprove?: boolean,
+  mcpServers: Record<string, { command: string; args: string[] }> = {},
 ): Promise<boolean> {
   if (!inDesktopShell()) return false;
   try {
@@ -168,6 +169,7 @@ export async function restartAgentRunner(
       baseUrl: baseUrl || null,
       model: model || null,
       selfImprove: selfImprove ?? true,
+      mcpServers,
     });
   } catch (err) {
     console.error("Failed to restart agent runner:", err);

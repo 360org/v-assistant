@@ -472,8 +472,8 @@ export function ModelSettings() {
         const code = urlObj?.searchParams.get("code") || urlObj?.searchParams.get("token") || manualCallbackUrl.trim();
         const state = urlObj?.searchParams.get("state") || "";
 
-        if (selectedProvider.id === "antigravity" || selectedProvider.id === "gemini") {
-          const res = await exchangeCode("gemini", code, "", "http://localhost:1420/callback", state);
+        if (selectedProvider.id === "antigravity" || selectedProvider.id === "gemini" || selectedProvider.id === "gemini-cli") {
+          const res = await exchangeCode(selectedProvider.id === "gemini-cli" ? "gemini" : "gemini", code, "", "http://localhost:1420/callback", state);
           key = res.apiKey;
           refreshToken = res.refreshToken;
           projectId = res.projectId;
@@ -760,10 +760,11 @@ export function ModelSettings() {
                               <button
                                 type="button"
                                 onClick={() => setCardTestStatus((prev) => ({ ...prev, [card.connId!]: undefined }))}
-                                className="text-neutral-400 hover:text-neutral-200 cursor-pointer ml-2 text-[11px]"
-                                title="Đóng"
+                                className="ml-3 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-current/40 bg-black/15 text-base font-bold leading-none text-current transition-colors hover:bg-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                                aria-label="Đóng thông báo xác thực"
+                                title="Đóng thông báo"
                               >
-                                ✕
+                                ×
                               </button>
                             </div>
                           )}

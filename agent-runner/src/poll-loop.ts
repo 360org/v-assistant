@@ -274,8 +274,13 @@ export async function executeAgentLoop(
   systemContext: { instructions: string },
   priorTranscript: ChatMessage[] = [],
 ): Promise<AgentLoopResult> {
-  const conversationHistory: ChatMessage[] = [...priorTranscript];
-  let currentPrompt = prompt;
+  // Keep the inbound turn in history before the first provider request. It used
+  // to exist only as `currentPrompt`, so the second tool-loop request began
+  // with an assistant function call followed by its tool result. Gemini rejects
+  // that orphaned function-call turn: it must immediately follow a user turn or
+  // another function response.
+  const conversationHistory: ChatMessage[] = [...priorTranscript, { role: 'user', content: prompt }];
+  let currentPrompt = '';
   let finalText: string | null = null;
   let sessionContinuation = continuation;
 

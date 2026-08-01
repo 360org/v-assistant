@@ -589,8 +589,10 @@
 
 - [x] Automated `inbound.db -> poll loop -> provider/tool loop -> outbound.db`
       tests pass locally, including session isolation and restart persistence.
-- [ ] Real Tauri host-process smoke remains required; web preview does not enter
-      the Tauri runtime path and cannot prove child-process lifecycle/delivery.
+- [~] Real Tauri host-process smoke: 2026-07-29 native `/Applications/V Assistant.app`
+      confirmed bundled AI Router + Agent Runner launch and remain alive; `runner.log`
+      confirmed poll loop, scheduler and Telegram channel start. A manual native chat
+      + outbound delivery turn remains required; web preview cannot prove it.
 
 - [x] Replace XOR Vault format with AES-256-CBC + HMAC-SHA256 and local
       64-byte key; migrate existing `vault.db` entries to v2 on read/startup.
@@ -598,10 +600,17 @@
       variables; connector gateway redacts all resolved values from output.
 - [ ] Add tool rate limiting, unauthenticated egress policy, and audit trail
       before enabling broader host capabilities for general users.
-- [ ] Bundle the Agent Runner in Tauri resources; production must not depend on
-      the checkout, `npx`, or a developer-installed Node runtime.
-- [ ] Move Telegram, scheduled jobs, and RAG execution behind the host/Runner
+- [x] Bundle the Agent Runner and Node runtime in Tauri resources; production
+      does not depend on the checkout, `npx`, or a developer-installed Node
+      runtime. Native smoke on 2026-07-29 confirmed AI Router and Runner launch
+      from `V Assistant.app/Contents/Resources/_up_/runtime/node/node`.
+- [x] Move Telegram, scheduled jobs, and RAG execution behind the host/Runner
       IPC path; keep the webview engine as a fallback only.
+      `agent-runner/src/index.ts` calls `startScheduler()` and
+      `startTelegramChannel()`; RAG retrieval reads `knowledge.db` directly
+      in `agent-runner/src/knowledge/index.ts`. The webview copies
+      (`src/runtime/knowledge.ts`) are the documented fallback path only —
+      see comments there and in `src/pages/Chat.tsx`.
 - [x] Add bounded retry with exponential backoff and `Retry-After` support for
       transient 429/529 responses from Claude, ChatGPT, and Gemini in both
       webview and Runner.
@@ -680,7 +689,8 @@
 - [x] GitHub Actions workflow (build installer)
 - [x] Bản phát hành v0.1.0
 - [x] Docker live-dev (`docker-compose.dev.yml` + `dev.sh`)
-- [ ] Bundle Agent Runner (Bun binary hoặc Node) vào Tauri resources
+- [x] Bundle Agent Runner + Node runtime vào Tauri resources. Build local tự
+      nạp Node theo kiến trúc macOS; CI nạp runtime đúng target.
 - [ ] Auto-detect runtime: Bun có sẵn → dùng Bun; fallback Node
 - [ ] Code signing & notarize macOS
 - [ ] Auto-update mechanism (Tauri updater plugin)

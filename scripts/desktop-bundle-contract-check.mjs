@@ -18,8 +18,9 @@ const assertions = [
     "desktop runtime must resolve Tauri's _up_ resource layout",
   ],
   [
-    runtime.includes('join("runtime/node/node")'),
-    "AI Router must prefer its bundled Node runtime",
+    runtime.includes('"runtime/node/node.exe"')
+      && runtime.includes('"runtime/node/node"'),
+    "AI Router must prefer its bundled Node runtime on Windows and Unix",
   ],
   [
     runtime.includes('join("agent-runner/dist/index.js")')
@@ -42,8 +43,9 @@ const assertions = [
   ],
   [
     workflow.includes("Verify packaged AI Router runtime")
-      && workflow.includes("ai-router/node_modules/undici/package.json"),
-    "macOS release workflow must inspect AI Router dependencies in the packaged app",
+      && workflow.includes("ai-router/node_modules/undici/package.json")
+      && workflow.includes('! grep -rq "better-sqlite3" "$app_path/Contents/Resources/_up_/agent-runner/dist"'),
+    "macOS release workflow must inspect bundled Router dependencies and keep the Runner native-addon free",
   ],
   [
     workflow.includes("agent-runner/dist/index.js")

@@ -40,6 +40,14 @@ pub struct RuntimeStatus {
     pub dir: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct McpServerConfig {
+    pub command: String,
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: std::collections::HashMap<String, String>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OutboundMessage {
     pub id: i64,
@@ -66,6 +74,14 @@ pub struct AgentConfig {
     pub description: String,
     pub instructions: Option<String>,
     pub soul: Option<String>,
+}
+
+fn is_host_shell(command: &str) -> bool {
+    Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| matches!(name.to_ascii_lowercase().as_str(), "sh" | "bash" | "zsh" | "fish" | "cmd" | "cmd.exe" | "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe"))
+        .unwrap_or(false)
 }
 
 fn find_executable(name: &str) -> Option<PathBuf> {
@@ -127,7 +143,11 @@ pub fn resolve_project_dir(resource_dir: PathBuf) -> PathBuf {
 }
 
 fn find_node(project_dir: &Path) -> Option<PathBuf> {
-    let bundled = project_dir.join("runtime/node/node");
+    let bundled = project_dir.join(if cfg!(windows) {
+        "runtime/node/node.exe"
+    } else {
+        "runtime/node/node"
+    });
     if bundled.exists() {
         return Some(bundled);
     }
@@ -234,6 +254,7 @@ fn spawn_process(
     cmd.env("VUA_DATA_DIR", dir)
         .env("VUA_IPC_DIR", dir.join("ipc"))
         .env("VUA_AGENT_WORKSPACE", dir.join("workspace"))
+        .env("VUA_AGENT_APPROVED_READ_PATHS_FILE", dir.join("approved-read-paths.json"))
         .env("VUA_AI_ROUTER_URL", "http://127.0.0.1:20128")
         .env("VUA_CONNECTOR_GATEWAY_TOKEN", connector_token)
         .env("CONFIG_PATH", config_path)
@@ -729,8 +750,15 @@ impl Runtime {
         model: Option<&str>,
         // User setting: let the role learn durable facts from conversations.
         self_improve: bool,
+        // Configured by the local user, passed through without exposing a shell.
+        mcp_servers: std::collections::HashMap<String, McpServerConfig>,
         app: Option<&tauri::AppHandle>,
     ) -> Result<bool, String> {
+        for (name, server) in &mcp_servers {
+            if server.command.trim().is_empty() || is_host_shell(&server.command) {
+                return Err(format!("MCP server \"{}\" must use a dedicated MCP executable, not a host shell.", name));
+            }
+        }
         self.stop_runner();
 
         let config_path = self.dir.join("runner.json");
@@ -739,7 +767,7 @@ impl Runtime {
             "assistantName": "V-Assistant",
             "agentName": agent_name,
             "maxMessagesPerPrompt": 10,
-            "mcpServers": {},
+            "mcpServers": mcp_servers,
             "model": model.unwrap_or("auto"),
             "baseUrl": base_url.unwrap_or("http://127.0.0.1:20128/v1"),
             "selfImprove": self_improve
@@ -782,11 +810,16 @@ impl Runtime {
                     let base_url = parsed.get("baseUrl").and_then(|x| x.as_str());
                     let model = parsed.get("model").and_then(|x| x.as_str());
                     let self_improve = parsed.get("selfImprove").and_then(|x| x.as_bool()).unwrap_or(true);
-                    return self.spawn_engine_with_config(agent_name, base_url, model, self_improve, app);
+                    let mcp_servers = parsed
+                        .get("mcpServers")
+                        .cloned()
+                        .and_then(|value| serde_json::from_value(value).ok())
+                        .unwrap_or_default();
+                    return self.spawn_engine_with_config(agent_name, base_url, model, self_improve, mcp_servers, app);
                 }
             }
         }
-        self.spawn_engine_with_config("default", None, Some("auto"), true, app)
+        self.spawn_engine_with_config("default", None, Some("auto"), true, Default::default(), app)
     }
 
     /// Respawn the AI Router now, killing any process still attached.
@@ -853,7 +886,17 @@ impl Runtime {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_project_dir;
+    use super::{is_host_shell, resolve_project_dir};
+
+    #[test]
+    fn rejects_host_shells_as_mcp_servers() {
+        assert!(is_host_shell("/bin/sh"));
+        assert!(is_host_shell("bash"));
+        assert!(is_host_shell("pwsh.exe"));
+        assert!(!is_host_shell("npx"));
+        assert!(!is_host_shell("/usr/local/bin/my-mcp-server"));
+    }
+
     use std::fs;
 
     #[test]

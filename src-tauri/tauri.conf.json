@@ -1,13 +1,21 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "V Assistant",
-  "version": "1.1.3",
+  "version": "1.1.40",
   "identifier": "com.vuaai.assistant",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU1NDVBMTdFODUxMUEyRjkKUldUNW9oR0ZmcUZGVll1NHdiRnZ0N2FwOG8vRHdMUG05TlJjMmRJVU5BVVA5L2JJK0tSaXlGUUgK",
+      "endpoints": [
+        "https://github.com/360org/v-assistant/releases/latest/download/latest.json"
+      ]
+    }
   },
   "app": {
     "windows": [
@@ -27,6 +35,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "publisher": "360org",
     "homepage": "https://vuaai.net",
     "copyright": "\u00a9 360org \u2014 vuaai.net",

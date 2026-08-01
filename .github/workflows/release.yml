@@ -1,11 +1,9 @@
 name: Production Release
 
-# Releases are deliberate. Pushing a `v*` tag builds the macOS installers;
-# Windows and Linux are built after manual approval through workflow_dispatch.
-#
-# This used to run on every push to main and mint its own tag, which is how the
-# repository ended up with 233 tags for a handful of real releases. A commit
-# belongs in CHANGELOGS.md; only an explicit tag is a release.
+# Releases are deliberate. Pushing a matching `v*` tag builds every supported
+# installer: macOS Apple Silicon, macOS Intel, Windows x64, and Linux x64.
+# `workflow_dispatch` is retained only to rebuild a platform group for an
+# existing release; it never invents a tag.
 on:
   push:
     tags: ["v*"]
@@ -163,9 +161,11 @@ jobs:
           run_install: false
 
       - name: Build installers and upload to draft release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: V Assistant ${{ needs.version.outputs.tag }}
@@ -173,7 +173,8 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-          assetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
+          releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
+          uploadUpdaterSignatures: true
 
       - name: Verify packaged AI Router runtime
         shell: bash
@@ -186,33 +187,27 @@ jobs:
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/node-machine-id/package.json"
           test -x "$app_path/Contents/Resources/_up_/runtime/node/node"
           test -f "$app_path/Contents/Resources/_up_/agent-runner/dist/index.js"
-          test -f "$app_path/Contents/Resources/_up_/agent-runner/node_modules/better-sqlite3/package.json"
-          file "$app_path/Contents/Resources/_up_/agent-runner/node_modules/better-sqlite3/build/Release/better_sqlite3.node" | grep -q "$expected_arch"
+          ! grep -rq "better-sqlite3" "$app_path/Contents/Resources/_up_/agent-runner/dist"
 
-  publish_macos:
-    needs: [version, build_macos]
-    if: needs.version.outputs.tag != '' && github.event_name == 'push'
-    runs-on: ubuntu-22.04
-    steps:
-      # gh release edit resolves repository metadata through Git; keep a
-      # checkout here so publishing does not fail after both macOS builds pass.
-      - uses: actions/checkout@v4
+      - name: Verify updater artifacts
+        shell: bash
+        run: |
+          updater="$(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f -name '*.tar.gz' -print -quit)"
+          test -n "$updater"
+          test -f "$updater.sig"
 
-      - name: Publish the completed macOS release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.version.outputs.tag }}
-        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
 
   build_other:
     needs: version
-    if: needs.version.outputs.tag != '' && github.event_name == 'workflow_dispatch' && github.event.inputs.targets == 'other'
+    if: needs.version.outputs.tag != '' && (github.event_name == 'push' || github.event.inputs.targets == 'other')
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: ubuntu-22.04
+            asset_suffix: Linux-x86_64
           - platform: windows-latest
+            asset_suffix: Windows-x86_64
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -248,10 +243,46 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install AI Router runtime dependencies
+        run: npm ci --prefix ai-router
+
       - name: Build bundled Agent Runner runtime
         run: |
           npm ci --prefix agent-runner
           ./agent-runner/node_modules/.bin/tsc --project agent-runner/tsconfig.json
+
+      - name: Bundle Node runtime for AI Router
+        shell: bash
+        run: |
+          case "${{ matrix.platform }}" in
+            ubuntu-22.04) archive="node-v24.18.0-linux-x64" ;;
+            windows-latest) archive="node-v24.18.0-win-x64" ;;
+            *) echo "Unsupported platform: ${{ matrix.platform }}" >&2; exit 1 ;;
+          esac
+          curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o node.tar.gz
+          mkdir -p runtime/node
+          tar -xzf node.tar.gz
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            install -m 755 "${archive}/node.exe" runtime/node/node.exe
+          else
+            install -m 755 "${archive}/bin/node" runtime/node/node
+          fi
+
+      - name: Verify bundled runtime input
+        shell: bash
+        run: |
+          test -f ai-router/src/sidecar.mjs
+          test -f ai-router/node_modules/undici/package.json
+          test -f ai-router/node_modules/uuid/package.json
+          test -f ai-router/node_modules/node-machine-id/package.json
+          test -f agent-runner/dist/index.js
+          ! grep -rq "better-sqlite3" agent-runner/dist
+          test ! -d agent-runner/node_modules/better-sqlite3
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            test -f runtime/node/node.exe
+          else
+            test -x runtime/node/node
+          fi
 
       - uses: pnpm/action-setup@v4
         with:
@@ -259,15 +290,32 @@ jobs:
           run_install: false
 
       - name: Build remaining installers and upload to draft release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: V Assistant ${{ needs.version.outputs.tag }}
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
           releaseDraft: true
           prerelease: false
+          releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
+          uploadUpdaterSignatures: true
+
+  publish_release:
+    needs: [version, build_macos, build_other]
+    if: needs.version.outputs.tag != '' && github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish the completed cross-platform release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
 
   publish_other:
     needs: [version, build_other]

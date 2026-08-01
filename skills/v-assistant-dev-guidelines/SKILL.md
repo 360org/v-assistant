@@ -57,7 +57,11 @@ Mọi thay đổi làm đảo thứ tự này, hoặc đẩy API key lên trư�
 
 idea.md §1.3: đóng cửa sổ app thì lịch vẫn chạy, Telegram vẫn trả lời. Nên
 **mọi hệ con có vòng lặp riêng đều phải nằm trong `agent-runner/`**, không phải
-webview. Đã di trú: Scheduler, Telegram. Còn lại: selfImprove, Knowledge/RAG.
+webview. Đã di trú xong: Scheduler, Telegram, selfImprove
+(`agent-runner/src/memory/self-improve.ts`), Knowledge/RAG
+(`agent-runner/src/knowledge/index.ts`). Bản trong webview
+(`src/runtime/knowledge.ts`) chỉ còn là fallback path khi runner không chạy —
+không phải bản trùng cần dọn.
 
 - **Không được để hai bản cùng chạy.** Khi chuyển một hệ con sang Host Process,
   phải **xoá bản webview ngay trong cùng commit** — nếu không lịch sẽ chạy 2 lần.

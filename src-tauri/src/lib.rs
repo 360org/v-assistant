@@ -71,6 +71,9 @@ fn runtime_restart_runner(
     base_url: Option<String>,
     model: Option<String>,
     self_improve: Option<bool>,
+    // `env` remains deliberately unavailable to the webview: integration
+    // secrets belong in the Vault/Connector Gateway, never runner.json.
+    mcp_servers: Option<std::collections::HashMap<String, runtime::McpServerConfig>>,
     app: tauri::AppHandle,
 ) -> Result<bool, String> {
     state.spawn_engine_with_config(
@@ -78,6 +81,7 @@ fn runtime_restart_runner(
         base_url.as_deref(),
         model.as_deref(),
         self_improve.unwrap_or(true),
+        mcp_servers.unwrap_or_default(),
         Some(&app),
     )
 }
@@ -142,6 +146,26 @@ fn pick_directory() -> Option<String> {
         .set_title("Chọn thư mục lưu trữ dữ liệu V Assistant")
         .pick_folder()
         .map(|path| path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn grant_agent_read_path(state: tauri::State<Runtime>, path: String) -> Result<String, String> {
+    let approved = std::fs::canonicalize(path.trim()).map_err(|e| format!("Không thể cấp quyền: {e}"))?;
+    if !approved.is_dir() {
+        return Err("Chỉ có thể cấp quyền đọc thư mục".to_string());
+    }
+    let grants_file = state.dir.join("approved-read-paths.json");
+    let mut grants: Vec<String> = std::fs::read_to_string(&grants_file)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
+    let approved = approved.to_string_lossy().to_string();
+    if !grants.contains(&approved) {
+        grants.push(approved.clone());
+        std::fs::write(&grants_file, serde_json::to_string(&grants).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(approved)
 }
 
 fn resolve_data_dir(custom_dir: &str) -> std::path::PathBuf {
@@ -352,6 +376,8 @@ fn set_autostart(enable: bool) -> Result<bool, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -431,6 +457,7 @@ pub fn run() {
             vault::vault_get,
             vault::vault_delete,
             pick_directory,
+            grant_agent_read_path,
             resolve_data_dir_path,
             save_custom_data_file,
             save_custom_data_text,

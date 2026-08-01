@@ -109,6 +109,7 @@ function buildSystemPrompt(assistantName: string, agentName: string, agentDir: s
   parts.push('=== MANDATORY WORKSPACE & FILE STORAGE RULE ===');
   parts.push('- All created or generated files MUST be saved inside your active workspace directory.');
   parts.push('- NEVER write or save files to Desktop (/Users/*/Desktop), Downloads, /tmp or outside the workspace unless the user explicitly specified that exact full absolute path in their current message.');
+  parts.push('- You may read a folder outside the workspace only after the user approves that exact folder. If a read tool returns PERMISSION_REQUEST, ask the user to approve it; never tell them to copy the project into the workspace.');
   parts.push('- Always use tools when they would help accomplish the task.');
   parts.push('Be concise and helpful.');
 

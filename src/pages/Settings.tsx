@@ -3,6 +3,7 @@ import { ModelSettings } from "@/components/settings/ModelSettings";
 import { VaultSettings } from "@/components/settings/VaultSettings";
 import { WorkspaceSettingsSection } from "@/components/settings/WorkspaceSettingsSection";
 import { AppUpdateSection } from "@/components/settings/AppUpdateSection";
+import { McpSettingsSection } from "@/components/settings/McpSettingsSection";
 import { useApp } from "@/lib/store";
 import { t } from "@/lib/i18n";
 
@@ -26,6 +27,9 @@ export function Settings() {
 
       {/* Workspace & Data Storage Location Section */}
       <WorkspaceSettingsSection />
+
+      {/* Model capabilities run only through user-approved MCP servers. */}
+      <McpSettingsSection />
 
       {/* General Settings (Theme, Language, Memory, Reset) */}
       <GeneralSettings />

@@ -467,6 +467,16 @@ export function Chat() {
     );
   }, [messages, searchQuery]);
 
+  const approveReadPath = async (path: string) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const approvedPath = await invoke<string>("grant_agent_read_path", { path });
+      await send(`Đã phê duyệt quyền đọc thư mục: ${approvedPath}. Hãy tiếp tục đọc và thực hiện yêu cầu trước đó.`);
+    } catch (error) {
+      alert(`Không thể cấp quyền đọc thư mục: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const send = async (customText?: string) => {
     if (!user) {
       alert("Bạn chưa đăng nhập người dùng local. Vui lòng đăng nhập tài khoản để Chat!");
@@ -1102,9 +1112,7 @@ export function Chat() {
                         <MessageContent
                           content={m.content}
                           assistant={m.role === "assistant"}
-                          onApprovePermission={(path) => {
-                            send(`Đã phê duyệt (Approve) quyền truy cập thư mục: ${path}. Hãy tiến hành đọc dữ liệu và thực thi công việc ngay!`);
-                          }}
+                          onApprovePermission={(path) => void approveReadPath(path)}
                         />
                       ) : streaming && idx === filteredMessages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">

@@ -241,4 +241,138 @@ html.theme-light [class*="bg-gradient-to-"] {
   border-color: #e2e8f0 !important;
 }
 
+/* Task tag picker: explicit colors avoid theme-wide neutral overrides washing out
+   selection state in the task configuration modal. */
+.task-tag-picker {
+  overflow: hidden;
+  border: 1px solid rgb(63 63 70);
+  border-radius: 12px;
+  background: rgb(10 10 10);
+}
+
+.task-tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+}
+
+.task-tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+  border: 1px solid rgb(63 63 70);
+  border-radius: 8px;
+  background: rgb(24 24 27);
+  color: rgb(212 212 216);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 150ms, border-color 150ms, color 150ms;
+}
+
+.task-tag-option:hover {
+  border-color: var(--color-gold-300);
+  color: white;
+}
+
+.task-tag-option-selected {
+  border-color: var(--color-gold-400);
+  background: color-mix(in srgb, var(--color-gold-400) 18%, rgb(24 24 27));
+  color: var(--color-gold-200);
+}
+
+.task-tag-check {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(113 113 122);
+  border-radius: 4px;
+}
+
+.task-tag-option-selected .task-tag-check {
+  border-color: var(--color-gold-400);
+  background: var(--color-gold-400);
+  color: white;
+}
+
+.task-tag-create {
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid rgb(63 63 70);
+  padding: 8px;
+}
+
+.task-tag-create input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 8px;
+  background: rgb(24 24 27);
+  color: white;
+  padding: 7px 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+.task-tag-create input:focus {
+  border-color: var(--color-gold-400);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-gold-400) 20%, transparent);
+}
+
+html.theme-light .task-tag-picker {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+html.theme-light .task-tag-option {
+  border-color: #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+html.theme-light .task-tag-option:hover {
+  border-color: #60a5fa !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html.theme-light .task-tag-option-selected {
+  border-color: #2563eb !important;
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html.theme-light .task-tag-check {
+  border-color: #94a3b8 !important;
+}
+
+html.theme-light .task-tag-option-selected .task-tag-check {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.theme-light .task-tag-create {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light .task-tag-create input {
+  border-color: #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html.theme-light .task-tag-create input:focus {
+  border-color: #2563eb !important;
+}
+
 

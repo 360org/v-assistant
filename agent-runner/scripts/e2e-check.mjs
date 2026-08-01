@@ -41,11 +41,11 @@ inbound.close();
 
 // A mock provider: no SDK, no network — echoes a fixed reply. Proves the loop
 // and IPC without hitting a real LLM.
-let sawPrompt = null;
+let sawUserMessage = null;
 const provider = {
   name: 'mock',
   query(input) {
-    sawPrompt = input.prompt;
+    sawUserMessage = input.messages?.at(-1)?.content ?? input.prompt;
     async function* events() {
       yield { type: 'init', continuation: 'sess-1' };
       yield { type: 'result', text: 'PONG from runner' };
@@ -92,7 +92,7 @@ controller.abort();
 await loop.catch(() => {});
 closeAll();
 
-check('inbound message reached the provider', sawPrompt !== null && sawPrompt.includes('hello runner'));
+check('inbound message reached the provider', sawUserMessage !== null && sawUserMessage.includes('hello runner'));
 check('reply written to outbound.db', reply === 'PONG from runner');
 
 console.log(pass ? '\n✓ Agent Runner poll loop + SQLite IPC work end-to-end' : '\n✗ FAILED');

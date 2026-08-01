@@ -23,6 +23,12 @@ const edits = [
     fn: (s) => s.replace(/("version":\s*)"[^"]+"/, `$1"${version}"`),
   },
   {
+    file: "package-lock.json",
+    fn: (s) => s
+      .replace(/("version":\s*)"[^"]+"/, `$1"${version}"`)
+      .replace(/("packages":\s*\{\s*"":\s*\{[\s\S]*?"version":\s*)"[^"]+"/, `$1"${version}"`),
+  },
+  {
     file: "src-tauri/Cargo.toml",
     // Only the [package] version (the first `version = "..."` in the file).
     fn: (s) => s.replace(/(\nversion\s*=\s*)"[^"]+"/, `$1"${version}"`),

@@ -291,7 +291,7 @@ export async function signInWithAiRouterCore(
   // Google only accepts the loopback callback registered by the inherited
   // Antigravity OAuth client. The Tauri WebView origin is an internal app
   // transport origin and must never be sent to an OAuth provider.
-  const redirectUri = provider === "antigravity"
+  const redirectUri = (provider === "antigravity" || provider === "gemini" || provider === "gemini-cli")
     ? "http://localhost:1420/callback"
     : `${window.location.origin}/callback`;
   const authorizeResponse = await fetch(`${AI_ROUTER_BASE_URL}/oauth/authorize`, {
@@ -405,7 +405,7 @@ export async function exchangeAiRouterOAuthCallbackUrl(
     throw new Error("Không tìm thấy tham số 'code' hoặc 'token' trong URL callback.");
   }
 
-  const redirectUri = (provider === "antigravity" || provider === "gemini")
+  const redirectUri = (provider === "antigravity" || provider === "gemini" || provider === "gemini-cli")
     ? "http://localhost:1420/callback"
     : (provider === "codex" || provider === "chatgpt" || provider === "openai")
     ? "http://localhost:1455/auth/callback"

@@ -77,6 +77,7 @@ const AI_ROUTER_OAUTH_URL = "http://127.0.0.1:20128/v1/oauth";
 
 const ROUTER_OAUTH_PROVIDER: Partial<Record<string, string>> = {
   gemini: "antigravity",
+  "gemini-cli": "gemini-cli",
   antigravity: "antigravity",
   claude: "claude",
   codex: "codex",
@@ -649,6 +650,69 @@ async function desktopLogin(provider: ProviderId): Promise<LoginResult> {
   }
 }
 
+// ─── AI Router (9router) OAuth ──────────────────────────────────────────────────
+
+async function signInViaRouter(
+  provider: ProviderId,
+  routerProvider: string,
+  onAuthUrl?: (url: string) => void,
+): Promise<LoginResult> {
+  const redirectUri = routerProvider === "codex"
+    ? "http://localhost:1455/auth/callback"
+    : routerProvider === "claude"
+      ? "http://localhost:443/callback"
+      : "http://localhost:1420/callback";
+
+  const response = await fetch(`${AI_ROUTER_OAUTH_URL}/authorize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider: routerProvider, redirectUri }),
+  });
+  const authorization = await response.json() as RouterAuthorization;
+  if (!response.ok || !authorization.authUrl || !authorization.state || !authorization.codeVerifier || !authorization.redirectUri) {
+    throw new Error(authorization.error || `AI Router could not start ${provider} sign-in.`);
+  }
+
+  await openExternal(authorization.authUrl);
+  onAuthUrl?.(authorization.authUrl);
+
+  // Wait for callback via popup/broadcast/localStorage (same as direct flow)
+  const payload = await waitForPopupCallback(
+    authorization.authUrl,
+    authorization.state,
+    false, // router handles callback properly, no manual paste needed
+  );
+  const code = payload.code || payload.token || "";
+  if (!code) throw new Error("No authorization code received from AI Router callback.");
+
+  // Exchange code via AI Router
+  const exchangeResponse = await fetch(`${AI_ROUTER_OAUTH_URL}/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider: routerProvider,
+      code,
+      redirectUri: authorization.redirectUri,
+      codeVerifier: authorization.codeVerifier,
+      state: authorization.state,
+    }),
+  });
+  const exchangePayload = await exchangeResponse.json() as { tokens?: RouterTokens; error?: string };
+  const tokens = exchangePayload.tokens;
+  const apiKey = tokens?.accessToken || tokens?.apiKey;
+  if (!exchangeResponse.ok || !tokens || !apiKey) {
+    throw new Error(exchangePayload.error || `${provider} sign-in could not be completed by AI Router.`);
+  }
+
+  return {
+    provider,
+    apiKey,
+    projectId: tokens.projectId,
+    refreshToken: tokens.refreshToken,
+    expiresAt: typeof tokens.expiresIn === "number" ? Date.now() + tokens.expiresIn * 1000 : undefined,
+  };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /** Open a URL in the user's real browser. */
@@ -678,6 +742,13 @@ export async function signIn(
   if (DEMO_MODE) {
     await sleep(900);
     return { provider, apiKey: "demo-key" };
+  }
+
+  // Route gemini/antigravity through AI Router (9router) — avoids Google's
+  // unverified-app block on internal Cloud Code Assist client ID.
+  const routerProvider = ROUTER_OAUTH_PROVIDER[provider];
+  if (routerProvider) {
+    return await signInViaRouter(provider, routerProvider, onAuthUrl);
   }
 
   if (!(provider in OAUTH_CONFIGS)) {

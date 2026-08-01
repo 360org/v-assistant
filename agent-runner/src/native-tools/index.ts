@@ -43,9 +43,20 @@ const WORKSPACE_ROOT = realRoot(
 const AGENT_ROOT = realRoot(path.join(DATA_DIR, 'agents', loadConfig().agentName));
 
 const ALLOWED_ROOTS = [WORKSPACE_ROOT, AGENT_ROOT];
+const APPROVED_READ_PATHS_FILE = process.env.VUA_AGENT_APPROVED_READ_PATHS_FILE;
 const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
 
 const ACCESS_DENIED = 'Access denied: agent tools are restricted to the assigned workspace';
+
+function approvedReadRoots(): string[] {
+  if (!APPROVED_READ_PATHS_FILE) return [];
+  try {
+    const paths = JSON.parse(fs.readFileSync(APPROVED_READ_PATHS_FILE, 'utf8'));
+    return Array.isArray(paths) ? paths.filter((item): item is string => typeof item === 'string').map(realRoot) : [];
+  } catch {
+    return [];
+  }
+}
 
 function isInside(root: string, target: string): boolean {
   const rel = path.relative(root, target);
@@ -59,6 +70,22 @@ function assertInsideWorkspace(target: string): void {
   if (!ALLOWED_ROOTS.some((root) => isInside(root, target))) {
     throw new Error(ACCESS_DENIED);
   }
+}
+
+function assertReadable(target: string): void {
+  if (!ALLOWED_ROOTS.concat(approvedReadRoots()).some((root) => isInside(root, target))) {
+    throw new Error(ACCESS_DENIED);
+  }
+}
+
+function readPath(input: string): string {
+  const resolved = realpathBestEffort(path.resolve(WORKSPACE_ROOT, input));
+  try {
+    assertReadable(resolved);
+  } catch {
+    throw new Error(`${ACCESS_DENIED}. PERMISSION_REQUEST: ${resolved}`);
+  }
+  return resolved;
 }
 
 /**
@@ -122,7 +149,7 @@ const fileReadTool: NativeTool = {
     },
   },
   async execute(args): Promise<string> {
-    const filePath = workspacePath(args.path as string);
+    const filePath = readPath(args.path as string);
     try {
       const ext = path.extname(filePath).toLowerCase();
 
@@ -294,7 +321,7 @@ const grepTool: NativeTool = {
   },
   async execute(args): Promise<string> {
     const pattern = args.pattern as string;
-    const searchPath = workspacePath(args.path as string);
+    const searchPath = readPath(args.path as string);
     const include = args.include as string | undefined;
     const caseInsensitive = args.case_insensitive as boolean | undefined;
 
@@ -336,7 +363,7 @@ const globTool: NativeTool = {
   },
   async execute(args): Promise<string> {
     const pattern = args.pattern as string;
-    const cwd = workspacePath((args.cwd as string) || '.');
+    const cwd = readPath((args.cwd as string) || '.');
 
     try {
       const output = execFileSync('find', [cwd, '-type', 'f'], {

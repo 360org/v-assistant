@@ -2,6 +2,63 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [Unreleased]
+
+## [1.1.40] — 2026-08-01
+
+### Tài liệu khớp lại thực tế (audit theo `v-assistant-dev-guidelines`)
+
+*   `CHECKLIST.md`: tick lại mục "Move Telegram, scheduled jobs, and RAG
+    execution behind the host/Runner" — đã xong từ trước (`agent-runner/src/index.ts`
+    gọi `startScheduler()`/`startTelegramChannel()`, RAG đọc thẳng `knowledge.db`
+    trong `agent-runner/src/knowledge/index.ts`), checklist ghi `[ ]` là lỗi thời.
+*   `skills/v-assistant-dev-guidelines/SKILL.md` §0.45: sửa dòng liệt kê
+    "Còn lại: selfImprove, Knowledge/RAG" — cả hai đã di trú xong vào
+    `agent-runner/`, không còn dở dang.
+*   **MCP cấu hình được từ Settings:** người dùng tự khai báo server đã tin cậy
+    bằng tên, executable và arguments cố định. Tauri truyền cấu hình này vào
+    `runner.json`; Agent Runner chỉ nạp tools MCP mà server khai báo, không mở
+    lại host shell cho model.
+*   **Bản app native tự đủ runtime:** `build:local` tự nạp Node 24 theo kiến trúc
+    macOS trước khi bundle. Native smoke ngày 2026-07-29 xác nhận AI Router và
+    Agent Runner chạy từ `V Assistant.app/Contents/Resources/_up_/runtime/node/node`,
+    không còn dùng Node cài trên iMac. CI cũng bỏ kiểm tra `better-sqlite3` lỗi thời
+    vì Runner đã dùng `node:sqlite`.
+*   **Lịch & Nhiệm vụ chuyển Kanban:** thay danh sách dài bằng ba cột Đang chạy,
+    Tạm dừng và Cần chú ý. Mỗi card giữ thao tác pause/tiếp tục, lịch sử và xoá;
+    job có lần chạy mới nhất lỗi chỉ xuất hiện trong cột Cần chú ý.
+*   **Popup cấu hình tác vụ:** nhấp card Kanban hoặc nhấn Enter/Space để mở modal
+    chỉnh tên, prompt, lịch chạy và trạng thái bật/tạm dừng. Nút thao tác nhanh
+    trên card không mở popup, giữ nguyên pause, lịch sử và xoá.
+*   **Tag và filter Lịch & Nhiệm vụ:** task có tag tự do (nhập bằng dấu phẩy) từ
+    lúc tạo hoặc trong popup cấu hình. Board hiển thị tag và lọc kết hợp theo
+    trạng thái/tag, có một nút xóa toàn bộ điều kiện lọc. Filter dùng dropdown
+    checkbox tối nền, số lượng tag và thao tác Bỏ chọn giống Model Pack; không
+    dùng native `<select>` mặc định của hệ điều hành.
+*   **Task Workspace nhiều view:** thêm thanh chuyển Grid, Board, Calendar, List,
+    Status và Charts. Calendar theo bố cục Planner có điều hướng tháng, lưới 7 ngày,
+    task chạy theo lịch và panel tác vụ chưa có lịch; mọi task trong các view đều mở
+    cùng popup cấu hình. Charts chỉ tổng hợp `TaskRunLog` thật và hiện empty state
+    khi Scheduler chưa ghi nhận run nào.
+*   **Danh mục tag dùng chung:** thay ô nhập tag tự do từng task bằng bộ chọn
+    multi-select từ catalog tag chung. Tag mới chỉ được tạo có chủ đích qua nút Thêm,
+    sau đó xuất hiện để chọn lại ở mọi task; dữ liệu tag cũ tự được gom vào catalog.
+*   **Popup tag rõ nét theo theme:** selector tag chuyển sang chip checkbox có nền,
+    viền và trạng thái chọn riêng cho sáng/tối; typography tăng độ đậm và tương phản.
+    Ô tạo tag tách thành hàng phụ rõ ràng, không còn bị lẫn với chip selection.
+*   **Nút đóng lỗi Provider dễ thấy:** banner xác thực thất bại dùng nút đóng 28px,
+    có viền/nền, ký tự × đậm, tooltip và focus ring thay cho ký tự × 11px khó bấm.
+*   **Sửa vòng tool Gemini:** Agent Runner đưa user turn vào transcript trước request
+    đầu tiên. Khi model gọi tool, history gửi lại giữ đúng `user → function call →
+    function response`; không còn gửi function call mồ côi khiến Gemini/Antigravity
+    trả HTTP 400 `INVALID_ARGUMENT`. Thêm regression check cho thứ tự này.
+*   **Phát hành đa nền tảng:** một tag `v*` giờ dựng và chỉ công bố release sau khi
+    hoàn tất bốn installer: macOS Apple Silicon, macOS Intel, Windows x64 và Linux
+    x64. Mỗi bundle tự mang Node 24 đúng kiến trúc, AI Router cùng Agent Runner;
+    Windows dùng `node.exe` trong tài nguyên đóng gói. Workflow chuyển sang
+    `tauri-action` 1.0, tương thích runtime Node 24 của GitHub Actions và ký artifact
+    updater bằng secret của repository.
+
 ## [1.1.3] — 2026-07-27
 
 ### Quy trình phát hành

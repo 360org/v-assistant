@@ -69,10 +69,11 @@ let prompts = [];
 const stubProvider = {
   name: 'stub',
   query: ({ prompt, messages }) => {
-    prompts.push({ prompt, history: messages ?? [] });
+    const userText = messages?.at(-1)?.content ?? prompt;
+    prompts.push({ prompt: userText, history: (messages ?? []).slice(0, -1) });
     return {
       events: (async function* () {
-        yield { type: 'result', text: `echo: ${prompt}` };
+        yield { type: 'result', text: `echo: ${userText}` };
       })(),
     };
   },

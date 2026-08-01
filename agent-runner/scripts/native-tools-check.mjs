@@ -11,6 +11,12 @@ mkdirSync(dir);
 process.env.VUA_DATA_DIR = root;
 process.env.VUA_AGENT_NAME = 'default';
 process.env.VUA_AGENT_WORKSPACE = dir;
+const approvedDir = path.join(root, 'approved');
+mkdirSync(approvedDir);
+writeFileSync(path.join(approvedDir, 'readable.txt'), 'approved content');
+const approvedPathsFile = path.join(root, 'approved-read-paths.json');
+writeFileSync(approvedPathsFile, JSON.stringify([approvedDir]));
+process.env.VUA_AGENT_APPROVED_READ_PATHS_FILE = approvedPathsFile;
 
 // The system prompt points the agent at this tree, so the tools must reach it.
 const memoryDir = path.join(root, 'agents', 'default', 'memory');
@@ -65,6 +71,11 @@ check('bash is not exposed to the agent', r.is_error === true);
 
 r = await executeTool('file_read', { path: path.join(root, 'vault.key') });
 check('file tools cannot escape the assigned workspace', r.content.includes('Access denied'));
+
+r = await executeTool('file_read', { path: path.join(approvedDir, 'readable.txt') });
+check('file tools can read a user-approved folder', r.content.includes('approved content'));
+r = await executeTool('file_write', { path: path.join(approvedDir, 'blocked.txt'), content: 'nope' });
+check('approved folders remain read-only', r.content.includes('Access denied'));
 
 r = await executeTool('file_read', { path: path.join(memoryDir, 'index.md') });
 check('the agent can read its own memory', r.content.includes('what I remember'));

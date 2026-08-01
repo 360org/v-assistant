@@ -97,6 +97,14 @@ export interface ActiveSkill {
 }
 
 /** Per-agent configuration: workflow instructions and a personality "soul". */
+export interface McpServerConfig {
+  /** Executable chosen and approved by the local user, never by the model. */
+  command: string;
+  /** Fixed arguments supplied by the local user when configuring this server. */
+  args: string[];
+}
+
+/** Per-agent configuration: workflow instructions and a personality "soul". */
 export interface AgentConfig {
   /** How the agent should work — its process/steps (ChatGPT-style). */
   instructions?: string;
@@ -166,6 +174,8 @@ export interface ScheduledTask {
   /** Human recurrence, e.g. "Every day at 9:00". */
   schedule: string;
   enabled: boolean;
+  /** User-defined labels for filtering and grouping task work. */
+  tags?: string[];
   createdAt: number;
   /** When the task last ran (ms), so it isn't fired twice. */
   lastRun?: number;
@@ -196,6 +206,8 @@ interface PersistedState {
   agentConfigs: Record<string, AgentConfig>;
   /** NanoClaw engine skills the user has installed (channel/provider/etc). */
   installedEngineSkills: string[];
+  /** Local-user-approved MCP servers. Commands never come from a model turn. */
+  mcpServers: Record<string, McpServerConfig>;
   connectedIntegrations: string[];
   /**
    * Knowledge is isolated per role: each agent id (or "general" for the base
@@ -208,6 +220,8 @@ interface PersistedState {
   activeAgentId: string | null;
   customSkills: CustomSkill[];
   scheduledTasks: ScheduledTask[];
+  /** Shared task-tag catalog; tasks select from this list instead of inventing labels ad hoc. */
+  taskTags?: string[];
   taskRunLogs?: TaskRunLog[];
   /** Roles learn durable facts from chats and save them to their own memory. */
   selfImprove: boolean;
@@ -240,6 +254,7 @@ const initialState: PersistedState = {
   installedAgents: [],
   agentConfigs: {},
   installedEngineSkills: ["skill-creator", "write-email", "summarize-document", "odoo-post-publisher"],
+  mcpServers: {},
   connectedIntegrations: [],
   knowledgeByAgent: {},
   messages: [],
@@ -248,6 +263,7 @@ const initialState: PersistedState = {
   activeAgentId: null,
   customSkills: [],
   scheduledTasks: [],
+  taskTags: [],
   taskRunLogs: [],
   selfImprove: true,
   customAgents: [],
@@ -276,6 +292,10 @@ function loadStateForUser(key: string): PersistedState {
     };
     const merged = { ...initialState, ...parsed };
     merged.taskRunLogs = merged.taskRunLogs ?? [];
+    merged.taskTags = Array.from(new Set([
+      ...(merged.taskTags ?? []),
+      ...merged.scheduledTasks.flatMap((task) => task.tags ?? []),
+    ])).sort();
     if (parsed.knowledgeFiles && !parsed.knowledgeByAgent) {
       merged.knowledgeByAgent = { [GENERAL_KNOWLEDGE]: parsed.knowledgeFiles };
     }
@@ -350,6 +370,8 @@ interface AppStore extends PersistedState {
   addCustomSkill: (skill: CustomSkill) => void;
   removeCustomSkill: (source: string) => void;
   toggleEngineSkill: (skillId: string) => void;
+  setMcpServers: (servers: Record<string, McpServerConfig>) => void;
+  setTaskTags: (tags: string[]) => void;
   taskRunLogs: TaskRunLog[];
   addTaskRunLog: (log: Omit<TaskRunLog, "id">) => void;
   clearTaskRunLogs: (taskId?: string) => void;
@@ -898,6 +920,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const setMcpServers = useCallback((servers: Record<string, McpServerConfig>) => {
+    setState((s) => ({ ...s, mcpServers: servers }));
+  }, []);
+
+  const setTaskTags = useCallback((tags: string[]) => {
+    setState((s) => ({ ...s, taskTags: Array.from(new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))).sort() }));
+  }, []);
+
   const addScheduledTask = useCallback(
     (task: Omit<ScheduledTask, "id" | "createdAt">) => {
       const taskId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -919,6 +949,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
           ...s.scheduledTasks,
         ],
+        taskTags: Array.from(new Set([...(s.taskTags ?? []), ...(task.tags ?? [])])).sort(),
       }));
     },
     [],
@@ -1001,6 +1032,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scheduledTasks: s.scheduledTasks.map((t) =>
           t.id === id ? { ...t, ...patch } : t,
         ),
+        taskTags: Array.from(new Set([...(s.taskTags ?? []), ...(patch.tags ?? [])])).sort(),
       }));
     },
     [],
@@ -1473,7 +1505,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const runnerAgentId = state.activeAgentId || "default";
   const runnerModel =
     (state.provider ? state.providerConfigs[state.provider]?.model : undefined) || "auto";
-  const runnerSignature = `${runnerAgentId}|${runnerModel}|${state.selfImprove ? "1" : "0"}`;
+  const runnerMcpServers = JSON.stringify(state.mcpServers);
+  const runnerSignature = `${runnerAgentId}|${runnerModel}|${state.selfImprove ? "1" : "0"}|${runnerMcpServers}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -1484,7 +1517,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log(`[store] Syncing & starting runner: agent=${agentId}, model=${model}`);
       // Self-improvement runs in the runner, which reads the flag from
       // runner.json — restarting is how a flipped switch reaches it.
-      await restartAgentRunner(agentId, AI_ROUTER_BASE_URL, model, selfImprove === "1");
+      await restartAgentRunner(
+        agentId,
+        AI_ROUTER_BASE_URL,
+        model,
+        selfImprove === "1",
+        state.mcpServers,
+      );
     })();
 
     return () => {
@@ -1532,6 +1571,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
+      setMcpServers,
+      setTaskTags,
       taskRunLogs: state.taskRunLogs ?? [],
       addTaskRunLog,
       clearTaskRunLogs,
@@ -1588,6 +1629,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,
+      setMcpServers,
+      setTaskTags,
       addTaskRunLog,
       clearTaskRunLogs,
       addScheduledTask,

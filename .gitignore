@@ -6,6 +6,9 @@ node_modules/
 dist/
 dist-demo/
 
+# Downloaded on demand for the local Tauri bundle; CI fetches its matching runtime.
+runtime/node/node
+
 # Tauri
 src-tauri/target/
 src-tauri/gen/schemas/
