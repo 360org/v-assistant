@@ -31,15 +31,15 @@ jobs:
       # Agent tool-calling loop: Vault lookup → HTTP action → reply, in-app.
       - run: node scripts/tool-loop-check.mjs
       # Telegram 2-way channel: inbound message → assistant → reply, in-app.
-      - run: node scripts/telegram-check.mjs
-      # Scheduled tasks: schedule matching + a due task runs and delivers.
-      - run: node scripts/schedule-check.mjs
+      - run: npx tsx agent-runner/scripts/telegram-check.mjs
+      # Scheduler coverage runs with the Agent Runner job, where its SQLite IPC
+      # fixtures and nested dependencies are installed.
       # Direct sign-in: code→key exchange, per-vendor routing, user creation.
       - run: node scripts/login-check.mjs
       # Role isolation: each role's prompt carries only its own memory/knowledge.
       - run: node scripts/isolation-check.mjs
       # Self-improving memory: a role learns durable facts and dedupes them.
-      - run: node scripts/self-improve-check.mjs
+      - run: npx tsx agent-runner/scripts/self-improve-check.mjs
       # Connectors: an agent operates a system; credential auto-pulled from Vault.
       - run: node scripts/connector-check.mjs
       # Knowledge/RAG: real docx/xlsx/pptx/pdf extraction → chunks → retrieval.
