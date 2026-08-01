@@ -189,10 +189,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "${{ github.repository }}" \
+          retry() {
+            local attempt=0 status=0
+            until "$@"; do
+              status=$?
+              attempt=$((attempt + 1))
+              if [ "$attempt" -ge 5 ]; then return "$status"; fi
+              sleep $((attempt * 10))
+            done
+          }
+          if ! retry gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            retry gh release create "$TAG" --repo "${{ github.repository }}" \
               --draft --title "V Assistant $TAG" \
-              --notes "Download the installer for your platform below, then open it to install V Assistant."
+              --notes "Download the installer for your platform below, then open it to install V Assistant." || \
+              retry gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null
+          fi
           mkdir -p .release-assets
           while IFS= read -r -d '' signature; do
             artifact="${signature%.sig}"
@@ -200,7 +211,7 @@ jobs:
             cp "$artifact" ".release-assets/$name"
             cp "$signature" ".release-assets/$name.sig"
           done < <(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f -name '*.sig' -print0)
-          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+          retry gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
             "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/V Assistant_${{ needs.version.outputs.version }}_${{ matrix.dmg_arch }}.dmg" \
             .release-assets/*
 
@@ -308,10 +319,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "${{ github.repository }}" \
+          retry() {
+            local attempt=0 status=0
+            until "$@"; do
+              status=$?
+              attempt=$((attempt + 1))
+              if [ "$attempt" -ge 5 ]; then return "$status"; fi
+              sleep $((attempt * 10))
+            done
+          }
+          if ! retry gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            retry gh release create "$TAG" --repo "${{ github.repository }}" \
               --draft --title "V Assistant $TAG" \
-              --notes "Download the installer for your platform below, then open it to install V Assistant."
+              --notes "Download the installer for your platform below, then open it to install V Assistant." || \
+              retry gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null
+          fi
           mkdir -p .release-assets
           while IFS= read -r -d '' signature; do
             artifact="${signature%.sig}"
@@ -319,10 +341,17 @@ jobs:
             cp "$artifact" ".release-assets/$name"
             cp "$signature" ".release-assets/$name.sig"
           done < <(find src-tauri/target/release/bundle -type f -name '*.sig' -print0)
-          find src-tauri/target/release/bundle -type f \( \
-            -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
-          \) -exec gh release upload "$TAG" --repo "${{ github.repository }}" --clobber {} +
-          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber .release-assets/*
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            retry gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+              "src-tauri/target/release/bundle/msi/V Assistant_${{ needs.version.outputs.version }}_x64_en-US.msi" \
+              "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
+          else
+            retry gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+              "src-tauri/target/release/bundle/deb/V Assistant_${{ needs.version.outputs.version }}_amd64.deb" \
+              "src-tauri/target/release/bundle/rpm/V Assistant-${{ needs.version.outputs.version }}-1.x86_64.rpm" \
+              "src-tauri/target/release/bundle/appimage/V Assistant_${{ needs.version.outputs.version }}_amd64.AppImage"
+          fi
+          retry gh release upload "$TAG" --repo "${{ github.repository }}" --clobber .release-assets/*
 
   publish_release:
     needs: [version, build_macos, build_other]
