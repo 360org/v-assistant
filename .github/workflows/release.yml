@@ -190,10 +190,16 @@ jobs:
             gh release create "$TAG" --repo "${{ github.repository }}" \
               --draft --title "V Assistant $TAG" \
               --notes "Download the installer for your platform below, then open it to install V Assistant."
+          mkdir -p .release-assets
+          while IFS= read -r -d '' signature; do
+            artifact="${signature%.sig}"
+            name="$(basename "$artifact")_${{ matrix.asset_suffix }}"
+            cp "$artifact" ".release-assets/$name"
+            cp "$signature" ".release-assets/$name.sig"
+          done < <(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f -name '*.sig' -print0)
           gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
-            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/V Assistant_${{ needs.version.outputs.version }}_${{ matrix.dmg_arch }}.dmg#V Assistant_${{ needs.version.outputs.version }}_${{ matrix.asset_suffix }}.dmg" \
-            "src-tauri/target/${{ matrix.target }}/release/bundle/macos/V Assistant.app.tar.gz#V Assistant_${{ needs.version.outputs.version }}_${{ matrix.asset_suffix }}.app.tar.gz" \
-            "src-tauri/target/${{ matrix.target }}/release/bundle/macos/V Assistant.app.tar.gz.sig#V Assistant_${{ needs.version.outputs.version }}_${{ matrix.asset_suffix }}.app.tar.gz.sig"
+            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/V Assistant_${{ needs.version.outputs.version }}_${{ matrix.dmg_arch }}.dmg" \
+            .release-assets/*
 
 
   build_other:
@@ -303,10 +309,17 @@ jobs:
             gh release create "$TAG" --repo "${{ github.repository }}" \
               --draft --title "V Assistant $TAG" \
               --notes "Download the installer for your platform below, then open it to install V Assistant."
+          mkdir -p .release-assets
+          while IFS= read -r -d '' signature; do
+            artifact="${signature%.sig}"
+            name="$(basename "$artifact")_${{ matrix.asset_suffix }}"
+            cp "$artifact" ".release-assets/$name"
+            cp "$signature" ".release-assets/$name.sig"
+          done < <(find src-tauri/target/release/bundle -type f -name '*.sig' -print0)
           find src-tauri/target/release/bundle -type f \( \
-            -name '*.msi' -o -name '*.exe' -o -name '*.zip' -o -name '*.deb' \
-            -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.tar.gz' -o -name '*.sig' \
+            -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
           \) -exec gh release upload "$TAG" --repo "${{ github.repository }}" --clobber {} +
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber .release-assets/*
 
   publish_release:
     needs: [version, build_macos, build_other]
@@ -326,16 +339,16 @@ jobs:
 
           const release = JSON.parse(execFileSync("gh", ["api", `repos/${process.env.REPO}/releases/tags/${process.env.TAG}`], { encoding: "utf8" }));
           const assets = new Map(release.assets.map((asset) => [asset.name, asset]));
-          const pick = (suffixes) => {
-            const signature = release.assets.find((asset) => suffixes.some((suffix) => asset.name.endsWith(suffix)) && assets.has(asset.name.slice(0, -4)));
-            if (!signature) throw new Error(`Missing signed updater asset matching: ${suffixes.join(", ")}`);
+          const pick = (token) => {
+            const signature = release.assets.find((asset) => asset.name.endsWith(".sig") && asset.name.includes(token) && assets.has(asset.name.slice(0, -4)));
+            if (!signature) throw new Error(`Missing signed updater asset for: ${token}`);
             return { artifact: assets.get(signature.name.slice(0, -4)), signature };
           };
           const targets = {
-            "darwin-aarch64": pick(["macOS-Apple-Silicon.app.tar.gz.sig"]),
-            "darwin-x86_64": pick(["macOS-Intel.app.tar.gz.sig"]),
-            "linux-x86_64": pick([".AppImage.tar.gz.sig", ".AppImage.sig"]),
-            "windows-x86_64": pick([".msi.zip.sig", ".msi.sig", ".nsis.zip.sig", ".exe.sig"]),
+            "darwin-aarch64": pick("macOS-Apple-Silicon"),
+            "darwin-x86_64": pick("macOS-Intel"),
+            "linux-x86_64": pick("Linux-x86_64"),
+            "windows-x86_64": pick("Windows-x86_64"),
           };
           mkdirSync(".updater-signatures", { recursive: true });
           const platforms = {};
