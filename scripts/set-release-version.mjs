@@ -27,5 +27,7 @@ updateJson("package-lock.json", (lockfile) => {
 const cargoToml = "src-tauri/Cargo.toml";
 const cargo = fs.readFileSync(cargoToml, "utf8");
 const updatedCargo = cargo.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
-if (updatedCargo === cargo) throw new Error("Could not update the application version in src-tauri/Cargo.toml.");
+if (!/^version = "\d+\.\d+\.\d+"$/m.test(updatedCargo)) {
+  throw new Error("Could not find the application version in src-tauri/Cargo.toml.");
+}
 fs.writeFileSync(cargoToml, updatedCargo);
