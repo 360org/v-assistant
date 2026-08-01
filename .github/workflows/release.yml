@@ -152,14 +152,6 @@ jobs:
           ! grep -rq "better-sqlite3" agent-runner/dist
           test ! -d agent-runner/node_modules/better-sqlite3
 
-      # tauri-action picks its package manager from the lockfile. This repo has
-      # pnpm-lock.yaml, so it runs `pnpm tauri build` — which failed instantly
-      # on a runner that only had npm, with no compiler output to explain it.
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-          run_install: false
-
       - name: Build installers and upload to draft release
         uses: tauri-apps/tauri-action@action-v1.0.0
         env:
@@ -172,6 +164,7 @@ jobs:
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
           releaseDraft: true
           prerelease: false
+          tauriScript: npm run tauri --
           args: ${{ matrix.args }}
           releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
           uploadUpdaterSignatures: true
@@ -254,17 +247,15 @@ jobs:
       - name: Bundle Node runtime for AI Router
         shell: bash
         run: |
-          case "${{ matrix.platform }}" in
-            ubuntu-22.04) archive="node-v24.18.0-linux-x64" ;;
-            windows-latest) archive="node-v24.18.0-win-x64" ;;
-            *) echo "Unsupported platform: ${{ matrix.platform }}" >&2; exit 1 ;;
-          esac
-          curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o node.tar.gz
-          mkdir -p runtime/node
-          tar -xzf node.tar.gz
           if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            archive="node-v24.18.0-win-x64"
+            curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.zip" -o node.zip
+            unzip -q node.zip
             install -m 755 "${archive}/node.exe" runtime/node/node.exe
           else
+            archive="node-v24.18.0-linux-x64"
+            curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o node.tar.gz
+            tar -xzf node.tar.gz
             install -m 755 "${archive}/bin/node" runtime/node/node
           fi
 
@@ -301,6 +292,7 @@ jobs:
           releaseBody: Download the installer for your platform below, then open it to install V Assistant.
           releaseDraft: true
           prerelease: false
+          tauriScript: npm run tauri --
           releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
           uploadUpdaterSignatures: true
 
