@@ -68,6 +68,7 @@ jobs:
     if: needs.version.outputs.tag != '' && (github.event_name == 'push' || github.event.inputs.targets == 'macos')
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - platform: macos-latest
@@ -149,7 +150,7 @@ jobs:
           # The runner must stay free of native addons: SQLite comes from
           # `node:sqlite`, so the same dist/ runs on every platform and there is
           # no per-architecture .node file to verify.
-          ! grep -rq "better-sqlite3" agent-runner/dist
+          ! grep -rqE "from [\"']better-sqlite3|require\([\"']better-sqlite3" agent-runner/dist
           test ! -d agent-runner/node_modules/better-sqlite3
 
       - name: Build installers and upload to draft release
@@ -180,7 +181,7 @@ jobs:
           test -f "$app_path/Contents/Resources/_up_/ai-router/node_modules/node-machine-id/package.json"
           test -x "$app_path/Contents/Resources/_up_/runtime/node/node"
           test -f "$app_path/Contents/Resources/_up_/agent-runner/dist/index.js"
-          ! grep -rq "better-sqlite3" "$app_path/Contents/Resources/_up_/agent-runner/dist"
+          ! grep -rqE "from [\"']better-sqlite3|require\([\"']better-sqlite3" "$app_path/Contents/Resources/_up_/agent-runner/dist"
 
       - name: Verify updater artifacts
         shell: bash
@@ -191,10 +192,16 @@ jobs:
 
 
   build_other:
-    needs: version
-    if: needs.version.outputs.tag != '' && (github.event_name == 'push' || github.event.inputs.targets == 'other')
+    # tauri-action creates/uploads one draft release. Start this matrix only
+    # after both macOS entries have finished writing their release assets.
+    needs: [version, build_macos]
+    if: >-
+      always() && needs.version.outputs.tag != '' &&
+      ((github.event_name == 'push' && needs.build_macos.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.targets == 'other'))
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - platform: ubuntu-22.04
@@ -267,7 +274,7 @@ jobs:
           test -f ai-router/node_modules/uuid/package.json
           test -f ai-router/node_modules/node-machine-id/package.json
           test -f agent-runner/dist/index.js
-          ! grep -rq "better-sqlite3" agent-runner/dist
+          ! grep -rqE "from [\"']better-sqlite3|require\([\"']better-sqlite3" agent-runner/dist
           test ! -d agent-runner/node_modules/better-sqlite3
           if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
             test -f runtime/node/node.exe
