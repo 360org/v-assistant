@@ -55,9 +55,9 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 *   **Phát hành đa nền tảng:** một tag `v*` giờ dựng và chỉ công bố release sau khi
     hoàn tất bốn installer: macOS Apple Silicon, macOS Intel, Windows x64 và Linux
     x64. Mỗi bundle tự mang Node 24 đúng kiến trúc, AI Router cùng Agent Runner;
-    Windows dùng `node.exe` trong tài nguyên đóng gói. Workflow chuyển sang
-    `tauri-action` 1.0, tương thích runtime Node 24 của GitHub Actions và ký artifact
-    updater bằng secret của repository.
+    Windows dùng `node.exe` trong tài nguyên đóng gói. Workflow build/ký trực tiếp
+    bằng Tauri CLI và upload tuần tự bằng GitHub CLI, tạo `latest.json` từ chữ ký
+    updater của đủ bốn nền tảng bằng secret của repository.
 
 ## [1.1.3] — 2026-07-27
 

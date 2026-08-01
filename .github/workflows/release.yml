@@ -74,6 +74,7 @@ jobs:
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
             target: "aarch64-apple-darwin"
+            dmg_arch: "aarch64"
             asset_suffix: "macOS-Apple-Silicon"
           # The runner is pure JavaScript (SQLite comes from `node:sqlite`), so
           # this runner only has to produce the Intel Tauri binary — there is no
@@ -81,6 +82,7 @@ jobs:
           - platform: macos-15-intel
             args: "--target x86_64-apple-darwin"
             target: "x86_64-apple-darwin"
+            dmg_arch: "x64"
             asset_suffix: "macOS-Intel"
 
     runs-on: ${{ matrix.platform }}
@@ -153,22 +155,11 @@ jobs:
           ! grep -rqE "from [\"']better-sqlite3|require\([\"']better-sqlite3" agent-runner/dist
           test ! -d agent-runner/node_modules/better-sqlite3
 
-      - name: Build installers and upload to draft release
-        uses: tauri-apps/tauri-action@action-v1.0.0
+      - name: Build signed installers
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ needs.version.outputs.tag }}
-          releaseName: V Assistant ${{ needs.version.outputs.tag }}
-          releaseBody: Download the installer for your platform below, then open it to install V Assistant.
-          releaseDraft: true
-          prerelease: false
-          tauriScript: npm run tauri
-          args: ${{ matrix.args }}
-          releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
-          uploadUpdaterSignatures: true
+        run: npm run tauri -- build ${{ matrix.args }}
 
       - name: Verify packaged AI Router runtime
         shell: bash
@@ -189,6 +180,20 @@ jobs:
           updater="$(find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f -name '*.tar.gz' -print -quit)"
           test -n "$updater"
           test -f "$updater.sig"
+
+      - name: Upload macOS artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "${{ github.repository }}" \
+              --draft --title "V Assistant $TAG" \
+              --notes "Download the installer for your platform below, then open it to install V Assistant."
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/V Assistant_${{ needs.version.outputs.version }}_${{ matrix.dmg_arch }}.dmg#V Assistant_${{ needs.version.outputs.version }}_${{ matrix.asset_suffix }}.dmg" \
+            "src-tauri/target/${{ matrix.target }}/release/bundle/macos/V Assistant.app.tar.gz#V Assistant_${{ needs.version.outputs.version }}_${{ matrix.asset_suffix }}.app.tar.gz" \
+            "src-tauri/target/${{ matrix.target }}/release/bundle/macos/V Assistant.app.tar.gz.sig#V Assistant_${{ needs.version.outputs.version }}_${{ matrix.asset_suffix }}.app.tar.gz.sig"
 
 
   build_other:
@@ -282,39 +287,75 @@ jobs:
             test -x runtime/node/node
           fi
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-          run_install: false
-
-      - name: Build remaining installers and upload to draft release
-        uses: tauri-apps/tauri-action@action-v1.0.0
+      - name: Build signed installers
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ needs.version.outputs.tag }}
-          releaseName: V Assistant ${{ needs.version.outputs.tag }}
-          releaseBody: Download the installer for your platform below, then open it to install V Assistant.
-          releaseDraft: true
-          prerelease: false
-          tauriScript: npm run tauri
-          releaseAssetNamePattern: "[name]_[version]_${{ matrix.asset_suffix }}[ext]"
-          uploadUpdaterSignatures: true
+        run: npm run tauri -- build
+
+      - name: Upload platform artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "${{ github.repository }}" \
+              --draft --title "V Assistant $TAG" \
+              --notes "Download the installer for your platform below, then open it to install V Assistant."
+          find src-tauri/target/release/bundle -type f \( \
+            -name '*.msi' -o -name '*.exe' -o -name '*.zip' -o -name '*.deb' \
+            -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.tar.gz' -o -name '*.sig' \
+          \) -exec gh release upload "$TAG" --repo "${{ github.repository }}" --clobber {} +
 
   publish_release:
     needs: [version, build_macos, build_other]
     if: needs.version.outputs.tag != '' && github.event_name == 'push'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Generate updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          node <<'EOF'
+          const { execFileSync } = require("node:child_process");
+          const { mkdirSync, readFileSync, writeFileSync } = require("node:fs");
+
+          const release = JSON.parse(execFileSync("gh", ["api", `repos/${process.env.REPO}/releases/tags/${process.env.TAG}`], { encoding: "utf8" }));
+          const assets = new Map(release.assets.map((asset) => [asset.name, asset]));
+          const pick = (suffixes) => {
+            const signature = release.assets.find((asset) => suffixes.some((suffix) => asset.name.endsWith(suffix)) && assets.has(asset.name.slice(0, -4)));
+            if (!signature) throw new Error(`Missing signed updater asset matching: ${suffixes.join(", ")}`);
+            return { artifact: assets.get(signature.name.slice(0, -4)), signature };
+          };
+          const targets = {
+            "darwin-aarch64": pick(["macOS-Apple-Silicon.app.tar.gz.sig"]),
+            "darwin-x86_64": pick(["macOS-Intel.app.tar.gz.sig"]),
+            "linux-x86_64": pick([".AppImage.tar.gz.sig", ".AppImage.sig"]),
+            "windows-x86_64": pick([".msi.zip.sig", ".msi.sig", ".nsis.zip.sig", ".exe.sig"]),
+          };
+          mkdirSync(".updater-signatures", { recursive: true });
+          const platforms = {};
+          for (const [target, { artifact, signature }] of Object.entries(targets)) {
+            execFileSync("gh", ["release", "download", process.env.TAG, "--repo", process.env.REPO, "--pattern", signature.name, "--dir", ".updater-signatures"], { stdio: "inherit" });
+            platforms[target] = {
+              signature: readFileSync(`.updater-signatures/${signature.name}`, "utf8"),
+              url: artifact.browser_download_url,
+            };
+          }
+          writeFileSync("latest.json", `${JSON.stringify({ version: process.env.VERSION, notes: release.body || "", pub_date: new Date().toISOString(), platforms }, null, 2)}\n`);
+          EOF
 
       - name: Publish the completed cross-platform release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.version.outputs.tag }}
-        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
+        run: |
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber latest.json
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
 
   publish_other:
     needs: [version, build_other]
