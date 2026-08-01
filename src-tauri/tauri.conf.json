@@ -11,7 +11,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU1NDVBMTdFODUxMUEyRjkKUldUNW9oR0ZmcUZGVll1NHdiRnZ0N2FwOG8vRHdMUG05TlJjMmRJVU5BVVA5L2JJK0tSaXlGUUgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJFMkE0RkI4MzI0RUM4NkEKUldScXlFNHl1RThxTHRuckkycUFBbzBVbmxnTTZiWFMzajZWRDY2YTJaRXQ1STI1NnRkaGNFQzAK",
       "endpoints": [
         "https://github.com/360org/v-assistant/releases/latest/download/latest.json"
       ]
@@ -38,7 +38,7 @@
     "createUpdaterArtifacts": true,
     "publisher": "360org",
     "homepage": "https://vuaai.net",
-    "copyright": "\u00a9 360org \u2014 vuaai.net",
+    "copyright": "© 360org — vuaai.net",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
