@@ -16,6 +16,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix agent-runner
       # Runs validate-skills, tsc and vite build.
       - run: npm run build
       # Agent tool-calling loop: Vault lookup → HTTP action → reply, in-app.
