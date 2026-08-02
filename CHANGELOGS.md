@@ -27,6 +27,32 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 *   **Kiểm chứng:** thêm `agent-runner/scripts/capability-rail-check.mjs` và nối vào
     `agent-runner` test/check; root build V Assistant đã pass sau thay đổi.
 
+## [1.1.41] — 2026-08-02
+
+### Agent Runner và an toàn đường dẫn
+
+*   Telegram chuyển message vào hàng đợi SQLite `messages_in`; Runner xử lý
+    và phát reply qua `messages_out`, không còn bypass IPC bằng cách gọi trực tiếp
+    agent loop.
+*   Thêm các capability `ask_user_question`, `schedule_message`,
+    `list_scheduled`, `cancel_scheduled` cho câu hỏi tương tác và tác vụ định kỳ.
+*   Chuẩn hóa lexical path và realpath của mọi `approved_roots` trước kiểm tra
+    containment trong Tauri filesystem boundary, đóng đường path traversal tương đối.
+*   RAG, Scheduler và self-improve memory đã chạy trong Host Process, nên không
+    dừng khi người dùng đóng cửa sổ webview.
+
+### Native desktop
+
+*   Thêm plugin global shortcut cho macOS: ẩn/hiện cửa sổ, reload và phát sự kiện
+    shortcut vào webview.
+*   Thêm cập nhật checklist cho Planning, Self-correction và Task Completion.
+
+### Kiểm chứng
+
+*   `npx tsc --noEmit` và `npx tsc --project agent-runner/tsconfig.json --noEmit` đạt.
+*   `cargo check --quiet` đạt.
+*   `npm run build` đạt với 2.009 module.
+
 ## [1.1.40] — 2026-08-01
 
 ### Tài liệu khớp lại thực tế (audit theo `v-assistant-dev-guidelines`)

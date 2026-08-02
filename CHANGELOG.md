@@ -6,6 +6,27 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+## [1.1.41] - 2026-08-02
+
+### Thêm mới
+- **Capability rail nội bộ cho Agent Runner**: Agent có thể tìm và chạy native tools, built-in tools và MCP tools qua một bề mặt thống nhất.
+- **Cổng duyệt thao tác nhạy cảm**: Gửi tin, gửi file ra ngoài, sửa message và connector có credential yêu cầu người dùng phê duyệt trước khi thực thi.
+- **Câu hỏi tương tác và lịch chạy**: Bổ sung `ask_user_question`, `schedule_message`, `list_scheduled` và `cancel_scheduled` cho Agent Runner.
+- **Phím tắt macOS**: Thêm `Cmd+Shift+Q` ẩn/hiện cửa sổ, `Cmd+Shift+R` tải lại ứng dụng và `Cmd+Shift+E` phát sự kiện cho webview.
+- **Remote MCP và chẩn đoán**: Cấu hình MCP từ URL và xuất gói chẩn đoán đã che thông tin nhạy cảm.
+
+### Sửa lỗi và bảo mật
+- Telegram đi qua hàng đợi SQLite inbound/outbound thay vì gọi trực tiếp agent loop, đồng bộ với kiến trúc Host Process.
+- Chuẩn hóa toàn bộ approved roots trước khi kiểm tra containment, ngăn path traversal qua đường dẫn tương đối.
+- RAG, Scheduler và self-improve memory chạy trong Host Process để tiếp tục hoạt động khi đóng cửa sổ.
+- Skill Store lưu nguồn và version của skill để người dùng biết xuất xứ trước khi bật.
+
+### Kiểm chứng
+- `npx tsc --noEmit` — đạt.
+- `npx tsc --project agent-runner/tsconfig.json --noEmit` — đạt.
+- `cargo check --quiet` — đạt.
+- `npm run build` — đạt, 2.009 module.
+
 ## [1.1.2] - 2026-07-26
 
 - **Persistent Background Task Execution**: Giữ trang Trò chuyện (`Chat`) luôn mounted ngầm trong DOM (`hidden` khi ở trang khác). Khi Agent đang thực thi tác vụ (đọc/ghi tệp, gọi API, đặt lịch...), người dùng chuyển qua menu/trang khác (Lịch & Nhiệm vụ, Kho Media, Cài đặt...) thì tiến trình vẫn tiếp tục chạy hoàn tất 100% mà không bị dừng hay báo lỗi Retry.
