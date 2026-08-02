@@ -49,6 +49,8 @@ export function ModelSettings() {
   const [providerQuery, setProviderQuery] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<AiRouterProvider | null>(null);
   const [apiKey, setApiKey] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customName, setCustomName] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [verifyingCallback, setVerifyingCallback] = useState(false);
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
@@ -177,7 +179,8 @@ export function ModelSettings() {
     key: string,
     authType: "subscription" | "api-key",
     tokenData?: { email?: string; idToken?: string; refreshToken?: string; projectId?: string; expiresIn?: number } | null,
-    callbackUrlStr?: string
+    callbackUrlStr?: string,
+    customBaseUrl?: string
   ) => {
     const vendorAcc = await fetchVendorAccount(providerId as ProviderId, key).catch(() => null);
     const targetEmail =
@@ -221,6 +224,7 @@ export function ModelSettings() {
         projectId: tokenData?.projectId,
         expiresAt: tokenData?.expiresIn ? Date.now() + tokenData.expiresIn * 1000 : undefined,
         email: targetEmail,
+        ...(customBaseUrl ? { providerSpecificData: { baseUrl: customBaseUrl } } : {}),
       })
     ).catch(() => {});
 
@@ -251,6 +255,10 @@ export function ModelSettings() {
 
   const connectApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
+    if (selectedProvider.id === "ai-compatible" && !customBaseUrl.trim()) {
+      setConnectMessage("❌ Lỗi: Cần điền Endpoint Base URL cho kết nối Compatible.");
+      return;
+    }
     setConnecting(true);
     setConnectMessage(null);
     try {
@@ -260,14 +268,21 @@ export function ModelSettings() {
         connectionStatus: "connected",
       });
 
+      const finalName = customName?.trim() || selectedProvider.name;
       await saveConnectionAndCleanupDuplicates(
         selectedProvider.id,
-        selectedProvider.name,
+        finalName,
         apiKey.trim(),
-        "api-key"
+        "api-key",
+        null,
+        undefined,
+        customBaseUrl.trim() || undefined
       ).catch(() => {});
 
-      setConnectMessage(`✅ Kết nối thành công API Key cho ${selectedProvider.name}!`);
+      setConnectMessage(`✅ Kết nối thành công API Key cho ${finalName}!`);
+      setCustomBaseUrl("");
+      setCustomName("");
+      setApiKey("");
       await loadConnections();
       setTimeout(() => {
         setShowProviderManager(false);
@@ -983,20 +998,44 @@ export function ModelSettings() {
                   {/* API Key option */}
                   {(selectedProvider.apiKey || true) && (
                     <div className="p-3.5 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-2.5">
-                      <div className="text-xs font-semibold text-neutral-200">{t("config_via_apikey", language)}</div>
+                      <div className="text-xs font-semibold text-neutral-200">
+                        {selectedProvider.id === "ai-compatible" ? "Cấu hình Custom Endpoint" : t("config_via_apikey", language)}
+                      </div>
+
+                      {selectedProvider.id === "ai-compatible" && (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={customName}
+                            onChange={(e) => setCustomName(e.target.value)}
+                            placeholder="Tên kết nối (Ví dụ: 9router local, OmiRouter...)"
+                            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={customBaseUrl}
+                            onChange={(e) => setCustomBaseUrl(e.target.value)}
+                            placeholder="Endpoint Base URL (Ví dụ: http://localhost:20128/v1)"
+                            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
+                          />
+                        </div>
+                      )}
+
                       <div className="flex gap-2">
                         <input
                           type="password"
                           value={apiKey}
                           onChange={(e) => setApiKey(e.target.value)}
-                          placeholder={`${t("enter_apikey_placeholder", language)} (${selectedProvider.name})`}
+                          placeholder={selectedProvider.id === "ai-compatible"
+                            ? "API Key / Access Token (nếu có, không có nhập 'dummy')"
+                            : `${t("enter_apikey_placeholder", language)} (${selectedProvider.name})`}
                           className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
                         />
                         <Button
                           size="sm"
                           variant="secondary"
                           onClick={connectApiKey}
-                          disabled={connecting || !apiKey.trim()}
+                          disabled={connecting || !apiKey.trim() || (selectedProvider.id === "ai-compatible" && !customBaseUrl.trim())}
                           className="gap-1.5 text-xs cursor-pointer shrink-0"
                         >
                           <KeyRound className="size-3.5 text-gold-400" />

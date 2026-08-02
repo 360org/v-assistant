@@ -8,6 +8,7 @@ export type ProviderId =
   | "chatgpt"
   | "claude"
   | "gemini"
+  | "grok-cli"
   | "openrouter"
   | "local";
 
@@ -26,22 +27,13 @@ export interface Provider {
 
 export const PROVIDERS: Provider[] = [
   {
-    id: "openrouter",
-    name: "OpenRouter",
-    loginLabel: "Continue with OpenRouter",
-    tagline: "GPT, Claude, Gemini & hundreds more — one login",
-    oauth: true,
-    keyUrl: "https://openrouter.ai/keys",
-    hint: "Sign in once and use GPT, Claude, Gemini, Llama and hundreds more.",
-  },
-  {
     id: "chatgpt",
     name: "ChatGPT",
     loginLabel: "Continue with ChatGPT",
-    tagline: "OpenAI GPT — API key or via OpenRouter",
-    oauth: false,
+    tagline: "OpenAI GPT — sign in with your subscription",
+    oauth: true,
     keyUrl: "https://platform.openai.com/api-keys",
-    hint: "Direct ChatGPT sign-in coming soon. For now, paste your API key from platform.openai.com, or use 'Continue with OpenRouter' (already supports GPT-4o).",
+    hint: "Sign in with your ChatGPT subscription.",
   },
   {
     id: "claude",
@@ -61,7 +53,25 @@ export const PROVIDERS: Provider[] = [
     keyUrl: "https://aistudio.google.com/apikey",
     hint: "Sign in with your Gemini subscription. API keys remain available under Advanced options.",
   },
-{
+  {
+    id: "grok-cli",
+    name: "Grok",
+    loginLabel: "Continue with Grok",
+    tagline: "xAI Grok — sign in with your subscription",
+    oauth: true,
+    keyUrl: "https://console.x.ai",
+    hint: "Sign in with your Grok subscription.",
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    loginLabel: "Continue with OpenRouter",
+    tagline: "GPT, Claude, Gemini & hundreds more — one login",
+    oauth: true,
+    keyUrl: "https://openrouter.ai/keys",
+    hint: "Sign in once and use GPT, Claude, Gemini, Llama and hundreds more.",
+  },
+  {
     id: "local",
     name: "Local AI",
     loginLabel: "Use Local AI",

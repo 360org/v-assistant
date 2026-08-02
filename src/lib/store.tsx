@@ -28,6 +28,38 @@ import {
 
 export const fileObjectURLs = new Map<string, string>();
 import { parseSkillMd } from "@/lib/skills";
+
+export function parseTasksFromMessages(messages: ChatMessage[]): ParsedTask[] {
+  const assistantMsg = [...messages].reverse().find(
+    (m) => m.role === "assistant" && (m.content.includes("- [ ]") || m.content.includes("- [x]")),
+  );
+  if (!assistantMsg) return [];
+
+  const lines = assistantMsg.content.split("\n");
+  const tasks: ParsedTask[] = [];
+  const checklistRegex = /^\s*[-*]\s+\[([ xX])\]\s+(.+)$/;
+
+  for (const line of lines) {
+    const match = line.match(checklistRegex);
+    if (match) {
+      const isDone = match[1].toLowerCase() === "x";
+      const name = match[2].trim();
+      tasks.push({
+        id: `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        name,
+        status: isDone ? "completed" : "pending",
+      });
+    }
+  }
+
+  // Assign the first pending task as "in_progress"
+  const firstPending = tasks.find((t) => t.status === "pending");
+  if (firstPending) {
+    firstPending.status = "in_progress";
+  }
+
+  return tasks;
+}
 import { loginConfig, ROUTER_BASE_URL } from "@/runtime/providers";
 import { checkAppUpdate, type AppUpdateInfo } from "@/runtime/updater";
 import { vaultDelete, vaultGet, vaultSet } from "@/runtime/vault";
@@ -333,9 +365,17 @@ function loadState(): PersistedState {
   return loadStateForUser(lastActiveKey);
 }
 
+export interface ParsedTask {
+  id: string;
+  name: string;
+  status: "pending" | "in_progress" | "completed";
+}
+
 interface AppStore extends PersistedState {
   view: View;
   setView: (view: View) => void;
+  /** Active session tasks parsed from Agent Plan checklist */
+  activeSessionTasks: ParsedTask[];
   /** One-shot draft for the chat composer (set by Skills → Use). */
   chatDraft: string | null;
   /** The skill whose instructions are steering the current chat, if any. */
@@ -1531,9 +1571,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [runnerSignature]);
 
+  const activeSessionTasks = useMemo(
+    () => parseTasksFromMessages(state.messages),
+    [state.messages],
+  );
+
   const value = useMemo<AppStore>(
     () => ({
       ...state,
+      activeSessionTasks,
       // The Knowledge page and Home badge show the active role's knowledge.
       knowledgeFiles:
         state.knowledgeByAgent[knowledgeBucket(state.activeAgentId)] ?? [],
@@ -1626,6 +1672,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connectProvider,
       importAgent,
       removeCustomAgent,
+      activeSessionTasks,
       addCustomSkill,
       removeCustomSkill,
       toggleEngineSkill,

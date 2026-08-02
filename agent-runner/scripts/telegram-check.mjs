@@ -60,10 +60,11 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 process.env.VUA_AI_ROUTER_URL = `http://127.0.0.1:${server.address().port}`;
 
 // --- runner wiring -----------------------------------------------------------
-const { createInboundSchema, closeAll, getOutboundDb } = await import('../src/db/connection.ts');
+const { createInboundSchema, closeAll, getOutboundDb, openInboundDbWritable } = await import('../src/db/connection.ts');
 createInboundSchema();
 
-const { handleMessage, runTelegramLoop, telegramConfigured } = await import('../src/channels/telegram.ts');
+const { handleMessage, runTelegramLoop, telegramConfigured, runTelegramDeliveryLoop } = await import('../src/channels/telegram.ts');
+const { executeAgentLoop } = await import('../src/poll-loop.ts');
 
 let prompts = [];
 const stubProvider = {
@@ -83,8 +84,39 @@ const config = {
   provider: stubProvider,
   providerName: 'stub',
   agentId: 'default',
+  dataDir: dir,
   systemContext: { instructions: '' },
 };
+
+// Helper to manually run one runner turn (read inbound -> LLM -> write outbound)
+async function driveRunnerTurn() {
+  const { getPendingMessages, markProcessing, markCompleted, sessionIdFor, getTranscript, setTranscript } = await import('../src/db/index.js');
+  const messages = getPendingMessages().filter((m) => m.kind !== 'system');
+  if (messages.length === 0) return;
+  markProcessing(messages.map((m) => m.id));
+  const prompt = messages.map((m) => JSON.parse(m.content).text).join('\n');
+  const routing = { platformId: messages[0].platform_id, channelType: messages[0].channel_type, threadId: messages[0].thread_id };
+  const sessionId = sessionIdFor(config.agentId || 'default', routing);
+  const priorTranscript = getTranscript(sessionId);
+  const result = await executeAgentLoop(config, prompt, undefined, routing, config.systemContext, priorTranscript);
+  if (result.text) {
+    const { writeMessageOut } = await import('../src/db/index.js');
+    writeMessageOut({
+      id: `out-${Date.now()}`,
+      kind: 'chat',
+      platform_id: routing.platformId,
+      channel_type: routing.channelType,
+      thread_id: routing.threadId,
+      content: JSON.stringify({ text: result.text }),
+    });
+    setTranscript(sessionId, [
+      ...priorTranscript,
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: result.text },
+    ]);
+  }
+  markCompleted(messages.map((m) => m.id));
+}
 
 // --- the capability is required ---------------------------------------------
 check('the channel reports the stored token without revealing it', await telegramConfigured());
@@ -102,28 +134,42 @@ process.env.VUA_CONNECTOR_GATEWAY_TOKEN = saved;
 
 // --- one answered message ----------------------------------------------------
 await handleMessage(config, 42, 'chào em');
+await driveRunnerTurn();
+
+// Start delivery loop with short signal to process and stop
+const deliveryController = new AbortController();
+const deliveryPromise = runTelegramDeliveryLoop(config, deliveryController.signal);
+await new Promise((r) => setTimeout(r, 100));
+deliveryController.abort();
+await deliveryPromise;
+
 check('the reply goes back to the same chat', sent.length === 1 && sent[0].chatId === 42);
 check('the reply is the agent answer', sent[0].text === 'echo: chào em');
 
-const rows = getOutboundDb().prepare('SELECT channel_type, thread_id, content FROM messages_out ORDER BY seq').all();
-check('both sides of the turn are mirrored to outbound.db', rows.length === 2);
-check('the mirror is tagged as the telegram channel', rows.every((r) => r.channel_type === 'telegram'));
-check('the mirror threads by chat id', rows.every((r) => r.thread_id === '42'));
-check(
-  'the mirror keeps the user turn and the answer apart',
-  JSON.parse(rows[0].content).role === 'user' && JSON.parse(rows[1].content).role === 'assistant',
-);
+const rows = getOutboundDb().prepare('SELECT channel_type, thread_id FROM messages_out').all();
+check('outbound message is written to outbound.db', rows.length === 1);
+check('the mirror is tagged as the telegram channel', rows[0].channel_type === 'telegram');
+check('the mirror threads by chat id', rows[0].thread_id === '42');
 
 // --- the conversation remembers itself ---------------------------------------
 await handleMessage(config, 42, 'còn nhớ không?');
+await driveRunnerTurn();
 check('the next turn carries the prior transcript', prompts[1].history.length === 2);
+
 await handleMessage(config, 99, 'hello');
+await driveRunnerTurn();
 check('a second chat does not inherit the first', prompts[2].history.length === 0);
 
 // --- /start is answered without spending a model call ------------------------
 const before = prompts.length;
 await handleMessage(config, 42, '/start');
 check('/start replies without calling the model', prompts.length === before);
+
+const deliveryControllerStart = new AbortController();
+const deliveryPromiseStart = runTelegramDeliveryLoop(config, deliveryControllerStart.signal);
+await new Promise((r) => setTimeout(r, 100));
+deliveryControllerStart.abort();
+await deliveryPromiseStart;
 check('/start greets the user', /V-Assistant/.test(sent[sent.length - 1].text));
 
 // --- the backlog is skipped on start -----------------------------------------
@@ -133,14 +179,26 @@ pending = [
   { updateId: 7, text: 'tin cũ 1', chatId: 5 },
   { updateId: 8, text: 'tin cũ 2', chatId: 5 },
 ];
-const controller = new AbortController();
-const loop = runTelegramLoop(config, controller.signal);
-// Let the drain pass consume the backlog, then deliver a live message. The
-// stub answers instantly, so the loop is in its idle wait by now.
-await new Promise((r) => setTimeout(r, 200));
-abortAfterSend = () => controller.abort();
+
+const loopController = new AbortController();
+const loop = runTelegramLoop(config, loopController.signal);
+// Let the drain pass consume the backlog
+await new Promise((r) => setTimeout(r, 100));
+
 pending = [{ updateId: 9, text: 'tin mới', chatId: 5 }];
+// Wait for loop to pick it up and write to messages_in (must be > IDLE_MS 1000ms)
+await new Promise((r) => setTimeout(r, 1200));
+loopController.abort();
 await loop;
+
+// Manually process the live message that entered inbound.db
+await driveRunnerTurn();
+
+const deliveryControllerLive = new AbortController();
+const deliveryPromiseLive = runTelegramDeliveryLoop(config, deliveryControllerLive.signal);
+await new Promise((r) => setTimeout(r, 100));
+deliveryControllerLive.abort();
+await deliveryPromiseLive;
 
 check('the backlog is not answered', !sent.some((m) => /tin cũ/.test(m.text)));
 check('a message that arrives while listening is answered', sent.some((m) => m.text === 'echo: tin mới'));

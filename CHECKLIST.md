@@ -707,6 +707,19 @@
 - [ ] **App Focus & Window Management**: Tự động mở, chuyển đổi focus giữa các ứng dụng trên hệ thống (VS Code, Chrome, Terminal, Finder, Finder...)
 
 ### 13.2 Browser Tools & Automation
+- [ ] **Browser Automation (Playwright)**: Cho phép Agent tự động hóa các thao tác trên trình duyệt (click, điền form, cào dữ liệu) mà không cần popup
+- [ ] **Vault Connection**: Đăng nhập tự động các website bằng tài khoản/cookie được lưu trong Vault bảo mật
+
+---
+
+## 15. Năng lực Tự chủ & Vòng lặp Thực thi (Autonomy & Harness Loop)
+
+- [x] **Cơ chế Lập kế hoạch (Planning Mechanism):** Khi nhận nhiệm vụ trên 2 bước/tool call, Agent tự động phân rã tác vụ thành một Plan chi tiết (dạng Markdown checklist), xác định Done criteria để theo dõi và cập nhật tiến trình trong prompt hệ thống của `src/runtime/engine.ts`.
+- [x] **Tự sửa lỗi & Phục hồi (Self-Correction & Self-Healing):** Khi tool call trả về `is_error: true` hoặc lỗi hệ thống, Agent tự động phân tích nguyên nhân và thử các phương án tự sửa sai (quét thư mục, sửa cú pháp lệnh) thay vì dừng lại.
+- [x] **Chủ động hoàn tất tác vụ (Task Completion):** Tự động chuyển tiếp sang bước tiếp theo trong kế hoạch mà không cần người dùng ra lệnh cho từng bước nhỏ, luôn đánh giá Done criteria để chốt kết quả cuối cùng.
+- [ ] **Theo dõi trạng thái Task qua UI:** Tích hợp kế hoạch Markdown checklist của Agent hiển thị trực tiếp lên Task Workspace / Kanban view trên UI của V Assistant để người dùng theo dõi trực quan.
+- [ ] **Cải tiến Memory để tự học (Self-learning Memory):** Tinh chỉnh cấu trúc memories của Agent để ghi nhớ các lỗi tool đã sửa thành công, tự áp dụng giải pháp đã tối ưu cho các phiên làm việc sau.
+
 - [x] **Web Search & HTTP Fetch**: Tìm kiếm thông tin web công khai và đọc trang HTML/Markdown (`web_search`, `http_request`)
 - [ ] **Interactive Browser Automation (Playwright / Puppeteer MCP)**: Tự động tương tác với website phức tạp đòi hỏi JavaScript (click nút, điền form, chụp ảnh màn hình web, xử lý captcha)
 - [ ] **Chrome DevTools Protocol (CDP) Bridge**: Kết nối trực tiếp vào trình duyệt Google Chrome đang mở của người dùng qua Remote Debugging Port để đọc cookies/session và điều khiển tab

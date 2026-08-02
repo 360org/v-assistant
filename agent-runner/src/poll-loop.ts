@@ -460,7 +460,11 @@ export async function executeAgentLoop(
       });
 
       log(`Tool result (${tc.name}): ${result.content.slice(0, 200)}...`);
-      if (result.content.includes('PERMISSION_REQUEST:') || result.content.includes('APPROVAL_REQUIRED:')) {
+      if (
+        result.content.includes('PERMISSION_REQUEST:') ||
+        result.content.includes('APPROVAL_REQUIRED:') ||
+        result.content.startsWith('INTERACTIVE_QUESTION_PENDING:')
+      ) {
         return { text: result.content, continuation: sessionContinuation };
       }
     }

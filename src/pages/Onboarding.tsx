@@ -163,7 +163,7 @@ export function Onboarding() {
                 </p>
               )}
               <div className="mt-6 flex flex-col gap-2.5">
-                {PROVIDERS.map((p) => (
+                {PROVIDERS.filter((p) => p.id !== "openrouter").map((p) => (
                   <button
                     key={p.id}
                     disabled={signingIn !== null}

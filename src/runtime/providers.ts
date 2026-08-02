@@ -84,6 +84,7 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o-mini",
   claude: "claude-sonnet-5",
   gemini: "gemini-3.6-flash-high",
+  "grok-cli": "grok-beta",
   openrouter: "openrouter/auto",
   local: "llama3.2",
 };
@@ -100,6 +101,7 @@ export const ROUTED_MODELS: Record<ProviderId, string> = {
   chatgpt: "openai/gpt-4o-mini",
   claude: "anthropic/claude-sonnet-4-5",
   gemini: "google/gemini-flash-1.5",
+  "grok-cli": "x-ai/grok-beta",
   openrouter: "openrouter/auto",
   local: "",
 };
@@ -126,6 +128,7 @@ export const SUBSCRIPTION_MODELS: Record<ProviderId, string> = {
   chatgpt: "gpt-4o",
   claude: "claude-sonnet-5",
   gemini: "gemini-3.6-flash-medium",
+  "grok-cli": "grok-beta",
   openrouter: "openrouter/auto",
   local: "",
 };
@@ -194,6 +197,10 @@ export const MODELS: Record<ProviderId, { id: string; name: string }[]> = {
     { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)" },
     { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)" },
     { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)" },
+  ],
+  "grok-cli": [
+    { id: "grok-beta", name: "Grok Beta" },
+    { id: "grok-2", name: "Grok 2" },
   ],
   openrouter: [
     { id: "openrouter/auto", name: "Auto (best available)" },

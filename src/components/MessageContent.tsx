@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ShieldAlert, CheckCircle2, XCircle, Copy, Check } from "lucide-react";
+import { ShieldAlert, CheckCircle2, XCircle, Copy, Check, HelpCircle, Send } from "lucide-react";
 
 /**
  * Provider reasoning is transport metadata, not chat content. Keeping an
@@ -278,26 +278,54 @@ export function MessageContent({
   content,
   assistant,
   onApprovePermission,
+  onAnswerQuestion,
 }: {
   content: string;
   assistant: boolean;
   onApprovePermission?: (path: string) => Promise<void>;
+  onAnswerQuestion?: (answer: string) => Promise<void>;
 }) {
   const [permissionStatus, setPermissionStatus] = useState<"pending" | "approved" | "denied">("pending");
+  const [questionStatus, setQuestionStatus] = useState<"pending" | "answered">("pending");
+  const [selectedAnswer, setSelectedAnswer] = useState("");
+  const [textAnswer, setTextAnswer] = useState("");
   const visible = assistant ? visibleAssistantText(content) : content;
-  const permissionMatch = content.match(/^\[\[VUA_PERMISSION:(.+)\]\]$/);
-  const legacyPermission = content.match(/^(?:Tool error: Access denied: agent tools are restricted to the assigned workspace\. )?PERMISSION_REQUEST:\s*(\S+)$/);
-  let detectedPath: string | null = null;
+
+  // Detect interactive question payload
+  const interactiveQuestionMatch = visible.match(/^INTERACTIVE_QUESTION_PENDING:\s*(\{[\s\S]+\})$/);
+  let questionPayload: { questionId: string; question: string; options?: string[] } | null = null;
   try {
-    const jsonPath = permissionMatch ? JSON.parse(permissionMatch[1]).path : null;
-    if (jsonPath) detectedPath = jsonPath;
+    if (interactiveQuestionMatch) {
+      questionPayload = JSON.parse(interactiveQuestionMatch[1]);
+    }
   } catch {
-    // Invalid permission envelopes remain hidden instead of becoming actionable UI.
+    // Ignore parse errors
   }
-  if (!detectedPath && legacyPermission) {
-    detectedPath = legacyPermission[1];
+
+  const permissionMatch = content.match(/^\[\[VUA_PERMISSION:(.+)\]\]$/);
+  const legacyPermissionMatch = content.match(/^(?:Tool error: Access denied: agent tools are restricted to the assigned workspace\. )?PERMISSION_REQUEST:\s*(.+)$/);
+
+  let detectedPath: string | null = null;
+
+  // 1. Ưu tiên định dạng JSON VUA_PERMISSION
+  try {
+    if (permissionMatch) {
+      const jsonPath = JSON.parse(permissionMatch[1]).path;
+      if (jsonPath) {
+        detectedPath = jsonPath;
+      }
+    }
+  } catch {
+    // Các envelope quyền không hợp lệ sẽ bị ẩn đi thay vì trở thành UI có thể tương tác.
   }
-  const blocks = parseMarkdownBlocks(permissionMatch || (legacyPermission && detectedPath) ? "" : visible);
+
+  // 2. Nếu chưa tìm thấy, quay lại định dạng văn bản PERMISSION_REQUEST cũ
+  if (!detectedPath && legacyPermissionMatch) {
+    detectedPath = legacyPermissionMatch[1];
+  }
+
+  // Nếu detectedPath hoặc questionPayload có giá trị, chúng ta đang hiển thị thẻ tương tác, không cần parse markdown cho nội dung khác.
+  const blocks = parseMarkdownBlocks((detectedPath || questionPayload) ? "" : visible);
 
   return (
     <div className="space-y-2 leading-relaxed">
@@ -433,6 +461,75 @@ export function MessageContent({
           {permissionStatus === "denied" && (
             <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-400">
               <XCircle className="size-4" /> Đã từ chối quyền truy cập thư mục.
+            </div>
+          )}
+        </div>
+      )}
+
+      {assistant && questionPayload && onAnswerQuestion && (
+        <div className="my-3 rounded-xl border border-gold-500/40 bg-neutral-950/90 p-3.5 shadow-md">
+          <div className="flex items-center gap-2 text-xs font-semibold text-gold-400">
+            <HelpCircle className="size-4 text-gold-400 shrink-0" />
+            <span>Yêu cầu xác nhận thông tin (Interactive Question)</span>
+          </div>
+          <div className="mt-2 text-sm text-neutral-200 font-medium">
+            {questionPayload.question}
+          </div>
+
+          {questionStatus === "pending" && (
+            <div className="mt-3">
+              {questionPayload.options && questionPayload.options.length > 0 ? (
+                // Render multiple choice options
+                <div className="flex flex-wrap gap-2">
+                  {questionPayload.options.map((opt, oIdx) => (
+                    <button
+                      key={oIdx}
+                      onClick={() => {
+                        setSelectedAnswer(opt);
+                        setQuestionStatus("answered");
+                        void onAnswerQuestion(opt);
+                      }}
+                      className="cursor-pointer rounded-lg border border-neutral-700 bg-neutral-900 px-3.5 py-1.5 text-xs text-neutral-200 hover:border-gold-500/50 hover:bg-gold-500/10 transition-colors active:scale-95"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                // Render text input field
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!textAnswer.trim()) return;
+                    setSelectedAnswer(textAnswer);
+                    setQuestionStatus("answered");
+                    void onAnswerQuestion(textAnswer);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={textAnswer}
+                    onChange={(e) => setTextAnswer(e.target.value)}
+                    placeholder="Nhập câu trả lời của bạn..."
+                    className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200 focus:border-gold-500 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!textAnswer.trim()}
+                    className="flex cursor-pointer items-center justify-center rounded-lg bg-gold-500 px-3 py-1.5 text-xs font-semibold text-neutral-950 shadow-xs hover:bg-gold-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Send className="size-3.5" />
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {questionStatus === "answered" && (
+            <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gold-400 bg-gold-500/5 border border-gold-500/20 rounded-lg px-2.5 py-1.5">
+              <Check className="size-4 shrink-0 text-emerald-400" />
+              <span>Đã trả lời: <strong className="text-neutral-100">{selectedAnswer}</strong>. Agent đang tiếp tục xử lý...</span>
             </div>
           )}
         </div>

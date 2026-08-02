@@ -114,6 +114,14 @@ export function getOutboundDb(): DatabaseHandle {
     `);
 
     _outbound.exec(`
+      CREATE TABLE IF NOT EXISTS outbound_delivery_ack (
+        message_id  TEXT PRIMARY KEY,
+        status      TEXT NOT NULL DEFAULT 'delivered',
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+
+    _outbound.exec(`
       CREATE TABLE IF NOT EXISTS session_state (
         key         TEXT PRIMARY KEY,
         value       TEXT NOT NULL,
@@ -150,8 +158,18 @@ export function clearStaleProcessingAcks(): void {
 }
 
 /**
- * Close all database connections (for graceful shutdown).
+ * Open inbound.db read-write (for host/adapters to insert incoming messages).
  */
+export function openInboundDbWritable(): DatabaseHandle {
+  if (!fs.existsSync(DEFAULT_INBOUND_PATH)) {
+    createInboundSchema(DEFAULT_INBOUND_PATH);
+  }
+  const db = openDatabase(DEFAULT_INBOUND_PATH);
+  db.exec('PRAGMA busy_timeout = 5000');
+  db.exec('PRAGMA mmap_size = 0');
+  return db;
+}
+
 export function closeAll(): void {
   if (_inbound) {
     _inbound.close();

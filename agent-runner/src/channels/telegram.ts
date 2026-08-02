@@ -15,7 +15,7 @@
  * Every turn is also written to `messages_out` (channel_type `telegram`, thread
  * = chat id) so the app can show the conversation when it is open.
  */
-import { getContinuation, setContinuation, getTranscript, setTranscript, sessionIdFor, writeMessageOut } from '../db/index.js';
+import { getContinuation, setContinuation, getTranscript, setTranscript, sessionIdFor, writeMessageOut, writeMessageIn, getOutboundDb, markOutboundDelivered, isOutboundDelivered } from '../db/index.js';
 import { executeAgentLoop, type PollLoopConfig } from '../poll-loop.js';
 import { learnFromExchange } from '../memory/self-improve.js';
 import type { RoutingContext } from '../formatter.js';
@@ -114,66 +114,35 @@ export async function notifyTelegram(text: string): Promise<boolean> {
   }
 }
 
-/** Mirror one Telegram turn into the outbound queue so the UI can show it. */
-function recordTurn(chatId: number, role: 'user' | 'assistant', text: string): void {
+/**
+ * Route one incoming Telegram message into the inbound SQLite queue.
+ * (Task 1: Router — Channel -> inbound.db)
+ */
+export async function handleMessage(config: PollLoopConfig, chatId: number, text: string): Promise<void> {
   const routing = telegramRouting(chatId);
-  writeMessageOut({
+
+  // If start command, write direct greeting back to outbox, else route inbound
+  if (text.startsWith('/start')) {
+    writeMessageOut({
+      id: generateId(),
+      kind: 'chat',
+      platform_id: routing.platformId,
+      channel_type: routing.channelType,
+      thread_id: routing.threadId,
+      content: JSON.stringify({ text: GREETING }),
+    });
+    return;
+  }
+
+  log(`Routing Telegram message from chat ${chatId} into inbound queue`);
+  await writeMessageIn({
     id: generateId(),
     kind: 'chat',
     platform_id: routing.platformId,
     channel_type: routing.channelType,
     thread_id: routing.threadId,
-    content: JSON.stringify({ text, role, chatId }),
+    content: JSON.stringify({ text }),
   });
-}
-
-/**
- * Answer one Telegram message. Exported so the channel can be tested without
- * driving the poll loop.
- */
-export async function handleMessage(config: PollLoopConfig, chatId: number, text: string): Promise<void> {
-  if (text.startsWith('/start')) {
-    await sendMessage(chatId, GREETING);
-    return;
-  }
-
-  const routing = telegramRouting(chatId);
-  const sessionId = sessionIdFor(config.agentId || 'default', routing);
-  recordTurn(chatId, 'user', text);
-
-  try {
-    const priorTranscript = getTranscript(sessionId);
-    const result = await executeAgentLoop(
-      config,
-      text,
-      getContinuation(sessionId, config.providerName),
-      routing,
-      config.systemContext,
-      priorTranscript,
-    );
-    if (result.continuation) setContinuation(sessionId, config.providerName, result.continuation);
-
-    const reply = result.text?.trim();
-    if (!reply) {
-      await sendMessage(chatId, '…');
-      return;
-    }
-    setTranscript(sessionId, [
-      ...priorTranscript,
-      { role: 'user', content: text },
-      { role: 'assistant', content: reply },
-    ]);
-    recordTurn(chatId, 'assistant', reply);
-    await sendMessage(chatId, reply);
-    // A Telegram conversation teaches the role as much as one in the app.
-    if (config.agentDir) {
-      void learnFromExchange(config, config.agentDir, { user: text, assistant: reply });
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log(`Turn failed for chat ${chatId}: ${message}`);
-    await sendMessage(chatId, `⚠️ ${message}`).catch(() => undefined);
-  }
 }
 
 /**
@@ -227,9 +196,68 @@ export async function runTelegramLoop(config: PollLoopConfig, signal?: AbortSign
   }
 }
 
+/**
+ * Scan outbound queue and deliver pending Telegram replies.
+ * (Task 2 & 3: Delivery with Response Registry — outbound.db -> Channel)
+ */
+export async function runTelegramDeliveryLoop(config: PollLoopConfig, signal?: AbortSignal): Promise<void> {
+  while (!signal?.aborted) {
+    try {
+      if (!(await telegramConfigured())) {
+        await sleep(RETRY_MS, signal);
+        continue;
+      }
+
+      const outbound = getOutboundDb();
+      // Fetch recent outbound messages for Telegram
+      const pending = outbound
+        .prepare(
+          `SELECT id, content, thread_id FROM messages_out
+           WHERE channel_type = 'telegram'
+           ORDER BY seq ASC
+           LIMIT 50`
+        )
+        .all() as Array<{ id: string; content: string; thread_id: string | null }>;
+
+      for (const row of pending) {
+        if (signal?.aborted) return;
+        if (isOutboundDelivered(row.id)) continue;
+
+        const chatId = row.thread_id ? Number(row.thread_id) : null;
+        if (!chatId) {
+          markOutboundDelivered([row.id]);
+          continue;
+        }
+
+        let text = '';
+        try {
+          const payload = JSON.parse(row.content);
+          text = typeof payload.text === 'string' ? payload.text : String(payload);
+        } catch {
+          text = row.content;
+        }
+
+        if (text) {
+          log(`Delivering outbound message id ${row.id} to Telegram chat ${chatId}`);
+          await sendMessage(chatId, text);
+        }
+
+        markOutboundDelivered([row.id]);
+      }
+    } catch (error) {
+      log(`Delivery failed loop: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    await sleep(IDLE_MS, signal);
+  }
+}
+
 /** Start the channel in the background. Runs until the process exits. */
 export function startTelegramChannel(config: PollLoopConfig): void {
   void runTelegramLoop(config, config.signal).catch((error) => {
-    log(`Channel stopped: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Channel receiver stopped: ${error instanceof Error ? error.message : String(error)}`);
+  });
+  void runTelegramDeliveryLoop(config, config.signal).catch((error) => {
+    log(`Channel deliverer stopped: ${error instanceof Error ? error.message : String(error)}`);
   });
 }

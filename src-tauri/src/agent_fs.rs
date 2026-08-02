@@ -103,13 +103,23 @@ fn readable_path(workspace: &Path, approved_roots: &[String], input: &str) -> Re
     if trimmed.is_empty() {
         return Err("path is required".to_string());
     }
-    let target = realpath_best_effort(&lexical_normalize(&realpath_best_effort(workspace).join(trimmed)));
-    let mut roots = vec![realpath_best_effort(workspace)];
-    roots.extend(approved_roots.iter().filter_map(|root| std::fs::canonicalize(root).ok()));
-    if roots.iter().any(|root| target.starts_with(root)) {
-        return Ok(target);
+    // Chuẩn hóa target path
+    let target_normalized = realpath_best_effort(&lexical_normalize(&realpath_best_effort(workspace).join(trimmed)));
+
+    let mut all_roots_normalized = vec![realpath_best_effort(workspace)];
+
+    // Chuẩn hóa tất cả approved_roots bằng realpath_best_effort và lexical_normalize
+    for root_str in approved_roots {
+        let root_path = PathBuf::from(root_str);
+        all_roots_normalized.push(realpath_best_effort(&lexical_normalize(&root_path)));
     }
-    Err(format!("{ACCESS_DENIED}. PERMISSION_REQUEST: {}", target.to_string_lossy()))
+
+    // Kiểm tra xem target_normalized có bắt đầu bằng bất kỳ root nào đã được chuẩn hóa không
+    if all_roots_normalized.iter().any(|root| target_normalized.starts_with(root)) {
+        return Ok(target_normalized);
+    }
+
+    Err(format!("{ACCESS_DENIED}. PERMISSION_REQUEST: {}", target_normalized.to_string_lossy()))
 }
 
 pub fn read(workspace: &Path, approved_roots: &[String], path: &str) -> Result<String, String> {

@@ -15,8 +15,19 @@ function log(msg: string): void {
   console.error(`[agent-runner] ${msg}`);
 }
 
+import { startBuiltinMcpServer } from './mcp-tools/index.js';
+
 async function main(): Promise<void> {
   const config = loadConfig();
+
+  // If called with --mcp, start the built-in JSON-RPC stdio MCP server
+  // (Task 4: Built-in MCP Server)
+  if (process.argv.includes('--mcp')) {
+    log('Starting V-Assistant Built-in stdio MCP Server');
+    startBuiltinMcpServer();
+    return;
+  }
+
   const providerName = config.provider.toLowerCase() as ProviderName;
 
   log(`Starting V-Assistant Agent Runner v0.1.0`);

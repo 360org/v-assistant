@@ -123,3 +123,55 @@ export function markCompleted(ids: string[]): void {
     stmt.run(id);
   }
 }
+
+export interface WriteMessageIn {
+  id: string;
+  kind?: string;
+  process_after?: string | null;
+  recurrence?: string | null;
+  trigger?: number;
+  platform_id?: string | null;
+  channel_type?: string | null;
+  thread_id?: string | null;
+  content: string;
+}
+
+/**
+ * Write a new inbound message (host/adapter side), auto-assigning an even seq number.
+ * Host/Tauri uses even seq (2, 4, 6...), Runner uses odd (1, 3, 5...).
+ */
+export async function writeMessageIn(msg: WriteMessageIn): Promise<number> {
+  const { openInboundDbWritable, getOutboundDb } = await import('./connection.js');
+  const inbound = openInboundDbWritable();
+  const outbound = getOutboundDb();
+
+  try {
+    // Read max seq from both DBs to maintain global ordering
+    const maxIn = (inbound.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM messages_in').get() as { m: number }).m;
+    const maxOut = (outbound.prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM messages_out').get() as { m: number }).m;
+    const max = Math.max(maxIn, maxOut);
+    const nextSeq = max % 2 === 0 ? max + 2 : max + 1; // next even
+
+    inbound
+      .prepare(
+        `INSERT INTO messages_in (id, seq, kind, timestamp, status, process_after, recurrence, tries, trigger, platform_id, channel_type, thread_id, content)
+         VALUES (?, ?, ?, datetime('now'), 'pending', ?, ?, 0, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        msg.id,
+        nextSeq,
+        msg.kind ?? 'chat',
+        msg.process_after ?? null,
+        msg.recurrence ?? null,
+        msg.trigger ?? 1,
+        msg.platform_id ?? null,
+        msg.channel_type ?? null,
+        msg.thread_id ?? null,
+        msg.content
+      );
+
+    return nextSeq;
+  } finally {
+    inbound.close();
+  }
+}

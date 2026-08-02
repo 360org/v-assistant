@@ -51,7 +51,6 @@ export function OAuthCallbackPage() {
     // to the app instead so completeOAuthReturn can exchange the saved code.
     setTimeout(() => {
       if (window.opener) window.close();
-      else window.location.replace("/");
     }, 1200);
   }
 
@@ -76,7 +75,11 @@ export function OAuthCallbackPage() {
           <>
             <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
             <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Authorization Successful</h1>
-            <p style={{ color: "#a3a3a3", fontSize: 14 }}>This window will close automatically…</p>
+            <p style={{ color: "#a3a3a3", fontSize: 14 }}>
+              {window.opener
+                ? "This window will close automatically…"
+                : "Đăng nhập thành công! Bạn có thể đóng tab này và quay lại ứng dụng V Assistant."}
+            </p>
           </>
         ) : (
           <>

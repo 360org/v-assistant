@@ -16,7 +16,8 @@ pub mod vault;
 
 use knowledge::{KnowledgeContent, KnowledgeRecord};
 use runtime::{AgentConfig, OutboundMessage, Runtime, RuntimeStatus};
-use tauri::Manager;
+use tauri::{Manager, Emitter};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 #[tauri::command]
 fn runtime_status(state: tauri::State<Runtime>) -> RuntimeStatus {
@@ -386,6 +387,36 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new()
+            .with_shortcuts(["Cmd+Shift+Q", "Cmd+Shift+R", "Cmd+Shift+E"]).unwrap()
+            .with_handler(|app, shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    match shortcut.to_string().as_str() {
+                        "Cmd+Shift+Q" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.is_visible().map(|visible| {
+                                    if visible {
+                                        let _ = window.hide();
+                                    } else {
+                                        let _ = window.show();
+                                        let _ = window.set_focus();
+                                    }
+                                });
+                            }
+                        }
+                        "Cmd+Shift+R" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.eval("window.location.reload()");
+                            }
+                        }
+                        "Cmd+Shift+E" => {
+                            let _ = app.emit("global-shortcut", "Cmd+Shift+E");
+                        }
+                        _ => {}
+                    }
+                }
+            })
+            .build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {

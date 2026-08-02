@@ -20,14 +20,35 @@ try {
   });
 
   const definitions = tools.getBuiltinToolDefinitions();
-  assert.deepEqual(definitions.map((tool) => tool.name), ['send_message', 'send_file', 'edit_message', 'add_reaction']);
+  assert.deepEqual(definitions.map((tool) => tool.name), ['send_message', 'send_file', 'edit_message', 'add_reaction', 'ask_user_question', 'schedule_message', 'list_scheduled', 'cancel_scheduled']);
 
   const sent = await tools.executeBuiltinTool('send_message', { text: 'hello from MCP' });
   assert.equal(sent.is_error, undefined);
 
+  const question = await tools.executeBuiltinTool('ask_user_question', { question: 'Choose a database?', options: ['sqlite', 'postgres'] });
+  assert.equal(question.is_error, undefined);
+  assert.match(question.content, /^INTERACTIVE_QUESTION_PENDING:/);
+
+  // --- Test Scheduling MCP Tools ---
+  const sched = await tools.executeBuiltinTool('schedule_message', { name: 'Test Task', prompt: 'Echo hello', schedule: 'Every day' });
+  assert.equal(sched.is_error, undefined);
+  assert.match(sched.content, /Task scheduled successfully/);
+
+  const list = await tools.executeBuiltinTool('list_scheduled', {});
+  assert.equal(list.is_error, undefined);
+  assert.match(list.content, /Test Task/);
+
+  const cancel = await tools.executeBuiltinTool('cancel_scheduled', { name: 'Test Task' });
+  assert.equal(cancel.is_error, undefined);
+  assert.match(cancel.content, /Task canceled successfully/);
+
+  const listAfter = await tools.executeBuiltinTool('list_scheduled', {});
+  assert.match(listAfter.content, /No scheduled tasks found/);
+
   const outbound = db.getOutboundDb();
-  const message = outbound.prepare('SELECT kind, platform_id, channel_type, thread_id, in_reply_to, content FROM messages_out').get();
-  assert.deepEqual(message, {
+  const messages = outbound.prepare('SELECT kind, platform_id, channel_type, thread_id, in_reply_to, content FROM messages_out ORDER BY seq ASC').all();
+  assert.equal(messages.length, 2);
+  assert.deepEqual(messages[0], {
     kind: 'chat',
     platform_id: 'test-platform',
     channel_type: 'chat',
@@ -35,6 +56,13 @@ try {
     in_reply_to: 'inbound-1',
     content: JSON.stringify({ text: 'hello from MCP' }),
   });
+
+  const parsedContent = JSON.parse(messages[1].content);
+  assert.equal(messages[1].kind, 'chat');
+  assert.equal(parsedContent.type, 'user_question');
+  assert.equal(parsedContent.question, 'Choose a database?');
+  assert.deepEqual(parsedContent.options, ['sqlite', 'postgres']);
+  assert.ok(parsedContent.questionId.startsWith('q-'));
 
   const unknown = await tools.executeBuiltinTool('does_not_exist', {});
   assert.equal(unknown.is_error, true);

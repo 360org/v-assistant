@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronUp, Eraser, FileText, FolderOpen, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eraser, FileText, FolderOpen, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X, ClipboardList, CheckCircle2 } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ export function Chat() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSharedMedia, setShowSharedMedia] = useState(false);
+  const [showTasksPanel, setShowTasksPanel] = useState(true);
   const [mediaTab, setMediaTab] = useState<"media" | "link" | "docs">("media");
 
   const {
@@ -66,6 +67,7 @@ export function Chat() {
     agents,
     activeBackgroundTasks,
     stopBackgroundTask,
+    activeSessionTasks,
   } = useApp();
   const [input, setInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -474,6 +476,10 @@ export function Chat() {
       (message) => message.role === "user" && message.content.includes(path),
     );
     await send(request?.content ?? `Đã duyệt quyền đọc thư mục: 📁 ${path}. Hãy tiếp tục yêu cầu trước đó.`, true);
+  };
+
+  const answerQuestion = async (answer: string) => {
+    await send(answer, true);
   };
 
   const send = async (customText?: string, resend = false) => {
@@ -1006,6 +1012,16 @@ export function Chat() {
             <Search className="size-4" />
           </button>
           <button
+            onClick={() => setShowTasksPanel((prev) => !prev)}
+            title="Nhiệm vụ Agent (Agent Plan)"
+            className={cn(
+              "cursor-pointer rounded-lg p-1.5 transition-colors",
+              showTasksPanel ? "bg-gold-400/20 text-gold-300" : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
+            )}
+          >
+            <ClipboardList className="size-4" />
+          </button>
+          <button
             onClick={() => setShowSharedMedia((prev) => !prev)}
             title="Shared Media & Files"
             className={cn(
@@ -1111,6 +1127,7 @@ export function Chat() {
                           content={m.content}
                           assistant={m.role === "assistant"}
                           onApprovePermission={approveReadPath}
+                          onAnswerQuestion={answerQuestion}
                         />
                       ) : streaming && idx === filteredMessages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">
@@ -1161,6 +1178,89 @@ export function Chat() {
               );
             })}
             <div ref={bottomRef} />
+          </div>
+        )}
+
+        {/* Task Progress & Plan Panel (Task 7: Kanban / Plan visualization) */}
+        {showTasksPanel && activeSessionTasks.length > 0 && (
+          <div className="w-80 shrink-0 border-l border-neutral-850 bg-neutral-950 flex flex-col h-full animate-in slide-in-from-right duration-200">
+            <div className="p-4 border-b border-neutral-850 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gold-400 flex items-center gap-2">
+                <ClipboardList className="size-4" />
+                Nhiệm vụ Agent (Plan)
+              </span>
+              <button
+                onClick={() => setShowTasksPanel(false)}
+                className="text-neutral-500 hover:text-neutral-350"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {/* 1. DOING (IN PROGRESS) */}
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gold-500/80 flex items-center justify-between">
+                  <span>Đang làm (Doing)</span>
+                  <span className="rounded bg-gold-500/10 px-1.5 py-0.5 text-gold-400">
+                    {activeSessionTasks.filter(t => t.status === "in_progress").length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {activeSessionTasks.filter(t => t.status === "in_progress").map((task) => (
+                    <div key={task.id} className="rounded-xl border border-gold-500/30 bg-gold-500/5 p-3 flex items-start gap-2.5 shadow-sm">
+                      <Loader2 className="size-4 text-gold-400 animate-spin mt-0.5 shrink-0" />
+                      <span className="text-xs font-medium text-gold-200 leading-relaxed">{task.name}</span>
+                    </div>
+                  ))}
+                  {activeSessionTasks.filter(t => t.status === "in_progress").length === 0 && (
+                    <div className="text-[11px] text-neutral-600 italic px-1 py-1">Không có task nào đang làm</div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. TO DO (PENDING) */}
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 flex items-center justify-between">
+                  <span>Đang chờ (To Do)</span>
+                  <span className="rounded bg-neutral-900 px-1.5 py-0.5 text-neutral-400">
+                    {activeSessionTasks.filter(t => t.status === "pending").length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {activeSessionTasks.filter(t => t.status === "pending").map((task) => (
+                    <div key={task.id} className="rounded-xl border border-neutral-900 bg-neutral-900/40 p-3 flex items-start gap-2.5">
+                      <div className="size-3.5 rounded-full border border-neutral-700 mt-0.5 shrink-0" />
+                      <span className="text-xs text-neutral-400 leading-relaxed">{task.name}</span>
+                    </div>
+                  ))}
+                  {activeSessionTasks.filter(t => t.status === "pending").length === 0 && (
+                    <div className="text-[11px] text-neutral-650 italic px-1 py-1">Không có task nào đang chờ</div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. DONE (COMPLETED) */}
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-500/80 flex items-center justify-between">
+                  <span>Đã xong (Done)</span>
+                  <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-400">
+                    {activeSessionTasks.filter(t => t.status === "completed").length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {activeSessionTasks.filter(t => t.status === "completed").map((task) => (
+                    <div key={task.id} className="rounded-xl border border-neutral-900/60 bg-neutral-950 p-3 flex items-start gap-2.5 opacity-65">
+                      <CheckCircle2 className="size-4 text-emerald-500 mt-0.5 shrink-0" />
+                      <span className="text-xs text-neutral-500 line-through leading-relaxed">{task.name}</span>
+                    </div>
+                  ))}
+                  {activeSessionTasks.filter(t => t.status === "completed").length === 0 && (
+                    <div className="text-[11px] text-neutral-650 italic px-1 py-1">Chưa hoàn thành task nào</div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

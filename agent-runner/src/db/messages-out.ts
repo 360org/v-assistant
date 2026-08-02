@@ -111,3 +111,28 @@ export function getRoutingBySeq(seq: number): {
     .get(seq) as { channel_type: string | null; platform_id: string | null; thread_id: string | null } | undefined;
   return inRow ?? null;
 }
+
+/**
+ * Mark outbound messages as delivered in the outbound_delivery_ack table.
+ */
+export function markOutboundDelivered(ids: string[]): void {
+  const outbound = getOutboundDb();
+  const stmt = outbound.prepare(
+    `INSERT OR REPLACE INTO outbound_delivery_ack (message_id, status, updated_at)
+     VALUES (?, 'delivered', datetime('now'))`
+  );
+  for (const id of ids) {
+    stmt.run(id);
+  }
+}
+
+/**
+ * Check if an outbound message has already been delivered.
+ */
+export function isOutboundDelivered(id: string): boolean {
+  const outbound = getOutboundDb();
+  const row = outbound
+    .prepare('SELECT status FROM outbound_delivery_ack WHERE message_id = ?')
+    .get(id) as { status: string } | undefined;
+  return !!row;
+}

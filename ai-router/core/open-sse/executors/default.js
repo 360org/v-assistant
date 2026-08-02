@@ -122,8 +122,8 @@ export class DefaultExecutor extends BaseExecutor {
     if (rt?.baseUrl) {
       return rt.urlSuffix ? `${rt.baseUrl}${rt.urlSuffix}` : rt.baseUrl;
     }
-    if (this.provider?.startsWith?.("openai-compatible-")) {
-      const baseUrl = credentials?.providerSpecificData?.baseUrl || OPENAI_COMPAT_BASE;
+    if (this.provider?.startsWith?.("openai-compatible-") || this.provider === "ai-compatible") {
+      const baseUrl = credentials?.providerSpecificData?.baseUrl || credentials?.baseUrl || OPENAI_COMPAT_BASE;
       const normalized = baseUrl.replace(/\/$/, "");
       const path = this.provider.includes("responses") ? "/responses" : "/chat/completions";
       return `${normalized}${path}`;

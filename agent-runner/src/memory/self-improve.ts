@@ -22,12 +22,14 @@ const MAX_NOTES_PER_TURN = 3;
 const MEMORY_FILE = path.join('memory', 'memories', 'learned.md');
 
 const REFLECT_SYSTEM =
-  'You maintain a long-term memory about the user for one assistant role. ' +
-  'From the latest exchange, extract 0-3 SHORT, durable facts or preferences ' +
-  'worth remembering in future chats (e.g. "Prefers answers in Vietnamese", ' +
-  '"Runs a coffee shop called Highland"). Only stable, reusable facts — never ' +
-  'one-off task details, and never anything already in the existing memory. ' +
-  'Return ONLY a JSON array of strings; return [] if nothing is worth saving.';
+  'You maintain a long-term memory about the user and execution experiences for one assistant role. ' +
+  'From the latest exchange, extract 0-3 SHORT, durable facts, preferences, or tool execution learnings ' +
+  'worth remembering in future chats (e.g., "Prefers answers in Vietnamese", ' +
+  '"If tool X fails with path Y, use glob to find the absolute path", ' +
+  '"Runs a coffee shop called Highland"). Focus especially on tool calls that failed but were successfully corrected ' +
+  '— record the error context and the working fix so you avoid repeating the same mistake. ' +
+  'Only stable, reusable facts or execution learnings — never one-off task details, and never anything ' +
+  'already in the existing memory. Return ONLY a JSON array of strings; return [] if nothing is worth saving.';
 
 function log(msg: string): void {
   console.error(`[self-improve] ${msg}`);

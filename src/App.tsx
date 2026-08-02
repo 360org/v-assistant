@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useApp, type View } from "@/lib/store";
@@ -35,6 +35,35 @@ const pages: Record<View, React.ComponentType<any>> = {
 export default function App() {
   const { onboarded, user, view } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Listen for global shortcuts from Tauri
+  useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("global-shortcut", (event) => {
+        const shortcut = event.payload as string;
+        console.log("[Global Shortcut]", shortcut);
+
+        switch (shortcut) {
+          case "Cmd+Shift+Q":
+            // Window toggle handled by Rust
+            break;
+          case "Cmd+Shift+R":
+            // Reload handled by Rust
+            break;
+          case "Cmd+Shift+E":
+            // External editor shortcut - could trigger something in the future
+            break;
+          case "Cmd+Shift+N":
+            // New chat - could be added
+            break;
+          default:
+            break;
+        }
+      });
+    }).catch(() => {});
+  }, []);
 
   if (!onboarded || !user) {
     return <Onboarding />;

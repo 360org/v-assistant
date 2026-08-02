@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import REGISTRY from "../core/open-sse/providers/registry/index.js";
+import { PROVIDERS, PROVIDER_MODELS } from "../core/open-sse/providers/index.js";
 import { handleChatCore } from "../core/open-sse/handlers/chatCore.js";
 import { handleComboChat } from "../core/open-sse/services/combo.js";
 import {
@@ -20,6 +21,36 @@ import {
   pollForToken,
   requestDeviceCode,
 } from "../core/src/lib/oauth/providers.js";
+
+// AI Compatible registry entry, loaded directly into core registry at runtime.
+// ponytail: dynamic provider registry via API is not needed, static push covers it.
+const AI_COMPATIBLE_PROVIDER = {
+  id: "ai-compatible",
+  priority: 99,
+  alias: "ai-compatible",
+  display: {
+    name: "AI Compatible",
+    icon: "network_ping",
+    color: "#10B981",
+    notice: {
+      text: "Kết nối đến các API tương thích OpenAI / 9router / OmiRouter khác.",
+    },
+  },
+  category: "custom",
+  authType: "apikey",
+  authModes: ["apikey"],
+  transport: {
+    baseUrl: "https://api.openai.com/v1",
+    format: "openai",
+  },
+  models: [
+    { id: "auto", name: "Auto-detect / Load Models" }
+  ],
+  passthroughModels: true,
+};
+REGISTRY.push(AI_COMPATIBLE_PROVIDER);
+PROVIDERS["ai-compatible"] = AI_COMPATIBLE_PROVIDER.transport;
+PROVIDER_MODELS["ai-compatible"] = AI_COMPATIBLE_PROVIDER.models;
 
 const host = process.env.AI_ROUTER_HOST || "127.0.0.1";
 const port = Number(process.env.AI_ROUTER_PORT || 20128);
@@ -394,22 +425,28 @@ function modelsForConnections(connections, packs = []) {
 
 async function dynamicModelsForConnection(connection) {
   const provider = REGISTRY.find((entry) => entry.id === connection.provider);
-  if (!provider?.modelsFetcher?.url || !provider.passthroughModels) return [];
+  const isCompatible = connection.provider === "ai-compatible";
+  if (!isCompatible && (!provider?.modelsFetcher?.url || !provider.passthroughModels)) return [];
   try {
     const credentials = await credentialsFromVault(connection);
+    const baseUrl = credentials?.providerSpecificData?.baseUrl || credentials?.baseUrl;
+    const fetchUrl = isCompatible && baseUrl
+      ? `${baseUrl.replace(/\/$/, "")}/models`
+      : provider.modelsFetcher.url;
     const headers = {};
     const token = credentials.apiKey || credentials.accessToken;
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(provider.modelsFetcher.url, { headers });
+    const response = await fetch(fetchUrl, { headers });
     if (!response.ok) return [];
     const payload = await response.json();
     const items = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+    const provId = provider?.id || connection.provider;
     return items
       .filter((item) => typeof item?.id === "string")
       .map((item) => ({
-        id: accountModelId(provider.id, item.id, connection.id),
+        id: accountModelId(provId, item.id, connection.id),
         name: typeof item.name === "string" ? item.name : item.id,
-        provider: provider.id,
+        provider: provId,
         connectionId: connection.id,
         accountLabel: connection.accountLabel || connection.email || connection.id,
       }));
@@ -933,7 +970,19 @@ async function testConnection(id) {
   if (!connection) throw new Error("AI Router connection was not found.");
   const provider = REGISTRY.find((entry) => entry.id === connection.provider);
   let model = provider?.models?.find((item) => !item.kind || item.kind === "llm");
-  if (provider && !model && provider.passthroughModels) {
+  if (connection.provider === "ai-compatible") {
+    const dynamic = await dynamicModelsForConnection(connection);
+    const testModel = dynamic[0];
+    if (testModel) {
+      const resolved = modelAccount(testModel.id);
+      model = {
+        id: resolved.modelId.slice(connection.provider.length + 1),
+        name: testModel.name,
+      };
+    } else {
+      throw new Error("Không thể tải danh sách model từ Custom Endpoint để chạy kiểm tra.");
+    }
+  } else if (provider && !model && provider.passthroughModels) {
     const dynamic = await dynamicModelsForConnection(connection);
     const testModel = dynamic.find((item) => item.id.endsWith(":free")) || dynamic[0];
     if (testModel) model = {
@@ -941,19 +990,20 @@ async function testConnection(id) {
       name: testModel.name,
     };
   }
-  if (!provider || !model) throw new Error("This provider returned no testable language model.");
+  const provId = provider?.id || connection.provider;
+  if (!provId || !model) throw new Error("This provider returned no testable language model.");
 
   try {
     const credentials = await credentialsFromVault(connection);
     const body = {
-      model: `${provider.id}/${model.id}`,
+      model: `${provId}/${model.id}`,
       messages: [{ role: "user", content: "Reply with OK." }],
       max_tokens: 16,
       stream: false,
     };
     const result = await handleChatCore({
       body,
-      modelInfo: { provider: provider.id, model: model.id },
+      modelInfo: { provider: provId, model: model.id },
       credentials,
       connectionId: connection.id,
       apiKey: credentials.apiKey || credentials.accessToken,
