@@ -1,26 +1,26 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useApp, type View } from "@/lib/store";
 import { Sidebar } from "@/components/Sidebar";
 import { Logo } from "@/components/Logo";
-import { Onboarding } from "@/pages/Onboarding";
-import { Home } from "@/pages/Home";
-import { Chat } from "@/pages/Chat";
-import { Sessions } from "@/pages/Sessions";
-import { Agents } from "@/pages/Agents";
-import { Skills } from "@/pages/Skills";
-import { Knowledge } from "@/pages/Knowledge";
-import { MediaGallery } from "@/pages/MediaGallery";
-import { Vault } from "@/pages/Vault";
-import { Scheduled } from "@/pages/Scheduled";
-import { Integrations } from "@/pages/Integrations";
-import { Settings } from "@/pages/Settings";
 import { UpdateNotificationBanner } from "@/components/UpdateNotificationBanner";
 
-const pages: Record<View, React.ComponentType<any>> = {
+const Onboarding = lazy(() => import("@/pages/Onboarding").then(({ Onboarding }) => ({ default: Onboarding })));
+const Home = lazy(() => import("@/pages/Home").then(({ Home }) => ({ default: Home })));
+const Chat = lazy(() => import("@/pages/Chat").then(({ Chat }) => ({ default: Chat })));
+const Sessions = lazy(() => import("@/pages/Sessions").then(({ Sessions }) => ({ default: Sessions })));
+const Agents = lazy(() => import("@/pages/Agents").then(({ Agents }) => ({ default: Agents })));
+const Skills = lazy(() => import("@/pages/Skills").then(({ Skills }) => ({ default: Skills })));
+const Knowledge = lazy(() => import("@/pages/Knowledge").then(({ Knowledge }) => ({ default: Knowledge })));
+const MediaGallery = lazy(() => import("@/pages/MediaGallery").then(({ MediaGallery }) => ({ default: MediaGallery })));
+const Vault = lazy(() => import("@/pages/Vault").then(({ Vault }) => ({ default: Vault })));
+const Scheduled = lazy(() => import("@/pages/Scheduled").then(({ Scheduled }) => ({ default: Scheduled })));
+const Integrations = lazy(() => import("@/pages/Integrations").then(({ Integrations }) => ({ default: Integrations })));
+const Settings = lazy(() => import("@/pages/Settings").then(({ Settings }) => ({ default: Settings })));
+
+const pages: Partial<Record<View, typeof Home>> = {
   home: Home,
-  chat: Chat,
   sessions: Sessions,
   agents: Agents,
   skills: Skills,
@@ -31,6 +31,14 @@ const pages: Record<View, React.ComponentType<any>> = {
   integrations: Integrations,
   settings: Settings,
 };
+
+function PageFallback() {
+  return <div className="flex h-full items-center justify-center text-sm text-neutral-500">Đang tải…</div>;
+}
+
+function LazyApp({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageFallback />}>{children}</Suspense>;
+}
 
 export default function App() {
   const { onboarded, user, view } = useApp();
@@ -66,88 +74,90 @@ export default function App() {
   }, []);
 
   if (!onboarded || !user) {
-    return <Onboarding />;
+    return <LazyApp><Onboarding /></LazyApp>;
   }
 
   const Page = pages[view] || Home;
 
   return (
-    <div className="flex h-full flex-col md:flex-row">
-      {/* Mobile top bar */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-neutral-800 bg-neutral-900/40 px-4 py-2.5 md:hidden">
-        <button
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
-          className="cursor-pointer rounded-lg p-1.5 text-neutral-300 hover:bg-neutral-800"
-        >
-          <Menu className="size-5" />
-        </button>
-        <Logo className="size-7" />
-        <span className="text-sm font-semibold">V Assistant</span>
-      </header>
+    <LazyApp>
+      <div className="flex h-full flex-col md:flex-row">
+        {/* Mobile top bar */}
+        <header className="flex shrink-0 items-center gap-3 border-b border-neutral-800 bg-neutral-900/40 px-4 py-2.5 md:hidden">
+          <button
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            className="cursor-pointer rounded-lg p-1.5 text-neutral-300 hover:bg-neutral-800"
+          >
+            <Menu className="size-5" />
+          </button>
+          <Logo className="size-7" />
+          <span className="text-sm font-semibold">V Assistant</span>
+        </header>
 
-      {/* Desktop sidebar */}
-      <Sidebar className="hidden md:flex" />
+        {/* Desktop sidebar */}
+        <Sidebar className="hidden md:flex" />
 
-      {/* Mobile drawer */}
-      <AnimatePresence>
-        {menuOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 z-40 bg-black/60 md:hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMenuOpen(false)}
-            />
-            <motion.div
-              className="fixed inset-y-0 left-0 z-50 md:hidden"
-              initial={{ x: -260 }}
-              animate={{ x: 0 }}
-              exit={{ x: -260 }}
-              transition={{ type: "tween", duration: 0.2 }}
-            >
-              <Sidebar
-                className="bg-neutral-950"
-                onNavigate={() => setMenuOpen(false)}
-              />
-              <button
-                onClick={() => setMenuOpen(false)}
-                aria-label="Close menu"
-                className="absolute right-2 top-3 cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"
-              >
-                <X className="size-5" />
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-y-auto">
-        <UpdateNotificationBanner />
-        <div className="flex-1 min-h-0 relative h-full">
-          {/* Chat page is kept permanently mounted so active streaming & background agent tasks never get killed when switching views */}
-          <div className={view === "chat" ? "h-full" : "hidden"}>
-            <Chat />
-          </div>
-
-          {/* Other views */}
-          {view !== "chat" && (
-            <AnimatePresence mode="wait">
+        {/* Mobile drawer */}
+        <AnimatePresence>
+          {menuOpen && (
+            <>
               <motion.div
-                key={view}
-                className="h-full"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-40 bg-black/60 md:hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setMenuOpen(false)}
+              />
+              <motion.div
+                className="fixed inset-y-0 left-0 z-50 md:hidden"
+                initial={{ x: -260 }}
+                animate={{ x: 0 }}
+                exit={{ x: -260 }}
+                transition={{ type: "tween", duration: 0.2 }}
               >
-                <Page />
+                <Sidebar
+                  className="bg-neutral-950"
+                  onNavigate={() => setMenuOpen(false)}
+                />
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Close menu"
+                  className="absolute right-2 top-3 cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"
+                >
+                  <X className="size-5" />
+                </button>
               </motion.div>
-            </AnimatePresence>
+            </>
           )}
-        </div>
-      </main>
-    </div>
+        </AnimatePresence>
+
+        <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-y-auto">
+          <UpdateNotificationBanner />
+          <div className="flex-1 min-h-0 relative h-full">
+            {/* Chat page is kept permanently mounted so active streaming & background agent tasks never get killed when switching views */}
+            <div className={view === "chat" ? "h-full" : "hidden"}>
+              <Chat />
+            </div>
+
+            {/* Other views */}
+            {view !== "chat" && (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={view}
+                  className="h-full"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Page />
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </div>
+        </main>
+      </div>
+    </LazyApp>
   );
 }
