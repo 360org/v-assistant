@@ -4,6 +4,7 @@ import { VaultSettings } from "@/components/settings/VaultSettings";
 import { WorkspaceSettingsSection } from "@/components/settings/WorkspaceSettingsSection";
 import { AppUpdateSection } from "@/components/settings/AppUpdateSection";
 import { McpSettingsSection } from "@/components/settings/McpSettingsSection";
+import { DiagnosticsSection } from "@/components/settings/DiagnosticsSection";
 import { useApp } from "@/lib/store";
 import { t } from "@/lib/i18n";
 
@@ -30,6 +31,9 @@ export function Settings() {
 
       {/* Model capabilities run only through user-approved MCP servers. */}
       <McpSettingsSection />
+
+      {/* Redacted health/support bundle for local-first debugging. */}
+      <DiagnosticsSection />
 
       {/* General Settings (Theme, Language, Memory, Reset) */}
       <GeneralSettings />

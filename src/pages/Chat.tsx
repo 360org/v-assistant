@@ -468,16 +468,15 @@ export function Chat() {
   }, [messages, searchQuery]);
 
   const approveReadPath = async (path: string) => {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const approvedPath = await invoke<string>("grant_agent_read_path", { path });
-      await send(`Đã phê duyệt quyền đọc thư mục: ${approvedPath}. Hãy tiếp tục đọc và thực hiện yêu cầu trước đó.`);
-    } catch (error) {
-      alert(`Không thể cấp quyền đọc thư mục: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke<string>("grant_agent_read_path", { path });
+    const request = [...messages].reverse().find(
+      (message) => message.role === "user" && message.content.includes(path),
+    );
+    await send(request?.content ?? `Đã duyệt quyền đọc thư mục: 📁 ${path}. Hãy tiếp tục yêu cầu trước đó.`, true);
   };
 
-  const send = async (customText?: string) => {
+  const send = async (customText?: string, resend = false) => {
     if (!user) {
       alert("Bạn chưa đăng nhập người dùng local. Vui lòng đăng nhập tài khoản để Chat!");
       return;
@@ -558,11 +557,10 @@ export function Chat() {
       attachments: resolvedAttachments,
     };
     const assistantId = newMessageId();
-    const history = [...messages, userMessage];
-    setMessages([
-      ...history,
-      { id: assistantId, role: "assistant", content: "", createdAt: Date.now() },
-    ]);
+    const history = resend
+      ? [...messages, { id: assistantId, role: "assistant" as const, content: "", createdAt: Date.now() }]
+      : [...messages, userMessage, { id: assistantId, role: "assistant" as const, content: "", createdAt: Date.now() }];
+    setMessages(history);
 
     setStreaming(true);
     const controller = new AbortController();
@@ -1112,7 +1110,7 @@ export function Chat() {
                         <MessageContent
                           content={m.content}
                           assistant={m.role === "assistant"}
-                          onApprovePermission={(path) => void approveReadPath(path)}
+                          onApprovePermission={approveReadPath}
                         />
                       ) : streaming && idx === filteredMessages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">

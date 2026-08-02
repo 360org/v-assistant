@@ -98,8 +98,22 @@ pub fn workspace_path(workspace: &Path, input: &str) -> Result<PathBuf, String> 
     Ok(real)
 }
 
-pub fn read(workspace: &Path, path: &str) -> Result<String, String> {
-    std::fs::read_to_string(workspace_path(workspace, path)?).map_err(err)
+fn readable_path(workspace: &Path, approved_roots: &[String], input: &str) -> Result<PathBuf, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("path is required".to_string());
+    }
+    let target = realpath_best_effort(&lexical_normalize(&realpath_best_effort(workspace).join(trimmed)));
+    let mut roots = vec![realpath_best_effort(workspace)];
+    roots.extend(approved_roots.iter().filter_map(|root| std::fs::canonicalize(root).ok()));
+    if roots.iter().any(|root| target.starts_with(root)) {
+        return Ok(target);
+    }
+    Err(format!("{ACCESS_DENIED}. PERMISSION_REQUEST: {}", target.to_string_lossy()))
+}
+
+pub fn read(workspace: &Path, approved_roots: &[String], path: &str) -> Result<String, String> {
+    std::fs::read_to_string(readable_path(workspace, approved_roots, path)?).map_err(err)
 }
 
 pub fn write(workspace: &Path, path: &str, content: &str) -> Result<String, String> {
@@ -111,8 +125,8 @@ pub fn write(workspace: &Path, path: &str, content: &str) -> Result<String, Stri
     Ok(target.to_string_lossy().to_string())
 }
 
-pub fn list(workspace: &Path, path: &str) -> Result<Vec<String>, String> {
-    let target = workspace_path(workspace, if path.trim().is_empty() { "." } else { path })?;
+pub fn list(workspace: &Path, approved_roots: &[String], path: &str) -> Result<Vec<String>, String> {
+    let target = readable_path(workspace, approved_roots, if path.trim().is_empty() { "." } else { path })?;
     let mut names: Vec<String> = std::fs::read_dir(target)
         .map_err(err)?
         .filter_map(|entry| entry.ok())
@@ -170,8 +184,31 @@ mod tests {
     #[test]
     fn reads_outside_the_workspace_are_refused() {
         let ws = workspace();
-        assert!(read(&ws, "/etc/hosts").is_err());
+        assert!(read(&ws, &[], "/etc/hosts").is_err());
         assert!(write(&ws, "../escaped.txt", "x").is_err());
+    }
+
+    #[test]
+    fn approved_folders_are_readable_but_not_writable() {
+        let ws = workspace();
+        let approved = ws.parent().unwrap().join(format!("vua-approved-{}", std::process::id()));
+        std::fs::create_dir_all(&approved).unwrap();
+        std::fs::write(approved.join("note.txt"), "approved content").unwrap();
+        let grants = vec![approved.to_string_lossy().to_string()];
+        assert_eq!(read(&ws, &grants, approved.join("note.txt").to_str().unwrap()).unwrap(), "approved content");
+        assert!(write(&ws, approved.join("blocked.txt").to_str().unwrap(), "nope").is_err());
+    }
+
+    #[test]
+    fn approved_folder_match_is_component_bound() {
+        let ws = workspace();
+        let base = ws.parent().unwrap().join(format!("vua-approved-bound-{}", std::process::id()));
+        let sibling = ws.parent().unwrap().join(format!("vua-approved-bound-{}-sibling", std::process::id()));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&sibling).unwrap();
+        std::fs::write(sibling.join("secret.txt"), "nope").unwrap();
+        let grants = vec![base.to_string_lossy().to_string()];
+        assert!(read(&ws, &grants, sibling.join("secret.txt").to_str().unwrap()).is_err());
     }
 
     #[test]
@@ -179,6 +216,6 @@ mod tests {
         let ws = workspace();
         let written = write(&ws, "sub/dir/file.txt", "hello").unwrap();
         assert!(PathBuf::from(&written).starts_with(realpath_best_effort(&ws)));
-        assert_eq!(read(&ws, "sub/dir/file.txt").unwrap(), "hello");
+        assert_eq!(read(&ws, &[], "sub/dir/file.txt").unwrap(), "hello");
     }
 }

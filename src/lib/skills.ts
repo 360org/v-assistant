@@ -28,6 +28,10 @@ export interface SkillTemplate {
   prompt: string;
   /** Full instruction body, for the engine once real providers are wired. */
   instructions: string;
+  /** Nguồn skill: built-in, URL, hoặc skill tự tạo local. */
+  provenance: string;
+  /** Version tuỳ chọn từ metadata, dùng cho kiểm tra cập nhật sau này. */
+  version?: string;
 }
 
 /**
@@ -154,7 +158,7 @@ const files = import.meta.glob<string>("../../skills/*/SKILL.md", {
 });
 
 /** Maps a parsed Agent Skill onto the app's card/template shape. */
-export function toTemplate(skill: AgentSkill): SkillTemplate {
+export function toTemplate(skill: AgentSkill, provenance = "built-in"): SkillTemplate {
   return {
     id: skill.name,
     name: skill.metadata["vua-title"] ?? skill.name,
@@ -163,6 +167,8 @@ export function toTemplate(skill: AgentSkill): SkillTemplate {
     description: skill.metadata["vua-tagline"] ?? skill.description,
     prompt: skill.metadata["vua-prompt"] ?? "",
     instructions: skill.instructions,
+    provenance,
+    version: skill.metadata["vua-version"] ?? skill.metadata.version,
   };
 }
 

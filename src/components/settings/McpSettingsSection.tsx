@@ -11,7 +11,17 @@ export function McpSettingsSection() {
   const [name, setName] = useState("");
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("[]");
+  const [remoteUrl, setRemoteUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const addServerConfig = (serverName: string, server: McpServerConfig) => {
+    setMcpServers({ ...mcpServers, [serverName]: server });
+    setName("");
+    setCommand("");
+    setArgs("[]");
+    setRemoteUrl("");
+    setError(null);
+  };
 
   const addServer = () => {
     const cleanName = name.trim();
@@ -37,12 +47,27 @@ export function McpSettingsSection() {
       return;
     }
 
-    const server: McpServerConfig = { command: cleanCommand, args: parsedArgs };
-    setMcpServers({ ...mcpServers, [cleanName]: server });
-    setName("");
-    setCommand("");
-    setArgs("[]");
-    setError(null);
+    addServerConfig(cleanName, { command: cleanCommand, args: parsedArgs });
+  };
+
+  const addRemoteServer = () => {
+    let url: URL;
+    try {
+      url = new URL(remoteUrl.trim());
+    } catch {
+      setError("Remote MCP URL không hợp lệ.");
+      return;
+    }
+    if (!/^https?:$/.test(url.protocol)) {
+      setError("Remote MCP chỉ hỗ trợ http/https.");
+      return;
+    }
+    const cleanName = (name.trim() || url.hostname.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "") || "remote-mcp").slice(0, 40);
+    if (!NAME_PATTERN.test(cleanName)) {
+      setError("Tên chỉ dùng chữ, số, gạch nối hoặc gạch dưới.");
+      return;
+    }
+    addServerConfig(cleanName, { command: "npx", args: ["-y", "mcp-remote", url.toString()] });
   };
 
   const removeServer = (serverName: string) => {
@@ -78,6 +103,18 @@ export function McpSettingsSection() {
             className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400"
           />
           <input
+            value={remoteUrl}
+            onChange={(event) => setRemoteUrl(event.target.value)}
+            placeholder="Remote MCP URL, ví dụ https://api.example.com/mcp"
+            className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400"
+          />
+          <Button size="sm" variant="secondary" onClick={addRemoteServer} className="sm:col-span-2 justify-center">
+            <Plus className="size-3.5" /> Thêm remote MCP bằng URL
+          </Button>
+          <div className="sm:col-span-2 rounded-lg border border-neutral-800 bg-neutral-950/70 p-3 text-[11px] leading-relaxed text-neutral-500">
+            Remote MCP dùng bridge <code>mcp-remote</code>. Nếu server yêu cầu OAuth, bridge tự mở trình duyệt và quản lý phiên riêng; V Assistant không đưa token hoặc secret vào prompt của agent.
+          </div>
+          <input
             value={command}
             onChange={(event) => setCommand(event.target.value)}
             placeholder="Lệnh cố định, ví dụ npx"
@@ -87,7 +124,7 @@ export function McpSettingsSection() {
             value={args}
             onChange={(event) => setArgs(event.target.value)}
             placeholder='Arguments JSON, ví dụ ["-y", "@scope/server"]'
-            className="sm:col-span-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400"
+            className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 font-mono text-sm outline-none placeholder:text-neutral-600 focus:border-gold-400"
           />
         </div>
         {error && <p className="text-xs text-rose-400">{error}</p>}

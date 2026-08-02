@@ -79,13 +79,20 @@ function assertReadable(target: string): void {
 }
 
 function readPath(input: string): string {
+  const requested = needsReadApproval(input);
+  if (requested) throw new Error(`${ACCESS_DENIED}. PERMISSION_REQUEST: ${requested}`);
+  return realpathBestEffort(path.resolve(WORKSPACE_ROOT, input));
+}
+
+/** Return the exact folder the user must approve, if this path is outside grants. */
+export function needsReadApproval(input: string): string | null {
   const resolved = realpathBestEffort(path.resolve(WORKSPACE_ROOT, input));
   try {
     assertReadable(resolved);
+    return null;
   } catch {
-    throw new Error(`${ACCESS_DENIED}. PERMISSION_REQUEST: ${resolved}`);
+    return path.resolve(input);
   }
-  return resolved;
 }
 
 /**

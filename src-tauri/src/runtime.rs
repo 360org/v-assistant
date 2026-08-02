@@ -54,6 +54,9 @@ pub struct OutboundMessage {
     pub group_id: String,
     pub content: String,
     pub created_at: i64,
+    #[serde(rename = "type")]
+    pub message_type: Option<String>,
+    pub permission: Option<serde_json::Value>,
     /// Which channel produced the row — `chat`, `telegram`, … Callers filter on
     /// it so a Telegram reply is never handed to the chat window as its answer.
     pub channel_type: Option<String>,
@@ -670,10 +673,17 @@ impl Runtime {
                 let mut role = None;
                 let mut status = None;
                 let mut duration_ms = None;
+                let mut message_type = None;
+                let mut permission = None;
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(t) = parsed.get("text").and_then(|x| x.as_str()) {
                         text = t.to_string();
                     }
+                    message_type = parsed
+                        .get("type")
+                        .and_then(|x| x.as_str())
+                        .map(|x| x.to_string());
+                    permission = parsed.get("permission").cloned();
                     role = parsed
                         .get("role")
                         .and_then(|x| x.as_str())
@@ -690,6 +700,8 @@ impl Runtime {
                     group_id: "default".to_string(),
                     content: text,
                     created_at: chrono::Utc::now().timestamp(),
+                    message_type,
+                    permission,
                     channel_type,
                     thread_id,
                     role,
