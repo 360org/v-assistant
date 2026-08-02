@@ -2,7 +2,7 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
-## [Unreleased]
+## [1.1.42] — 2026-08-02
 
 ### Lớp capability local học từ OpenWork
 

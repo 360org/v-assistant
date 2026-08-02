@@ -52,6 +52,12 @@ REGISTRY.push(AI_COMPATIBLE_PROVIDER);
 PROVIDERS["ai-compatible"] = AI_COMPATIBLE_PROVIDER.transport;
 PROVIDER_MODELS["ai-compatible"] = AI_COMPATIBLE_PROVIDER.models;
 
+// Enable passthrough dynamic models for Google / Cloud Code providers to load from live Quotas API
+const geminiCliReg = REGISTRY.find(e => e.id === "gemini-cli");
+if (geminiCliReg) geminiCliReg.passthroughModels = true;
+const antigravityReg = REGISTRY.find(e => e.id === "antigravity");
+if (antigravityReg) antigravityReg.passthroughModels = true;
+
 const host = process.env.AI_ROUTER_HOST || "127.0.0.1";
 const port = Number(process.env.AI_ROUTER_PORT || 20128);
 const uiOrigin = process.env.AI_ROUTER_UI_ORIGIN || "http://localhost:1420";
@@ -409,7 +415,7 @@ function modelsForConnections(connections, packs = []) {
     // Chat only exposes models after the same Core path has passed a smoke test.
     if (connection.isActive === false || connection.testStatus !== "Verified") continue;
     const provider = REGISTRY.find((entry) => entry.id === connection.provider);
-    if (!provider || !Array.isArray(provider.models)) continue;
+    if (!provider || !Array.isArray(provider.models) || provider.passthroughModels) continue;
     for (const model of provider.models
       .filter((model) => !model.kind || model.kind === "llm")
       .map((model) => ({
@@ -426,9 +432,24 @@ function modelsForConnections(connections, packs = []) {
 async function dynamicModelsForConnection(connection) {
   const provider = REGISTRY.find((entry) => entry.id === connection.provider);
   const isCompatible = connection.provider === "ai-compatible";
-  if (!isCompatible && (!provider?.modelsFetcher?.url || !provider.passthroughModels)) return [];
+  const isGoogleCloudCode = connection.provider === "gemini-cli" || connection.provider === "antigravity";
+  if (!isCompatible && !isGoogleCloudCode && (!provider?.modelsFetcher?.url || !provider.passthroughModels)) return [];
   try {
     const credentials = await credentialsFromVault(connection);
+    if (isGoogleCloudCode) {
+      // Fetch dynamic quota from Google Cloud Code Assist API and return as model items
+      const usage = await getUsageForProvider(connection).catch(() => null);
+      if (usage && usage.quotas) {
+        return Object.keys(usage.quotas).map((modelId) => ({
+          id: accountModelId(connection.provider, modelId, connection.id),
+          name: usage.quotas[modelId].displayName || modelId,
+          provider: connection.provider,
+          connectionId: connection.id,
+          accountLabel: connection.accountLabel || connection.email || connection.id,
+        }));
+      }
+      return [];
+    }
     const baseUrl = credentials?.providerSpecificData?.baseUrl || credentials?.baseUrl;
     const fetchUrl = isCompatible && baseUrl
       ? `${baseUrl.replace(/\/$/, "")}/models`

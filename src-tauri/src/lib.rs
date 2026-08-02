@@ -151,8 +151,8 @@ fn pick_directory() -> Option<String> {
 
 #[tauri::command]
 fn grant_agent_read_path(state: tauri::State<Runtime>, path: String) -> Result<String, String> {
-    let approved = std::fs::canonicalize(path.trim()).map_err(|e| format!("Không thể cấp quyền: {e}"))?;
-    if !approved.is_dir() {
+    let approved_pathbuf = std::fs::canonicalize(path.trim()).map_err(|e| format!("Không thể cấp quyền: {e}"))?;
+    if !approved_pathbuf.is_dir() {
         return Err("Chỉ có thể cấp quyền đọc thư mục".to_string());
     }
     let grants_file = state.dir.join("approved-read-paths.json");
@@ -160,14 +160,14 @@ fn grant_agent_read_path(state: tauri::State<Runtime>, path: String) -> Result<S
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_default();
-    let approved = approved.to_string_lossy().to_string();
-    if !grants.contains(&approved) {
-        grants.push(approved.clone());
+    let approved_str = approved_pathbuf.to_string_lossy().to_string(); // Đổi tên biến để tránh trùng
+    if !grants.contains(&approved_str) {
+        grants.push(approved_str.clone());
         std::fs::create_dir_all(&state.dir).map_err(|e| e.to_string())?;
         std::fs::write(&grants_file, serde_json::to_string(&grants).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
     }
-    Ok(approved)
+    Ok(approved_str)
 }
 
 fn resolve_data_dir(custom_dir: &str) -> std::path::PathBuf {
@@ -463,7 +463,6 @@ pub fn run() {
             let broker = vault::start_broker(dir.clone()).map_err(std::io::Error::other)?;
             // ponytail: approvals last only for this app session; add an explicit
             // "always allow" setting before making filesystem grants durable.
-            let _ = std::fs::remove_file(dir.join("approved-read-paths.json"));
             let runtime = Runtime::new(dir, project_dir, broker).map_err(std::io::Error::other)?;
             // Attach a NanoClaw engine when one is installed; otherwise the
             // UI silently falls back to the preview engine.

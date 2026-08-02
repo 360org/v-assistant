@@ -1071,13 +1071,13 @@ export function Chat() {
               <h2 className="mt-4 text-lg font-semibold">
                 How can I help you today?
               </h2>
-              <p className="mt-1 max-w-sm text-sm text-neutral-500">
+              <p className="mt-1 max-w-lg text-sm text-neutral-500">
                 Write an email, summarize a document, build a plan — or pick an
                 installed agent above for specialist help.
               </p>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-2xl flex-col gap-4">
+            <div className="mx-auto flex max-w-4xl flex-col gap-4">
               {filteredMessages.map((m, idx) => {
               const isUser = m.role === "user";
               const formattedTime = new Date(m.createdAt).toLocaleTimeString("vi-VN", {
@@ -1280,7 +1280,7 @@ export function Chat() {
       <div className="border-t border-neutral-800 px-3 py-3 sm:px-6 sm:py-4">
         {/* Active Running Task Widget — Chỉ hiển thị khi có tác vụ chạy ngầm đa nhiệm thực sự (như build image, async runner) */}
         {activeBackgroundTasks.length > 0 && (
-          <div className="mx-auto mb-3 max-w-2xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/90 shadow-xl backdrop-blur-md transition-all animate-fadeIn">
+          <div className="mx-auto mb-3 max-w-4xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/90 shadow-xl backdrop-blur-md transition-all animate-fadeIn">
             <div
               onClick={() => setTaskExpanded((prev) => !prev)}
               className="flex cursor-pointer items-center justify-between px-4 py-2.5 hover:bg-neutral-850/50 transition-colors select-none"
@@ -1338,7 +1338,7 @@ export function Chat() {
         )}
         {/* Attachment files list */}
         {knowledgeFiles.filter((f) => !sentFileIds.has(f.id)).length > 0 && (
-          <div className="mx-auto mb-2 flex max-w-2xl flex-wrap gap-2 px-1">
+          <div className="mx-auto mb-2 flex max-w-4xl flex-wrap gap-2 px-1">
             {knowledgeFiles.filter((f) => !sentFileIds.has(f.id)).map((f) => (
               <div
                 key={f.id}
@@ -1380,7 +1380,7 @@ export function Chat() {
 
         {/* Slash Command / Skill Autocomplete Popup */}
         {showSlashMenu && filteredSlashSkills.length > 0 && (
-          <div className="mx-auto mb-2 max-w-2xl overflow-hidden rounded-xl border border-neutral-700 bg-neutral-950 p-1 shadow-2xl shadow-black/80">
+          <div className="mx-auto mb-2 max-w-4xl overflow-hidden rounded-xl border border-neutral-700 bg-neutral-950 p-1 shadow-2xl shadow-black/80">
             <div className="px-2.5 py-1 text-[11px] font-semibold text-gold-400 uppercase tracking-wider flex items-center justify-between">
               <span>🪄 Chọn Kỹ năng (gõ / để tìm kiếm)</span>
               <span className="text-[10px] text-neutral-500">{filteredSlashSkills.length} kết quả</span>
@@ -1410,7 +1410,7 @@ export function Chat() {
         <div
           className={cn(
             "relative mx-auto transition-all duration-200",
-            isComposerExpanded ? "max-w-4xl" : "max-w-2xl"
+            isComposerExpanded ? "max-w-6xl" : "max-w-4xl"
           )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -1558,7 +1558,7 @@ export function Chat() {
             </button>
           </div>
         </div>
-        <p className="mx-auto mt-2 max-w-2xl text-center text-[11px] text-neutral-600">
+        <p className="mx-auto mt-2 max-w-4xl text-center text-[11px] text-neutral-600">
           Enter to send · Shift+Enter for a new line
         </p>
       </div>
