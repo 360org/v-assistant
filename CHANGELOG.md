@@ -6,6 +6,9 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+### Giao diện
+- Hiển thị phiên bản hiện tại cạnh tên V Assistant trên Sidebar; giữ thông báo bản cập nhật ở khu vực Cài đặt để tránh trùng lặp.
+
 ## [1.1.41] - 2026-08-02
 
 ### Thêm mới

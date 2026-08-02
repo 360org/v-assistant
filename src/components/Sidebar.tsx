@@ -2,7 +2,6 @@ import {
   Blocks,
   Bot,
   CalendarClock,
-  Download,
   Home,
   Image as ImageIcon,
   KeyRound,
@@ -58,7 +57,12 @@ export function Sidebar({
       <div className="flex items-center gap-2.5 px-2 py-3">
         <Logo />
         <div>
-          <div className="text-sm font-semibold leading-tight">V Assistant</div>
+          <div className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
+            V Assistant
+            <span className="rounded-md border border-emerald-500/30 bg-emerald-950/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
+              v{currentVersion}
+            </span>
+          </div>
           <div className="text-xs text-neutral-500">AI for everyone</div>
         </div>
       </div>
@@ -118,14 +122,6 @@ export function Sidebar({
             <div className="flex items-center justify-between gap-1">
               <span className="truncate text-xs font-medium text-neutral-200">
                 {user?.name ?? "V Assistant"}
-              </span>
-              <span className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-950/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
-                v{currentVersion}
-                {appUpdate?.hasUpdate && (
-                  <span className="inline-flex size-4 items-center justify-center rounded-full bg-gold-400 text-neutral-950" title={`Có bản mới v${appUpdate.latestVersion}`}>
-                    <Download className="size-2.5" />
-                  </span>
-                )}
               </span>
             </div>
             <span className="mt-0.5 block truncate text-[11px] text-neutral-500">

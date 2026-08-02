@@ -2,6 +2,14 @@
 
 Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu trúc hệ thống.
 
+## [Unreleased]
+
+### Giao diện Sidebar
+
+*   Hiển thị phiên bản hiện tại cạnh tên V Assistant trên Sidebar.
+*   Giữ thông báo có bản cập nhật tại khu vực Cài đặt, tránh hiển thị cùng một
+    thông tin ở hai vị trí.
+
 ## [1.1.42] — 2026-08-02
 
 ### Lớp capability local học từ OpenWork
