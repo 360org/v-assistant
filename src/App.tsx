@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState, useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useApp, type View } from "@/lib/store";
 import { Sidebar } from "@/components/Sidebar";
@@ -99,38 +98,27 @@ export default function App() {
         <Sidebar className="hidden md:flex" />
 
         {/* Mobile drawer */}
-        <AnimatePresence>
-          {menuOpen && (
-            <>
-              <motion.div
-                className="fixed inset-0 z-40 bg-black/60 md:hidden"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setMenuOpen(false)}
+        {menuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/60 md:hidden"
+              onClick={() => setMenuOpen(false)}
+            />
+            <div className="fixed inset-y-0 left-0 z-50 md:hidden animate-[drawer-in_200ms_ease-out]">
+              <Sidebar
+                className="bg-neutral-950"
+                onNavigate={() => setMenuOpen(false)}
               />
-              <motion.div
-                className="fixed inset-y-0 left-0 z-50 md:hidden"
-                initial={{ x: -260 }}
-                animate={{ x: 0 }}
-                exit={{ x: -260 }}
-                transition={{ type: "tween", duration: 0.2 }}
+              <button
+                onClick={() => setMenuOpen(false)}
+                aria-label="Close menu"
+                className="absolute right-2 top-3 cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"
               >
-                <Sidebar
-                  className="bg-neutral-950"
-                  onNavigate={() => setMenuOpen(false)}
-                />
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  aria-label="Close menu"
-                  className="absolute right-2 top-3 cursor-pointer rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800"
-                >
-                  <X className="size-5" />
-                </button>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+                <X className="size-5" />
+              </button>
+            </div>
+          </>
+        )}
 
         <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-y-auto">
           <UpdateNotificationBanner />
@@ -142,18 +130,9 @@ export default function App() {
 
             {/* Other views */}
             {view !== "chat" && (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={view}
-                  className="h-full"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <Page />
-                </motion.div>
-              </AnimatePresence>
+              <div key={view} className="h-full animate-[page-in_150ms_ease-out]">
+                <Page />
+              </div>
             )}
           </div>
         </main>

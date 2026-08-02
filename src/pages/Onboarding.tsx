@@ -4,7 +4,6 @@
  */
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Check, Copy, Loader2 } from "lucide-react";
 import {
   INTEGRATIONS,
@@ -124,15 +123,7 @@ export function Onboarding() {
 
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.2 }}
-          className="w-full max-w-md"
-        >
+      <div key={step} className="w-full max-w-md animate-[page-in_200ms_ease-out]">
           {step === "welcome" && (
             <div className="text-center">
               <Logo className="mx-auto size-20" />
@@ -292,8 +283,7 @@ export function Onboarding() {
               </button>
             </div>
           )}
-        </motion.div>
-      </AnimatePresence>
+      </div>
 
       {connectFor && (
         <ProviderConnect
