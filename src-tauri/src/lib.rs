@@ -162,6 +162,7 @@ fn grant_agent_read_path(state: tauri::State<Runtime>, path: String) -> Result<S
     let approved = approved.to_string_lossy().to_string();
     if !grants.contains(&approved) {
         grants.push(approved.clone());
+        std::fs::create_dir_all(&state.dir).map_err(|e| e.to_string())?;
         std::fs::write(&grants_file, serde_json::to_string(&grants).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
     }
@@ -317,9 +318,16 @@ fn agent_workspace(state: &tauri::State<Runtime>) -> std::path::PathBuf {
     state.dir.join("workspace")
 }
 
+fn approved_read_paths(state: &tauri::State<Runtime>) -> Vec<String> {
+    std::fs::read_to_string(state.dir.join("approved-read-paths.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 fn agent_read_file(state: tauri::State<Runtime>, path: String) -> Result<String, String> {
-    agent_fs::read(&agent_workspace(&state), &path)
+    agent_fs::read(&agent_workspace(&state), &approved_read_paths(&state), &path)
 }
 
 #[tauri::command]
@@ -333,7 +341,7 @@ fn agent_write_file(
 
 #[tauri::command]
 fn agent_list_dir(state: tauri::State<Runtime>, path: String) -> Result<Vec<String>, String> {
-    agent_fs::list(&agent_workspace(&state), &path)
+    agent_fs::list(&agent_workspace(&state), &approved_read_paths(&state), &path)
 }
 
 #[tauri::command]
@@ -422,6 +430,9 @@ pub fn run() {
                 .unwrap_or(runtime::resolve_project_dir(app.path().resource_dir()?));
             vault::migrate_legacy_vault(&dir).map_err(std::io::Error::other)?;
             let broker = vault::start_broker(dir.clone()).map_err(std::io::Error::other)?;
+            // ponytail: approvals last only for this app session; add an explicit
+            // "always allow" setting before making filesystem grants durable.
+            let _ = std::fs::remove_file(dir.join("approved-read-paths.json"));
             let runtime = Runtime::new(dir, project_dir, broker).map_err(std::io::Error::other)?;
             // Attach a NanoClaw engine when one is installed; otherwise the
             // UI silently falls back to the preview engine.

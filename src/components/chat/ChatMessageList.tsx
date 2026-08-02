@@ -8,7 +8,7 @@ interface ChatMessageListProps {
   messages: ChatMessage[];
   streaming: boolean;
   streamingContent?: string;
-  onApprovePermission: (path: string) => void;
+  onApprovePermission: (path: string) => Promise<void>;
   onRetry: () => void;
   onOpenPreview: (att: { id: string; name: string; dataUrl?: string }) => void;
 }

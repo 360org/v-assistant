@@ -4,6 +4,29 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+### Lớp capability local học từ OpenWork
+
+*   **Capability rail nội bộ cho Agent Runner:** thêm hai tool chuẩn `search_capabilities`
+    và `execute_capability` để gom native tools, built-in delivery tools và MCP tools
+    vào một bề mặt tìm/chạy thống nhất. Agent có thể tìm khả năng trước khi chọn
+    tool cụ thể, giảm hardcode khi thêm Skills, Connectors hoặc MCP mới.
+*   **Cổng duyệt cho thao tác outward-facing/credentialed:** capability gửi tin,
+    gửi file ra kênh ngoài, sửa message hoặc gọi connector có credential bị chặn bằng
+    `APPROVAL_REQUIRED` nếu chưa có `approved=true`; Runner dừng lượt để chờ người dùng
+    duyệt, không cho model tự retry trong cùng vòng tool. Ghi/sửa file trong workspace và
+    lập lịch nội bộ vẫn chạy ngay theo `idea.md`, vì đó là capability cốt lõi đã được cấp.
+*   **Skill Store có nguồn/version:** parser và trang Skills giữ nguồn cài đặt
+    của từng skill (`built-in`, URL import hoặc skill tự tạo) cùng metadata version nếu
+    có, giúp người dùng biết skill đến từ đâu trước khi bật/dùng.
+*   **Onboarding remote MCP bằng URL:** Settings → MCP cho phép dán URL remote MCP và tự
+    sinh cấu hình `npx -y mcp-remote <url>`. OAuth/token do bridge xử lý, không đưa
+    secret vào prompt Agent.
+*   **Gói chẩn đoán hỗ trợ đã che secret:** Settings có mục Diagnostics hiển thị
+    số lượng Skills/MCP/Knowledge/Scheduled và copy gói hỗ trợ đã che API key, token,
+    password, credential để debug local runtime an toàn.
+*   **Kiểm chứng:** thêm `agent-runner/scripts/capability-rail-check.mjs` và nối vào
+    `agent-runner` test/check; root build V Assistant đã pass sau thay đổi.
+
 ## [1.1.40] — 2026-08-01
 
 ### Tài liệu khớp lại thực tế (audit theo `v-assistant-dev-guidelines`)

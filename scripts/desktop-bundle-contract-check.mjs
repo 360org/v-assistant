@@ -44,12 +44,12 @@ const assertions = [
   [
     workflow.includes("Verify packaged AI Router runtime")
       && workflow.includes("ai-router/node_modules/undici/package.json")
-      && workflow.includes('! grep -rq "better-sqlite3" "$app_path/Contents/Resources/_up_/agent-runner/dist"'),
+      && workflow.includes('! grep -rqE "from [\\"\']better-sqlite3|require\\([\\"\']better-sqlite3" "$app_path/Contents/Resources/_up_/agent-runner/dist"'),
     "macOS release workflow must inspect bundled Router dependencies and keep the Runner native-addon free",
   ],
   [
     workflow.includes("agent-runner/dist/index.js")
-      && workflow.includes('! grep -rq "better-sqlite3" agent-runner/dist'),
+      && workflow.includes('! grep -rqE "from [\\"\']better-sqlite3|require\\([\\"\']better-sqlite3" agent-runner/dist'),
     "macOS release workflow must verify the packaged Agent Runner runtime",
   ],
   [

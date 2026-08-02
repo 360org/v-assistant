@@ -16,6 +16,8 @@ export interface OutboundMessage {
   group_id: string;
   content: string;
   created_at: number;
+  type: "permission_request" | null;
+  permission: { tool: string; path: string; access: "read" } | null;
   /** `chat`, `telegram`, `scheduled` — which channel produced the row. */
   channel_type: string | null;
   thread_id: string | null;
@@ -109,7 +111,9 @@ export const nanoclawEngine: Engine = {
         after = reply.id;
         if (reply.channel_type !== "chat") continue;
         answered = true;
-        yield reply.content;
+        yield reply.type === "permission_request" && reply.permission
+          ? `[[VUA_PERMISSION:${JSON.stringify(reply.permission)}]]`
+          : reply.content;
       }
       if (answered) return;
     }

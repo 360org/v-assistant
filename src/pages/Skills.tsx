@@ -38,7 +38,7 @@ export function Skills() {
     () =>
       customSkills.flatMap((c) => {
         try {
-          return [{ template: toTemplate(smartParseSkill(c.raw)), source: c.source }];
+          return [{ template: toTemplate(smartParseSkill(c.raw), c.source), source: c.source }];
         } catch {
           return [];
         }
@@ -218,6 +218,9 @@ export function Skills() {
                 <p className="mt-1 flex-1 text-sm text-neutral-400">
                   {template.description}
                 </p>
+                <p className="mt-2 line-clamp-2 break-all text-[11px] text-neutral-600">
+                  Nguồn: {template.provenance}{template.version ? ` · v${template.version}` : ""}
+                </p>
                 <div className="mt-4 flex items-center justify-between gap-2 border-t border-neutral-800/80 pt-3">
                   <Button
                     size="sm"
@@ -279,6 +282,9 @@ export function Skills() {
                 <h3 className="mt-3 font-semibold text-neutral-100">{skill.name}</h3>
                 <p className="mt-1 flex-1 text-sm text-neutral-400">
                   {skill.description}
+                </p>
+                <p className="mt-2 text-[11px] text-neutral-600">
+                  Nguồn: {skill.provenance}{skill.version ? ` · v${skill.version}` : ""}
                 </p>
                 <div className="mt-4 flex items-center justify-between gap-2 border-t border-neutral-800/80 pt-3">
                   <Button

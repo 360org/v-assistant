@@ -22,7 +22,7 @@ process.env.VUA_AGENT_APPROVED_READ_PATHS_FILE = approvedPathsFile;
 const memoryDir = path.join(root, 'agents', 'default', 'memory');
 mkdirSync(memoryDir, { recursive: true });
 writeFileSync(path.join(memoryDir, 'index.md'), '# what I remember');
-const { executeTool } = await import('../src/native-tools/index.ts');
+const { executeTool, needsReadApproval } = await import('../src/native-tools/index.ts');
 const file = path.join(dir, 'note.txt');
 
 let pass = true;
@@ -30,6 +30,9 @@ const check = (name, cond) => {
   console.log(`${cond ? '✓' : '✗'} ${name}`);
   if (!cond) pass = false;
 };
+
+check('unapproved folders request permission', needsReadApproval(path.join(root, 'outside')) === path.join(root, 'outside'));
+check('approved folders need no permission', needsReadApproval(approvedDir) === null);
 
 // file_write → file_read
 let r = await executeTool('file_write', { path: file, content: 'hello world\nsecond line' });

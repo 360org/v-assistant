@@ -31,10 +31,17 @@ import {
   isClearCommand,
   type RoutingContext,
 } from './formatter.js';
-import { getToolDefinitions, executeTool } from './native-tools/index.js';
+import { getToolDefinitions, executeTool, needsReadApproval } from './native-tools/index.js';
 import { learnFromExchange } from './memory/self-improve.js';
 import { retrieveKnowledge, formatExcerpts } from './knowledge/index.js';
 import { mcpManager } from './mcp-client/index.js';
+import {
+  CAPABILITY_TOOL_DEFINITIONS,
+  capabilityFromTool,
+  searchCapabilities,
+  sideEffectDenied,
+  type Capability,
+} from './capability-rail.js';
 import { clearBuiltinToolContext, executeBuiltinTool, getBuiltinToolDefinitions, hasBuiltinTool, setBuiltinToolContext } from './mcp-tools/index.js';
 import type { AgentProvider, ProviderEvent, ChatMessage, ToolCall, ToolResult } from './providers/types.js';
 
@@ -149,6 +156,27 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
     // --- Format prompt and query the provider ---
     const prompt = formatMessages(normalMessages);
     log(`Processing ${normalMessages.length} message(s), prompt: ${prompt.slice(0, 100)}...`);
+
+    const requestedPath = prompt.match(/📁\s*([^\n]+)/)?.[1]?.trim();
+    if (requestedPath) {
+      const approvalPath = needsReadApproval(requestedPath);
+      if (approvalPath) {
+        writeMessageOut({
+          id: generateId(),
+          kind: 'chat',
+          platform_id: routing.platformId,
+          channel_type: routing.channelType,
+          thread_id: routing.threadId,
+          content: JSON.stringify({
+            type: 'permission_request',
+            permission: { tool: 'file_read', path: approvalPath, access: 'read' },
+          }),
+        });
+        markCompleted(ids.filter((id) => !commandIds.includes(id)));
+        await sleep(ACTIVE_POLL_INTERVAL_MS);
+        continue;
+      }
+    }
 
     // Parse routing.platformId for skill instructions
     let activeSystemContext = config.systemContext;
@@ -302,8 +330,15 @@ export async function executeAgentLoop(
   }
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    const nativeTools = getToolDefinitions();
+    const builtinTools = getBuiltinToolDefinitions();
     const mcpTools = await mcpManager.listAllTools();
-    const allTools = [...getToolDefinitions(), ...getBuiltinToolDefinitions(), ...mcpTools];
+    const capabilities: Capability[] = [
+      ...nativeTools.map((tool) => capabilityFromTool(tool, 'native')),
+      ...builtinTools.map((tool) => capabilityFromTool(tool, 'builtin')),
+      ...mcpTools.map((tool) => capabilityFromTool(tool, 'mcp')),
+    ];
+    const allTools = [...CAPABILITY_TOOL_DEFINITIONS, ...nativeTools, ...builtinTools, ...mcpTools];
 
     const query = config.provider.query({
       prompt: currentPrompt,
@@ -363,7 +398,42 @@ export async function executeAgentLoop(
       log(`Tool call: ${tc.name}(${JSON.stringify(tc.arguments).slice(0, 200)})`);
       let result: ToolResult;
       
-      if (hasBuiltinTool(tc.name)) {
+      const directCapability = capabilities.find((item) => item.name === tc.name);
+      const directDenied = directCapability ? sideEffectDenied(directCapability, tc.arguments.approved) : null;
+      if (tc.name === 'search_capabilities') {
+        result = {
+          tool_call_id: tc.id,
+          content: searchCapabilities(
+            capabilities,
+            typeof tc.arguments.query === 'string' ? tc.arguments.query : '',
+            Number(tc.arguments.limit ?? 8),
+          ),
+        };
+      } else if (tc.name !== 'execute_capability' && directDenied) {
+        result = directDenied;
+      } else if (tc.name === 'execute_capability') {
+        const capabilityName = typeof tc.arguments.name === 'string' ? tc.arguments.name : '';
+        const capability = capabilities.find((item) => item.name === capabilityName);
+        const capabilityArgs = tc.arguments.arguments && typeof tc.arguments.arguments === 'object'
+          ? tc.arguments.arguments as Record<string, unknown>
+          : {};
+        const denied = capability ? sideEffectDenied(capability, tc.arguments.approved) : null;
+        if (!capability) {
+          result = { tool_call_id: tc.id, content: `Unknown capability: ${capabilityName}`, is_error: true };
+        } else if (denied) {
+          result = denied;
+        } else if (capability.kind === 'builtin') {
+          result = await executeBuiltinTool(capability.name, capabilityArgs);
+        } else if (capability.kind === 'mcp') {
+          result = await mcpManager.executeTool(capability.name, capabilityArgs) ?? {
+            tool_call_id: tc.id,
+            content: `Error: MCP tool "${capability.name}" failed to execute or server not found`,
+            is_error: true,
+          };
+        } else {
+          result = await executeTool(capability.name, capabilityArgs);
+        }
+      } else if (hasBuiltinTool(tc.name)) {
         result = await executeBuiltinTool(tc.name, tc.arguments);
       } else if (tc.name.includes('__')) {
         const mcpResult = await mcpManager.executeTool(tc.name, tc.arguments);
@@ -390,6 +460,9 @@ export async function executeAgentLoop(
       });
 
       log(`Tool result (${tc.name}): ${result.content.slice(0, 200)}...`);
+      if (result.content.includes('PERMISSION_REQUEST:') || result.content.includes('APPROVAL_REQUIRED:')) {
+        return { text: result.content, continuation: sessionContinuation };
+      }
     }
 
     // Continue loop — LLM will see tool results and decide next action

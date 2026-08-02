@@ -281,15 +281,23 @@ export function MessageContent({
 }: {
   content: string;
   assistant: boolean;
-  onApprovePermission?: (path: string) => void;
+  onApprovePermission?: (path: string) => Promise<void>;
 }) {
   const [permissionStatus, setPermissionStatus] = useState<"pending" | "approved" | "denied">("pending");
   const visible = assistant ? visibleAssistantText(content) : content;
-  const blocks = parseMarkdownBlocks(visible);
-
-  // Detect permission request path
-  const pathMatch = content.match(/(?:Không thể truy cập|thư mục|tệp|path|PERMISSION_REQUEST[:\s]+)(?:`?)([\/][^\s`\n]+)/i);
-  const detectedPath = pathMatch ? pathMatch[1] : null;
+  const permissionMatch = content.match(/^\[\[VUA_PERMISSION:(.+)\]\]$/);
+  const legacyPermission = content.match(/^(?:Tool error: Access denied: agent tools are restricted to the assigned workspace\. )?PERMISSION_REQUEST:\s*(\S+)$/);
+  let detectedPath: string | null = null;
+  try {
+    const jsonPath = permissionMatch ? JSON.parse(permissionMatch[1]).path : null;
+    if (jsonPath) detectedPath = jsonPath;
+  } catch {
+    // Invalid permission envelopes remain hidden instead of becoming actionable UI.
+  }
+  if (!detectedPath && legacyPermission) {
+    detectedPath = legacyPermission[1];
+  }
+  const blocks = parseMarkdownBlocks(permissionMatch || (legacyPermission && detectedPath) ? "" : visible);
 
   return (
     <div className="space-y-2 leading-relaxed">
@@ -394,17 +402,17 @@ export function MessageContent({
           {permissionStatus === "pending" && (
             <>
               <p className="mt-2 text-xs text-neutral-400">
-                Nhấn <strong>Cho phép (Approve)</strong> để cấp quyền cho Agent tự động truy cập và xử lý dữ liệu trong thư mục này.
+                Cho phép Agent đọc và phân tích thư mục này. Agent chỉ bắt đầu sau khi bạn duyệt.
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <button
                   onClick={() => {
                     setPermissionStatus("approved");
-                    onApprovePermission(detectedPath);
+                    void onApprovePermission(detectedPath).catch(() => setPermissionStatus("denied"));
                   }}
                   className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-500 active:scale-95"
                 >
-                  <CheckCircle2 className="size-3.5" /> Cho phép (Approve)
+                  <CheckCircle2 className="size-3.5" /> Cho phép đọc
                 </button>
                 <button
                   onClick={() => setPermissionStatus("denied")}
@@ -418,7 +426,7 @@ export function MessageContent({
 
           {permissionStatus === "approved" && (
             <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
-              <CheckCircle2 className="size-4" /> Đã cấp quyền truy cập thành công! Agent đang tiến hành làm việc...
+              <CheckCircle2 className="size-4" /> Đã cấp quyền. Agent đang đọc thư mục...
             </div>
           )}
 
