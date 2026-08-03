@@ -51,6 +51,16 @@ export async function engineRunning(): Promise<boolean> {
   }
 }
 
+/** Get detailed desktop runtime status from Rust. */
+export async function getRuntimeStatus(): Promise<{ engine_running: boolean; ai_router_running: boolean; version: string; dir: string } | null> {
+  if (!inDesktopShell()) return null;
+  try {
+    return await invoke<{ engine_running: boolean; ai_router_running: boolean; version: string; dir: string }>("runtime_status");
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The runtime directory the Host Process actually uses (`VUA_DATA_DIR`). Files
  * shared with the runner — the scheduled-task list above all — must be written

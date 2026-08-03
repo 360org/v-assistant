@@ -4,13 +4,22 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
-## [1.1.44] — 2026-08-03
+## [1.1.45] — 2026-08-03
 
-### Vá lỗi tương thích Windows WebView2
+### Hiển thị Trạng thái và Phục hồi AI Router
 
-*   **Sửa lỗi crash khi click Sign In:** Thay thế phương thức `AbortSignal.timeout()` bằng
+*   **Sửa lỗi crash khi click Sign In trên Windows:** Thay thế phương thức `AbortSignal.timeout()` bằng
     cơ chế `AbortController` và `setTimeout` truyền thống nhằm tương thích ngược 100% với
     các phiên bản WebView2 (Microsoft Edge) cũ trên Windows, ngăn chặn lỗi crash giao diện khi bấm Login.
+*   **Hiển thị trạng thái AI Router & Agent Runner:** Thêm mục giám sát trạng thái trực quan
+    tại phần Settings -> Chẩn đoán (`AI Router: 🟢 Đang chạy` / `🔴 Đang dừng`, `Agent Runner: 🟢 Đang chạy` / `🔴 Đang dừng`).
+*   **Thêm nút restart phục hồi AI Router:** Cho phép người dùng click khởi động lại AI Router trực tiếp
+    ở giao diện Chẩn đoán. Đồng thời nút "Thử lại" khi gặp lỗi kết nối AI Router giờ sẽ tự động gọi restart
+    AI Router sidecar trước khi kết nối lại, tăng khả năng tự phục hồi.
+
+## [1.1.44] — 2026-08-03
+
+*   Bản build thử nghiệm nội bộ của AbortSignal timeout.
 
 ## [1.1.43] — 2026-08-03
 

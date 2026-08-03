@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Check, CheckCircle2, Copy, ExternalLink, KeyRound, Link, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export function ModelSettings() {
   const [connections, setConnections] = useState<AiRouterConnection[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [loadingConnections, setLoadingConnections] = useState(true);
+  const [retryingRouter, setRetryingRouter] = useState(false);
   const [showProviderManager, setShowProviderManager] = useState(false);
   const [providerCatalog, setProviderCatalog] = useState<AiRouterProvider[]>([]);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -73,6 +75,19 @@ export function ModelSettings() {
       setLoadingConnections(false);
     }
   }, []);
+
+  const handleRetryConnection = async () => {
+    setRetryingRouter(true);
+    setConnectionError(language === "en" ? "Restarting AI Router..." : "Đang khởi động lại AI Router...");
+    try {
+      await invoke("runtime_restart_ai_router");
+      await new Promise((r) => setTimeout(r, 2500));
+    } catch {
+      /* ignore in web preview */
+    }
+    await loadConnections();
+    setRetryingRouter(false);
+  };
 
   useEffect(() => {
     void loadConnections();
@@ -596,8 +611,15 @@ export function ModelSettings() {
         ) : connectionError ? (
           <div className="flex items-center justify-between gap-3 text-xs text-red-300">
             <span>⚠️ {connectionError}</span>
-            <Button size="sm" variant="secondary" onClick={() => void loadConnections()} className="cursor-pointer">
-              <RefreshCw className="size-3.5" /> {language === "en" ? "Retry" : "Thử lại"}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={retryingRouter}
+              onClick={() => void handleRetryConnection()}
+              className="cursor-pointer"
+            >
+              <RefreshCw className={cn("size-3.5", retryingRouter && "animate-spin")} />{" "}
+              {language === "en" ? "Retry" : "Thử lại"}
             </Button>
           </div>
         ) : (
