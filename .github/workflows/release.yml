@@ -320,14 +320,30 @@ jobs:
           $installer = "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
           Write-Host "Running silent installation..."
           Start-Process -FilePath $installer -ArgumentList "/S" -Wait
-          Start-Sleep -Seconds 5
+
+          # Wait up to 30 seconds for the application to be installed (CI VMs can be slow)
           $installPath = "$env:LOCALAPPDATA\Programs\V Assistant\V Assistant.exe"
-          Write-Host "Checking installation path: $installPath"
-          if (Test-Path $installPath) {
+          $found = $false
+          for ($i = 1; $i -le 30; $i++) {
+            if (Test-Path $installPath) {
+              $found = $true
+              break
+            }
+            Start-Sleep -Seconds 1
+          }
+
+          if ($found) {
             Write-Host "Verification Success: V Assistant installed successfully!"
           } else {
-            Write-Error "Verification Failed: V Assistant.exe was not found at $installPath"
-            exit 1
+            Write-Host "Verification Failed: V Assistant.exe was not found at $installPath"
+            Write-Host "Searching for V Assistant.exe in AppData..."
+            $foundFiles = Get-ChildItem -Path $env:USERPROFILE -Filter "V Assistant.exe" -Recurse -ErrorAction SilentlyContinue
+            if ($foundFiles) {
+              Write-Host "Found V Assistant.exe at: $($foundFiles[0].FullName)"
+            } else {
+              Write-Error "Verification Failed: V Assistant.exe was not found anywhere under $env:USERPROFILE."
+              exit 1
+            }
           }
 
       - name: Upload platform artifacts
