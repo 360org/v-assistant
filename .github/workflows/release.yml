@@ -317,34 +317,53 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $installer = "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
-          Write-Host "Running silent installation..."
-          Start-Process -FilePath $installer -ArgumentList "/S" -Wait
+          $nsisInstaller = "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
+          $msiInstaller = "src-tauri/target/release/bundle/msi/V Assistant_${{ needs.version.outputs.version }}_x64_en-US.msi"
+          $nsisInstallPath = "$env:LOCALAPPDATA\Programs\V Assistant\V Assistant.exe"
+          $msiInstallPath = "C:\Program Files\V Assistant\V Assistant.exe"
 
-          # Wait up to 30 seconds for the application to be installed (CI VMs can be slow)
-          $installPath = "$env:LOCALAPPDATA\Programs\V Assistant\V Assistant.exe"
-          $found = $false
-          for ($i = 1; $i -le 30; $i++) {
-            if (Test-Path $installPath) {
-              $found = $true
-              break
+          # Helper to wait for file
+          function Wait-For-File($path, $seconds) {
+            for ($i = 1; $i -le $seconds; $i++) {
+              if (Test-Path $path) { return $true }
+              Start-Sleep -Seconds 1
             }
-            Start-Sleep -Seconds 1
+            return $false
           }
 
-          if ($found) {
-            Write-Host "Verification Success: V Assistant installed successfully!"
-          } else {
-            Write-Host "Verification Failed: V Assistant.exe was not found at $installPath"
-            Write-Host "Searching for V Assistant.exe in AppData..."
-            $foundFiles = Get-ChildItem -Path $env:USERPROFILE -Filter "V Assistant.exe" -Recurse -ErrorAction SilentlyContinue
-            if ($foundFiles) {
-              Write-Host "Found V Assistant.exe at: $($foundFiles[0].FullName)"
-            } else {
-              Write-Error "Verification Failed: V Assistant.exe was not found anywhere under $env:USERPROFILE."
-              exit 1
-            }
+          Write-Host "Attempting silent installation via NSIS..."
+          # Pass /D without quotes as NSIS requires, using Start-Process
+          $process = Start-Process -FilePath $nsisInstaller -ArgumentList "/S", "/D=$env:LOCALAPPDATA\Programs\V Assistant" -Wait -PassThru -NoNewWindow
+          Write-Host "NSIS Installer ExitCode: $($process.ExitCode)"
+
+          if (Wait-For-File $nsisInstallPath 15) {
+            Write-Host "Verification Success: V Assistant installed successfully via NSIS!"
+            exit 0
           }
+
+          Write-Host "NSIS silent install did not produce file. Trying MSI installer..."
+          $msiProcess = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", "`"$msiInstaller`"", "/qn", "/norestart", "/log", "msi_install.log" -Wait -PassThru
+          Write-Host "MSI Installer ExitCode: $($msiProcess.ExitCode)"
+
+          if (Wait-For-File $msiInstallPath 15) {
+            Write-Host "Verification Success: V Assistant installed successfully via MSI!"
+            exit 0
+          }
+
+          if (Test-Path "msi_install.log") {
+            Write-Host "MSI Install Log Content:"
+            Get-Content "msi_install.log" -Tail 50
+          }
+
+          Write-Host "Searching for V Assistant.exe under User Profile..."
+          $foundFiles = Get-ChildItem -Path $env:USERPROFILE -Filter "V Assistant.exe" -Recurse -ErrorAction SilentlyContinue
+          if ($foundFiles) {
+            Write-Host "Found V Assistant.exe at: $($foundFiles[0].FullName)"
+            exit 0
+          }
+
+          Write-Error "Verification Failed: Neither NSIS nor MSI installer produced V Assistant.exe."
+          exit 1
 
       - name: Upload platform artifacts
         shell: bash
