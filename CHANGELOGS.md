@@ -4,6 +4,21 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.43] — 2026-08-03
+
+### Vá lỗi tương thích Windows
+
+*   **Sửa lỗi cài đặt NSIS (`nsis_tauri_utils.dll` could not load):** Cấu hình chế độ
+    cài đặt NSIS mặc định sang `currentUser` (không đòi hỏi quyền Admin cao cấp cho việc ghi DLL tạm thời),
+    đồng thời tích hợp thêm kiểm thử khói cài đặt âm thầm (smoke-test silent install)
+    vào CI để phát hiện sớm các lỗi đóng gói trên Windows.
+*   **Sửa lỗi kết nối OAuth AI Router:** Thêm cơ chế tự động kết nối health-check và restart
+    AI Router sidecar (chờ tối đa 2.5s) trước khi cho phép bắt đầu luồng đăng nhập thủ công,
+    tránh lỗi thô "Failed to fetch" khi AI Router khởi động chậm trên môi trường Windows.
+*   **Ngăn chặn lỗi đứng màn hình Onboarding:** Thêm cơ chế phòng vệ tại bước kết thúc Onboarding
+    khi `provider === null` (đăng nhập bị ngắt quãng hoặc fail một phần) bằng cách hiển thị thông báo lỗi
+    tiếng Việt và trả người dùng về màn hình Login để thử lại.
+
 ### Giao diện Sidebar
 
 *   Hiển thị phiên bản hiện tại cạnh tên V Assistant trên Sidebar.
