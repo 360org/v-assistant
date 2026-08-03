@@ -51,9 +51,11 @@
       "../ai-router/**/*",
       "../runtime/node/**/*"
     ],
-    "nsis": {
-      "installMode": "currentUser",
-      "displayLanguageSelector": false
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
     }
   }
 }
