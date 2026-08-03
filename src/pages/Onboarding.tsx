@@ -70,15 +70,25 @@ export function Onboarding() {
       if (inDesktopShell()) {
         // Issue #3: health-check AI Router trước khi gọi OAuth.
         // Nếu sidecar chưa khởi động → thử restart rồi chờ tối đa 3s.
+        const checkHealth = async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1500);
+          try {
+            await fetch("http://127.0.0.1:20128/health", { signal: controller.signal });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
+
         try {
-          await fetch("http://127.0.0.1:20128/health", { signal: AbortSignal.timeout(1500) });
+          await checkHealth();
         } catch {
           try {
             await invoke("runtime_restart_ai_router");
             await new Promise((r) => setTimeout(r, 2500));
           } catch { /* invoke unavailable in web preview */ }
           try {
-            await fetch("http://127.0.0.1:20128/health", { signal: AbortSignal.timeout(1500) });
+            await checkHealth();
           } catch {
             throw new Error("AI Router chưa khởi động. Vui lòng thử lại sau vài giây hoặc khởi động lại ứng dụng.");
           }

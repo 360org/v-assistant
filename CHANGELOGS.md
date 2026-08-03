@@ -4,6 +4,14 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.44] — 2026-08-03
+
+### Vá lỗi tương thích Windows WebView2
+
+*   **Sửa lỗi crash khi click Sign In:** Thay thế phương thức `AbortSignal.timeout()` bằng
+    cơ chế `AbortController` và `setTimeout` truyền thống nhằm tương thích ngược 100% với
+    các phiên bản WebView2 (Microsoft Edge) cũ trên Windows, ngăn chặn lỗi crash giao diện khi bấm Login.
+
 ## [1.1.43] — 2026-08-03
 
 ### Vá lỗi tương thích Windows
