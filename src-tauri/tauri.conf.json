@@ -50,6 +50,10 @@
       "../agent-runner/**/*",
       "../ai-router/**/*",
       "../runtime/node/**/*"
-    ]
+    ],
+    "nsis": {
+      "installMode": "currentUser",
+      "displayLanguageSelector": false
+    }
   }
 }

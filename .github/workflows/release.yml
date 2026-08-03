@@ -313,6 +313,23 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri -- build
 
+      - name: Verify Windows installer (Smoke Test)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $installer = "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
+          Write-Host "Running silent installation..."
+          Start-Process -FilePath $installer -ArgumentList "/S" -Wait
+          Start-Sleep -Seconds 5
+          $installPath = "$env:LOCALAPPDATA\Programs\V Assistant\V Assistant.exe"
+          Write-Host "Checking installation path: $installPath"
+          if (Test-Path $installPath) {
+            Write-Host "Verification Success: V Assistant installed successfully!"
+          } else {
+            Write-Error "Verification Failed: V Assistant.exe was not found at $installPath"
+            exit 1
+          }
+
       - name: Upload platform artifacts
         shell: bash
         env:

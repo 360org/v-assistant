@@ -19,6 +19,7 @@ import {
   signIn,
 } from "@/runtime/oauth";
 import { inDesktopShell } from "@/runtime/proxy";
+import { invoke } from "@tauri-apps/api/core";
 import { loginConfig } from "@/runtime/providers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,21 @@ export function Onboarding() {
     setSigningIn(id);
     try {
       if (inDesktopShell()) {
+        // Issue #3: health-check AI Router trước khi gọi OAuth.
+        // Nếu sidecar chưa khởi động → thử restart rồi chờ tối đa 3s.
+        try {
+          await fetch("http://127.0.0.1:20128/health", { signal: AbortSignal.timeout(1500) });
+        } catch {
+          try {
+            await invoke("runtime_restart_ai_router");
+            await new Promise((r) => setTimeout(r, 2500));
+          } catch { /* invoke unavailable in web preview */ }
+          try {
+            await fetch("http://127.0.0.1:20128/health", { signal: AbortSignal.timeout(1500) });
+          } catch {
+            throw new Error("AI Router chưa khởi động. Vui lòng thử lại sau vài giây hoặc khởi động lại ứng dụng.");
+          }
+        }
         const attempt = await beginManualSignIn(id);
         setManualAttempt(attempt);
         setManualCallback("");
@@ -118,7 +134,12 @@ export function Onboarding() {
     );
 
   const finish = () => {
-    if (provider) completeOnboarding(provider, selected);
+    if (provider) {
+      completeOnboarding(provider, selected);
+    } else {
+      setSignInError("Không xác định được tài khoản AI. Vui lòng thử đăng nhập lại.");
+      setStep("login");
+    }
   };
 
   return (
