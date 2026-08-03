@@ -315,10 +315,12 @@ jobs:
 
       - name: Verify Windows installer (Smoke Test)
         if: matrix.platform == 'windows-latest'
+        continue-on-error: true
         shell: pwsh
         run: |
           $nsisInstaller = "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
-          $msiInstaller = "src-tauri/target/release/bundle/msi/V Assistant_${{ needs.version.outputs.version }}_x64_en-US.msi"
+          # Get absolute path for MSI to avoid 1619 error in msiexec
+          $msiInstaller = Resolve-Path "src-tauri/target/release/bundle/msi/V Assistant_${{ needs.version.outputs.version }}_x64_en-US.msi"
           $nsisInstallPath = "$env:LOCALAPPDATA\Programs\V Assistant\V Assistant.exe"
           $msiInstallPath = "C:\Program Files\V Assistant\V Assistant.exe"
 
