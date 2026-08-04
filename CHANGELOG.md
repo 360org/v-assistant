@@ -6,6 +6,30 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+## [1.1.51] - 2026-08-04
+
+### Tính năng mới & Trải nghiệm người dùng
+- **Hành động Reply & Retry**: Bổ sung hai nút bấm "Trả lời" (trích dẫn tin nhắn dạng blockquote) và "Thử lại" (gửi lại yêu cầu trước đó của user) trực tiếp dưới các bong bóng chat của AI.
+- **Thư mục dữ liệu mới `~/vuaai-data`**: Chuyển đổi toàn bộ đường dẫn lưu trữ mặc định của app từ tệp ẩn `.v-assistant/data` sang thư mục nổi `~/vuaai-data` giúp tăng nhận diện thương hiệu Vua AI và giúp người dùng dễ dàng quản lý tệp tin, custom skills, sao lưu.
+- **Tự động Code Sign & Notarize**: Tích hợp các kho mật khẩu của Apple Developer lên GitHub Actions để tự động ký số ứng dụng và chứng thực bảo mật trực tiếp với Apple khi phát hành, gỡ bỏ lỗi cảnh báo "unidentified developer" trên macOS.
+- **Tự động lưu xuất tệp sao lưu**: Khi chạy trên bản Desktop, thao tác xuất sao lưu sẽ tự động ghi trực tiếp thành tệp tin vật lý trong thư mục `~/vuaai-data/backup/` thay vì kích hoạt tải xuống của trình duyệt.
+- **Khắc phục lỗi cổng AI Router**: Chuyển cổng mặc định của sidecar sang `36360` để đồng bộ với backend mới và sửa lỗi AI Router tự động dừng sau khi mở.
+
+### Kiểm chứng
+- `npm run check` — pass toàn bộ.
+- Kiểm tra chữ ký số Gatekeeper trên macOS local — pass (`accepted, source=Notarized Developer ID`).
+
+## [1.1.50] - 2026-08-04
+
+### Sửa lỗi Windows/Desktop
+- **Đổi cổng AI Router sang 36360 (360 CORP)**: Tránh hoàn toàn xung đột cổng `20128` cố định cũ của 9router hoặc phiên bản cũ chạy ngầm.
+- **Sửa lỗi cú pháp healthcheck**: Sửa ký tự ngắt dòng `\r\n` chuẩn trong `TcpStream` của Rust backend, sửa lỗi HTTP 400 khiến app hiểu nhầm AI Router chưa chạy và tự động kill process.
+- **Tên binary trong Smoke Test**: Đồng bộ tên file tìm kiếm từ `V Assistant.exe` thành `v-assistant.exe` trong GitHub Actions.
+
+### Kiểm chứng
+- `npm run check` — pass toàn bộ.
+- Contract port 36360, resource/runtime, OAuth, Host Process, credential boundary, connector, isolation và RAG — pass.
+
 ## [1.1.49] - 2026-08-04
 
 ### Hotfix Windows AI Router

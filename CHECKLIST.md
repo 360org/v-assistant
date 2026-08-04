@@ -702,7 +702,7 @@
 - [x] Bundle Agent Runner + Node runtime vào Tauri resources. Build local tự
       nạp Node theo kiến trúc macOS; CI nạp runtime đúng target.
 - [ ] Auto-detect runtime: Bun có sẵn → dùng Bun; fallback Node
-- [ ] Code signing & notarize macOS
+- [x] Code signing & notarize macOS
 - [ ] Auto-update mechanism (Tauri updater plugin)
 
 ---
