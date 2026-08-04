@@ -4,7 +4,7 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
-## [1.1.51] — 2026-08-04
+## [1.1.52] — 2026-08-04
 
 ### Tính năng Reply, Retry & Tối ưu hóa Lưu trữ
 *   **Hành động Reply & Retry trực quan:** Bổ sung hai nút "Trả lời" (trích dẫn tin nhắn dạng blockquote) và "Thử lại" (gửi lại yêu cầu trước đó) trực tiếp bên dưới các bong bóng chat của AI.

@@ -6,7 +6,7 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
-## [1.1.51] - 2026-08-04
+## [1.1.52] - 2026-08-04
 
 ### Tính năng mới & Trải nghiệm người dùng
 - **Hành động Reply & Retry**: Bổ sung hai nút bấm "Trả lời" (trích dẫn tin nhắn dạng blockquote) và "Thử lại" (gửi lại yêu cầu trước đó của user) trực tiếp dưới các bong bóng chat của AI.
