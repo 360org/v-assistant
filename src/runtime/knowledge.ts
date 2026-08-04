@@ -373,7 +373,7 @@ export async function savePhysicalDataFile(
     return null;
   }
   try {
-    const customDir = localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
+    const customDir = localStorage.getItem("vua:custom-data-path") || "~/vuaai-data";
     let contentB64 = "";
     if (typeof fileOrB64 === "string") {
       contentB64 = fileOrB64;

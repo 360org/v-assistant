@@ -15,7 +15,7 @@ export function WorkspaceSettingsSection() {
     language,
   } = useApp();
 
-  const [dataPathInput, setDataPathInput] = useState(customDataPath || "~/.v-assistant/data");
+  const [dataPathInput, setDataPathInput] = useState(customDataPath || "~/vuaai-data");
   const [savedPathMsg, setSavedPathMsg] = useState<string | null>(null);
   const [copiedPath, setCopiedPath] = useState(false);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
@@ -23,11 +23,11 @@ export function WorkspaceSettingsSection() {
   const backupFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setDataPathInput(customDataPath || "~/.v-assistant/data");
+    setDataPathInput(customDataPath || "~/vuaai-data");
   }, [customDataPath]);
 
   const handleCopyDataPath = async () => {
-    const p = customDataPath || "~/.v-assistant/data";
+    const p = customDataPath || "~/vuaai-data";
     try {
       await navigator.clipboard.writeText(p);
       setCopiedPath(true);
@@ -90,7 +90,7 @@ export function WorkspaceSettingsSection() {
 
   const handleResetDefaultDataPath = () => {
     setCustomDataPath("");
-    setDataPathInput("~/.v-assistant/data");
+    setDataPathInput("~/vuaai-data");
     setSavedPathMsg("✅ Đã đặt lại đường dẫn dữ liệu mặc định!");
     setTimeout(() => setSavedPathMsg(null), 4000);
   };
@@ -161,7 +161,7 @@ export function WorkspaceSettingsSection() {
             </div>
             <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/80 px-3 py-2">
               <code className="flex-1 truncate font-mono text-xs text-gold-300">
-                {customDataPath || "~/.v-assistant/data"}
+                {customDataPath || "~/vuaai-data"}
               </code>
               <button
                 onClick={handleCopyDataPath}

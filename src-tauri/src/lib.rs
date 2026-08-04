@@ -175,9 +175,9 @@ fn grant_agent_read_path(state: tauri::State<Runtime>, path: String) -> Result<S
 fn resolve_data_dir(custom_dir: &str) -> std::path::PathBuf {
     use std::path::PathBuf;
     let trimmed = custom_dir.trim();
-    if trimmed.is_empty() || trimmed == "~/.v-assistant/data" {
+    if trimmed.is_empty() || trimmed == "~/vuaai-data" {
         if let Ok(home) = std::env::var("HOME") {
-            return PathBuf::from(home).join(".v-assistant/data");
+            return PathBuf::from(home).join("vuaai-data");
         }
     }
     if trimmed.starts_with("~/") {

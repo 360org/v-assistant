@@ -426,7 +426,7 @@ ${instructions}`;
       // Save physical file to customDataPath/skills/ if configured
       void import("@tauri-apps/api/core").then(({ invoke }) => {
         void invoke("save_custom_data_text", {
-          customDir: localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data",
+          customDir: localStorage.getItem("vua:custom-data-path") || "~/vuaai-data",
           relativePath: `skills/${name}/SKILL.md`,
           content: rawMd,
         }).catch(() => {});

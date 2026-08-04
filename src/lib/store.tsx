@@ -643,7 +643,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           localStorage.setItem("v-assistant-last-active-user-key", currentKey);
         }
 
-        const dataDir = state.customDataPath || localStorage.getItem("vua:custom-data-path") || "~/.v-assistant/data";
+        const dataDir = state.customDataPath || localStorage.getItem("vua:custom-data-path") || "~/vuaai-data";
         if (state.customDataPath) {
           localStorage.setItem("vua:custom-data-path", state.customDataPath);
         } else {
