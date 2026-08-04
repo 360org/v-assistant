@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronUp, Eraser, FileText, FolderOpen, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X, ClipboardList, CheckCircle2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, CornerUpLeft, Eraser, FileText, FolderOpen, Layers3, Loader2, Maximize2, Minimize2, Paperclip, Pencil, Plus, RotateCcw, Search, SendHorizonal, Square, Trash2, UploadCloud, Wand2, X, ClipboardList, CheckCircle2 } from "lucide-react";
 import { useApp, fileObjectURLs } from "@/lib/store";
 import { SKILLS, parseSkillMd, toTemplate, type SkillTemplate } from "@/lib/skills";
 import { Button } from "@/components/ui/button";
@@ -1123,12 +1123,62 @@ export function Chat() {
                       )}
 
                       {m.content?.trim() || (m.role === "assistant" && visibleAssistantText(m.content)) ? (
-                        <MessageContent
-                          content={m.content}
-                          assistant={m.role === "assistant"}
-                          onApprovePermission={approveReadPath}
-                          onAnswerQuestion={answerQuestion}
-                        />
+                        <>
+                          <MessageContent
+                            content={m.content}
+                            assistant={m.role === "assistant"}
+                            onApprovePermission={approveReadPath}
+                            onAnswerQuestion={answerQuestion}
+                          />
+                          {!isUser && m.content && (
+                            <div className="mt-2 flex items-center gap-3 border-t border-neutral-800/40 pt-1.5 text-xs text-neutral-400 select-none">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const quote = m.content
+                                    .split("\n")
+                                    .map((line) => `> ${line}`)
+                                    .join("\n");
+                                  setInput((prev) => (prev ? `${quote}\n\n${prev}` : `${quote}\n\n`));
+                                  setTimeout(() => composerRef.current?.focus(), 100);
+                                }}
+                                className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-gold-300 transition-colors"
+                                title="Trích dẫn trả lời (Reply)"
+                              >
+                                <CornerUpLeft className="size-3" />
+                                <span>Trả lời</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const msgIndex = messages.findIndex((msg) => msg.id === m.id);
+                                  let targetPrompt = "";
+                                  if (msgIndex > 0) {
+                                    for (let i = msgIndex - 1; i >= 0; i--) {
+                                      if (messages[i].role === "user") {
+                                        targetPrompt = messages[i].content;
+                                        break;
+                                      }
+                                    }
+                                  }
+                                  if (!targetPrompt) {
+                                    const lastUserMsg = [...messages].reverse().find((msg) => msg.role === "user");
+                                    targetPrompt = lastUserMsg ? lastUserMsg.content : "";
+                                  }
+                                  if (targetPrompt) {
+                                    send(targetPrompt, true);
+                                  }
+                                }}
+                                className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-neutral-400 hover:bg-neutral-800 hover:text-amber-400 transition-colors"
+                                title="Gửi lại yêu cầu trước đó (Retry)"
+                              >
+                                <RotateCcw className="size-3" />
+                                <span>Thử lại</span>
+                              </button>
+                            </div>
+                          )}
+                        </>
                       ) : streaming && idx === filteredMessages.length - 1 ? (
                         <div className="flex items-center gap-2 py-1 text-xs text-gold-300 font-medium select-none">
                           <span className="relative flex size-2.5 shrink-0">

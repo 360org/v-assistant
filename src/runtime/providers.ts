@@ -422,11 +422,17 @@ async function fetchWithRateLimitRetry(
   init: RequestInit,
 ): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch(url, init);
-    const retryable = [429, 500, 502, 503, 504, 529].includes(response.status);
-    if (!retryable || attempt === MAX_RATE_LIMIT_RETRIES) return response;
+    try {
+      const response = await fetch(url, init);
+      const retryable = [429, 500, 502, 503, 504, 529].includes(response.status);
+      if (!retryable || attempt === MAX_RATE_LIMIT_RETRIES) return response;
 
-    await new Promise<void>((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
+      await new Promise<void>((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
+    } catch (e) {
+      if (attempt === MAX_RATE_LIMIT_RETRIES) throw e;
+      const delay = DEFAULT_RETRY_DELAY_MS * 2 ** attempt;
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    }
   }
 }
 
