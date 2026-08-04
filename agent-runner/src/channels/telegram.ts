@@ -20,7 +20,7 @@ import { executeAgentLoop, type PollLoopConfig } from '../poll-loop.js';
 import { learnFromExchange } from '../memory/self-improve.js';
 import type { RoutingContext } from '../formatter.js';
 
-const ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
+const ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:36360';
 const LONG_POLL_SECONDS = 30;
 /** Wait before retrying when the router is down or no token is stored yet. */
 const RETRY_MS = 5_000;

@@ -61,7 +61,7 @@ export const translations = {
 
     // Model & Connected Accounts
     models_connected_title: "Mô hình AI & Tài khoản Kết nối (AI Models & Connected Accounts)",
-    models_connected_desc: "Quản lý kết nối API Keys, OAuth vendor thông qua Local AI Router (Port 20128).",
+    models_connected_desc: "Quản lý kết nối API Keys, OAuth vendor thông qua Local AI Router (Port 36360).",
     add_provider: "+ Thêm Provider Mới",
     close_provider_manager: "Đóng Quản lý Provider",
     active: "Active",
@@ -160,7 +160,7 @@ export const translations = {
 
     // Model & Connected Accounts
     models_connected_title: "AI Models & Connected Accounts",
-    models_connected_desc: "Manage API Keys, OAuth vendors via Local AI Router (Port 20128).",
+    models_connected_desc: "Manage API Keys, OAuth vendors via Local AI Router (Port 36360).",
     add_provider: "+ Add New Provider",
     close_provider_manager: "Close Provider Manager",
     active: "Active",
