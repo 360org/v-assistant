@@ -151,23 +151,25 @@ fn pick_directory() -> Option<String> {
 
 #[tauri::command]
 fn grant_agent_read_path(state: tauri::State<Runtime>, path: String) -> Result<String, String> {
-    let approved_pathbuf = std::fs::canonicalize(path.trim()).map_err(|e| format!("Không thể cấp quyền: {e}"))?;
-    if !approved_pathbuf.is_dir() {
-        return Err("Chỉ có thể cấp quyền đọc thư mục".to_string());
-    }
+    let selected = std::fs::canonicalize(path.trim()).map_err(|e| format!("Không thể cấp quyền: {e}"))?;
+    let approved = if selected.is_dir() {
+        selected
+    } else {
+        selected.parent().ok_or("Không tìm thấy thư mục chứa tệp")?.to_path_buf()
+    };
     let grants_file = state.dir.join("approved-read-paths.json");
     let mut grants: Vec<String> = std::fs::read_to_string(&grants_file)
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_default();
-    let approved_str = approved_pathbuf.to_string_lossy().to_string(); // Đổi tên biến để tránh trùng
-    if !grants.contains(&approved_str) {
-        grants.push(approved_str.clone());
+    let approved = approved.to_string_lossy().to_string();
+    if !grants.contains(&approved) {
+        grants.push(approved.clone());
         std::fs::create_dir_all(&state.dir).map_err(|e| e.to_string())?;
         std::fs::write(&grants_file, serde_json::to_string(&grants).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
     }
-    Ok(approved_str)
+    Ok(approved)
 }
 
 fn resolve_data_dir(custom_dir: &str) -> std::path::PathBuf {
@@ -420,18 +422,90 @@ pub fn run() {
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::{Menu, Submenu, PredefinedMenuItem};
+                use tauri::menu::{Menu, Submenu, PredefinedMenuItem, MenuItem};
+
+                // App Menu (V Assistant) - must be first submenu to become the macOS app menu
+                let app_menu = Submenu::new(app, "V Assistant", true)?;
+                app_menu.append_items(&[
+                    &PredefinedMenuItem::about(app, Some("About V Assistant"), None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Settings...", true, Some("Cmd+,"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::services(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::hide(app, Some("Hide V Assistant"))?,
+                    &PredefinedMenuItem::hide_others(app, Some("Hide Others"))?,
+                    &PredefinedMenuItem::show_all(app, Some("Show All"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::quit(app, Some("Quit V Assistant"))?,
+                ])?;
+
+                // File Menu
+                let file_menu = Submenu::new(app, "File", true)?;
+                file_menu.append_items(&[
+                    &MenuItem::new(app, "New Chat", true, Some("Cmd+N"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::close_window(app, Some("Close Window"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Save Conversation...", true, Some("Cmd+S"))?,
+                ])?;
+
+                // Edit Menu - use MenuItem::new for standard items to avoid macOS auto-placing them in app menu
                 let edit_menu = Submenu::new(app, "Edit", true)?;
                 edit_menu.append_items(&[
-                    &PredefinedMenuItem::undo(app, Some("Undo"))?,
-                    &PredefinedMenuItem::redo(app, Some("Redo"))?,
-                    &PredefinedMenuItem::cut(app, Some("Cut"))?,
-                    &PredefinedMenuItem::copy(app, Some("Copy"))?,
-                    &PredefinedMenuItem::paste(app, Some("Paste"))?,
-                    &PredefinedMenuItem::select_all(app, Some("Select All"))?,
+                    &MenuItem::new(app, "Undo", true, Some("Cmd+Z"))?,
+                    &MenuItem::new(app, "Redo", true, Some("Cmd+Shift+Z"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Cut", true, Some("Cmd+X"))?,
+                    &MenuItem::new(app, "Copy", true, Some("Cmd+C"))?,
+                    &MenuItem::new(app, "Paste", true, Some("Cmd+V"))?,
+                    &MenuItem::new(app, "Select All", true, Some("Cmd+A"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Find...", true, Some("Cmd+F"))?,
+                    &MenuItem::new(app, "Find Next", true, Some("Cmd+G"))?,
+                    &MenuItem::new(app, "Find Previous", true, Some("Cmd+Shift+G"))?,
                 ])?;
+
+                // View Menu
+                let view_menu = Submenu::new(app, "View", true)?;
+                view_menu.append_items(&[
+                    &MenuItem::new(app, "Toggle Sidebar", true, Some("Cmd+B"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Reload", true, Some("Cmd+R"))?,
+                    &MenuItem::new(app, "Toggle Full Screen", true, Some("Ctrl+Cmd+F"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Actual Size", true, Some("Cmd+0"))?,
+                    &MenuItem::new(app, "Zoom In", true, Some("Cmd+="))?,
+                    &MenuItem::new(app, "Zoom Out", true, Some("Cmd+-"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::new(app, "Toggle Developer Tools", true, Some("Cmd+Option+I"))?,
+                ])?;
+
+                // Window Menu
+                let window_menu = Submenu::new(app, "Window", true)?;
+                window_menu.append_items(&[
+                    &PredefinedMenuItem::minimize(app, Some("Minimize"))?,
+                    &PredefinedMenuItem::maximize(app, Some("Zoom"))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::bring_all_to_front(app, Some("Bring All to Front"))?,
+                ])?;
+
+                // Help Menu
+                let help_menu = Submenu::new(app, "Help", true)?;
+                help_menu.append_items(&[
+                    &MenuItem::new(app, "Documentation", true, None::<&str>)?,
+                    &MenuItem::new(app, "Report Issue...", true, None::<&str>)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::about(app, Some("About V Assistant"), None)?,
+                ])?;
+
                 let menu = Menu::new(app)?;
+                menu.append(&app_menu)?;
+                menu.append(&file_menu)?;
                 menu.append(&edit_menu)?;
+                menu.append(&view_menu)?;
+                menu.append(&window_menu)?;
+                menu.append(&help_menu)?;
                 app.set_menu(menu)?;
             }
 
@@ -461,8 +535,6 @@ pub fn run() {
                 .unwrap_or(runtime::resolve_project_dir(app.path().resource_dir()?));
             vault::migrate_legacy_vault(&dir).map_err(std::io::Error::other)?;
             let broker = vault::start_broker(dir.clone()).map_err(std::io::Error::other)?;
-            // ponytail: approvals last only for this app session; add an explicit
-            // "always allow" setting before making filesystem grants durable.
             let runtime = Runtime::new(dir, project_dir, broker).map_err(std::io::Error::other)?;
             // Attach a NanoClaw engine when one is installed; otherwise the
             // UI silently falls back to the preview engine.
