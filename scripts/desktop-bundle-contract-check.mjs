@@ -14,8 +14,22 @@ const assertions = [
     "Tauri must include the bundled Node runtime resource",
   ],
   [
-    runtime.includes("pub fn resolve_project_dir") && runtime.includes('join("_up_")'),
-    "desktop runtime must resolve Tauri's _up_ resource layout",
+    runtime.includes("pub fn resolve_project_dir")
+      && runtime.includes('join("_up_")')
+      && runtime.includes("current_exe()"),
+    "desktop runtime must resolve Tauri's packaged resource layouts",
+  ],
+  [
+    runtime.includes("fn router_healthcheck")
+      && runtime.includes("fn wait_router_ready")
+      && runtime.includes("AI Router did not become ready"),
+    "AI Router startup must wait for HTTP readiness and report diagnostics",
+  ],
+  [
+    runtime.includes("ai-router")
+      && runtime.includes("sidecar.mjs")
+      && runtime.includes("refusing to kill it"),
+    "runtime must not kill unrelated processes that own the router port",
   ],
   [
     runtime.includes('"runtime/node/node.exe"')
@@ -51,6 +65,13 @@ const assertions = [
     workflow.includes("agent-runner/dist/index.js")
       && workflow.includes('! grep -rqE "from [\\"\']better-sqlite3|require\\([\\"\']better-sqlite3" agent-runner/dist'),
     "macOS release workflow must verify the packaged Agent Runner runtime",
+  ],
+  [
+    workflow.includes('v-assistant.exe')
+      && workflow.includes('sidecar.mjs')
+      && workflow.includes('node.exe')
+      && workflow.includes('packaged AI Router, Agent Runner, or node.exe resource is missing'),
+    "Windows smoke test must verify packaged runtime resources after installation",
   ],
   [
     // One build, three platforms: the runner may not regain a native addon,

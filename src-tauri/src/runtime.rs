@@ -14,6 +14,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -135,6 +136,18 @@ fn find_executable(name: &str) -> Option<PathBuf> {
 /// Development uses the checkout directly; release builds resolve that bundled
 /// project root before spawning JavaScript sidecars.
 pub fn resolve_project_dir(resource_dir: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                let local_up = exe_dir.join("_up_");
+                if local_up.join("ai-router/src/sidecar.mjs").exists() {
+                    return local_up;
+                }
+            }
+        }
+    }
+
     if resource_dir.join("ai-router/src/sidecar.mjs").exists() {
         return resource_dir;
     }
@@ -318,33 +331,80 @@ fn kill_stale_port_process(port: u16) {
         return;
     }
 
-    println!(
-        "[tauri-runtime] Port {port} is busy; clearing the stale AI Router holding it. \
-         If another V Assistant instance is running, its router is being taken over."
-    );
+    println!("[tauri-runtime] Port {port} is busy; checking its owner before restart.");
 
     #[cfg(unix)]
     {
         use std::process::Command;
-        let _ = Command::new("pkill").arg("-f").arg("sidecar.mjs").status();
-        // Give the OS a moment to release the socket before we rebind it.
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        let pids = Command::new("lsof")
+            .args(["-nP", "-iTCP:20128", "-sTCP:LISTEN", "-t"])
+            .output()
+            .ok()
+            .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+            .unwrap_or_default();
+        for pid in pids.lines().filter(|pid| !pid.trim().is_empty()) {
+            let command = Command::new("ps")
+                .args(["-p", pid.trim(), "-o", "command="])
+                .output()
+                .ok()
+                .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+                .unwrap_or_default();
+            if command.contains("ai-router") && command.contains("sidecar.mjs") {
+                let _ = Command::new("kill").arg(pid.trim()).status();
+                println!("[tauri-runtime] Stopped stale AI Router (pid {}).", pid.trim());
+            } else {
+                eprintln!("[tauri-runtime] Port {port} belongs to another process; refusing to kill it.");
+            }
+        }
+        std::thread::sleep(Duration::from_millis(300));
     }
 
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         use std::process::Command;
+        let script = format!(
+            "Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | ForEach-Object {{ $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $_.OwningProcess); if ($p.CommandLine -like '*ai-router*sidecar.mjs*') {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }} }}"
+        );
         let mut cmd = Command::new("powershell");
-        cmd.args(&[
-            "-NoProfile",
-            "-Command",
-            &format!("Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Foreach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}")
-        ]);
+        cmd.args(["-NoProfile", "-Command", &script]);
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         let _ = cmd.status();
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(Duration::from_millis(500));
     }
+}
+
+fn router_healthcheck() -> Result<(), String> {
+    let mut stream = TcpStream::connect_timeout(
+        &"127.0.0.1:20128".parse().map_err(err)?,
+        Duration::from_millis(250),
+    ).map_err(err)?;
+    stream.set_read_timeout(Some(Duration::from_millis(500))).map_err(err)?;
+    stream.write_all(b"GET /health HTTP/1.1\\r\\nHost: 127.0.0.1:20128\\r\\nConnection: close\\r\\n\\r\\n").map_err(err)?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).map_err(err)?;
+    if response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200") {
+        Ok(())
+    } else {
+        Err(format!("health returned {}", response.lines().next().unwrap_or("no response")))
+    }
+}
+
+fn wait_router_ready(log_path: &Path) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last_error = String::from("not started");
+    while Instant::now() < deadline {
+        match router_healthcheck() {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = error,
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    let log_tail = std::fs::read_to_string(log_path)
+        .ok()
+        .map(|log| log.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\\n"))
+        .unwrap_or_default();
+    Err(format!("AI Router did not become ready: {last_error}\\n{log_tail}"))
 }
 
 fn spawn_ai_router(
@@ -369,11 +429,12 @@ fn spawn_ai_router(
         .env("AI_ROUTER_CONNECTOR_TOKEN", &broker.connector_token)
         .stdin(Stdio::null());
 
+    let log_path = dir.join("ai-router.log");
     let log = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(dir.join("ai-router.log"));
+        .open(&log_path);
     if let Ok(file) = log {
         if let Ok(stderr) = file.try_clone() {
             command.stdout(file).stderr(stderr);
@@ -385,7 +446,13 @@ fn spawn_ai_router(
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    command.spawn().map_err(err)
+    let mut child = command.spawn().map_err(err)?;
+    if let Err(error) = wait_router_ready(&log_path) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
+    Ok(child)
 }
 
 /// Restart the AI Router when its process is gone.
