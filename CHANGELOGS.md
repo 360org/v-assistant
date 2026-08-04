@@ -4,6 +4,17 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.50] — 2026-08-04
+
+### Sửa lỗi kiểm tra sức khỏe AI Router trên Windows (HTTP 400 Bad Request)
+
+*   **Sửa lỗi cú pháp healthcheck (Issue #10):** Thay thế ký tự ngắt dòng thô `\\r\\n` bằng byte
+    Carriage Return và Line Feed (`\r\n`) chuẩn trong HTTP request gửi qua `TcpStream` của Rust backend.
+    Sửa lỗi AI Router nhận request không hợp lệ (malformed) trả về `400 Bad Request` dẫn đến việc app
+    tưởng AI Router chưa sẵn sàng và tự động kill tiến trình con ngay sau khi spawn.
+*   **Sửa lỗi phân giải binary name trong Smoke Test:** Đổi tên file tìm kiếm từ `V Assistant.exe`
+    thành `v-assistant.exe` trong workflow kiểm thử cài đặt tự động trên GitHub Actions để test khói chạy đúng.
+
 ## [1.1.49] — 2026-08-04
 
 ### Hotfix Windows AI Router

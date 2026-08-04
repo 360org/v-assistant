@@ -325,7 +325,7 @@ registerProvider('local', (options) => {
 registerProvider('ai-router', (options) => {
   const provider = createOpenAIProvider({
     ...options,
-    baseUrl: options.baseUrl || 'http://127.0.0.1:20128/v1',
+    baseUrl: options.baseUrl || 'http://127.0.0.1:36360/v1',
     model: options.model || 'auto',
   });
   return { ...provider, name: 'ai-router' };
@@ -335,7 +335,7 @@ registerProvider('ai-router', (options) => {
 registerProvider('9router', (options) => {
   const provider = createOpenAIProvider({
     ...options,
-    baseUrl: options.baseUrl || 'http://127.0.0.1:20128/v1',
+    baseUrl: options.baseUrl || 'http://127.0.0.1:36360/v1',
     model: options.model || 'auto',
   });
   return { ...provider, name: 'ai-router' };

@@ -1037,7 +1037,7 @@ export function ModelSettings() {
                             type="text"
                             value={customBaseUrl}
                             onChange={(e) => setCustomBaseUrl(e.target.value)}
-                            placeholder="Endpoint Base URL (Ví dụ: http://localhost:20128/v1)"
+                            placeholder="Endpoint Base URL (Ví dụ: http://localhost:36360/v1)"
                             className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-gold-400 focus:outline-none font-mono"
                           />
                         </div>

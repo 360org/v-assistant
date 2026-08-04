@@ -44,7 +44,7 @@ const AGENT_ROOT = realRoot(path.join(DATA_DIR, 'agents', loadConfig().agentName
 
 const ALLOWED_ROOTS = [WORKSPACE_ROOT, AGENT_ROOT];
 const APPROVED_READ_PATHS_FILE = process.env.VUA_AGENT_APPROVED_READ_PATHS_FILE;
-const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:20128';
+const AI_ROUTER_URL = process.env.VUA_AI_ROUTER_URL || 'http://127.0.0.1:36360';
 
 const ACCESS_DENIED = 'Access denied: agent tools are restricted to the assigned workspace';
 

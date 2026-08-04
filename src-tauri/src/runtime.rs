@@ -285,7 +285,7 @@ fn spawn_process(
         .env("VUA_IPC_DIR", dir.join("ipc"))
         .env("VUA_AGENT_WORKSPACE", dir.join("workspace"))
         .env("VUA_AGENT_APPROVED_READ_PATHS_FILE", dir.join("approved-read-paths.json"))
-        .env("VUA_AI_ROUTER_URL", "http://127.0.0.1:20128")
+        .env("VUA_AI_ROUTER_URL", "http://127.0.0.1:36360")
         .env("VUA_CONNECTOR_GATEWAY_TOKEN", connector_token)
         .env("CONFIG_PATH", config_path)
         .env("PATH", new_path)
@@ -337,7 +337,7 @@ fn kill_stale_port_process(port: u16) {
     {
         use std::process::Command;
         let pids = Command::new("lsof")
-            .args(["-nP", "-iTCP:20128", "-sTCP:LISTEN", "-t"])
+            .args(["-nP", "-iTCP:36360", "-sTCP:LISTEN", "-t"])
             .output()
             .ok()
             .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
@@ -376,11 +376,11 @@ fn kill_stale_port_process(port: u16) {
 
 fn router_healthcheck() -> Result<(), String> {
     let mut stream = TcpStream::connect_timeout(
-        &"127.0.0.1:20128".parse().map_err(err)?,
+        &"127.0.0.1:36360".parse().map_err(err)?,
         Duration::from_millis(250),
     ).map_err(err)?;
     stream.set_read_timeout(Some(Duration::from_millis(500))).map_err(err)?;
-    stream.write_all(b"GET /health HTTP/1.1\\r\\nHost: 127.0.0.1:20128\\r\\nConnection: close\\r\\n\\r\\n").map_err(err)?;
+    stream.write_all(b"GET /health HTTP/1.1\r\nHost: 127.0.0.1:36360\r\nConnection: close\r\n\r\n").map_err(err)?;
     let mut response = String::new();
     stream.read_to_string(&mut response).map_err(err)?;
     if response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200") {
@@ -412,7 +412,7 @@ fn spawn_ai_router(
     project_dir: &Path,
     broker: &VaultBroker,
 ) -> Result<Child, String> {
-    kill_stale_port_process(20128);
+    kill_stale_port_process(36360);
     let sidecar = project_dir.join("ai-router/src/sidecar.mjs");
     if !sidecar.exists() {
         return Err("AI Router sidecar source not found".to_string());
@@ -828,12 +828,12 @@ impl Runtime {
     /// Forward an opaque connector request through AI Router. The Webview and
     /// model never receive the process capability or any resolved Vault value.
     pub fn connector_request(&self, payload: &str) -> Result<String, String> {
-        let mut stream = TcpStream::connect("127.0.0.1:20128").map_err(err)?;
+        let mut stream = TcpStream::connect("127.0.0.1:36360").map_err(err)?;
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(30)))
             .map_err(err)?;
         let request = format!(
-            "POST /v1/connectors/request HTTP/1.1\r\nHost: 127.0.0.1:20128\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "POST /v1/connectors/request HTTP/1.1\r\nHost: 127.0.0.1:36360\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             self.connector_token,
             payload.len(),
             payload,
@@ -888,7 +888,7 @@ impl Runtime {
             "maxMessagesPerPrompt": 10,
             "mcpServers": mcp_servers,
             "model": model.unwrap_or("auto"),
-            "baseUrl": base_url.unwrap_or("http://127.0.0.1:20128/v1"),
+            "baseUrl": base_url.unwrap_or("http://127.0.0.1:36360/v1"),
             "selfImprove": self_improve
         });
         std::fs::write(&config_path, serde_json::to_string_pretty(&config_json).map_err(err)?)

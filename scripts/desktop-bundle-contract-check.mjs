@@ -37,6 +37,11 @@ const assertions = [
     "AI Router must prefer its bundled Node runtime on Windows and Unix",
   ],
   [
+    runtime.includes('36360')
+      && !runtime.includes('20128'),
+    "desktop runtime must use port 36360 for AI Router and connectors",
+  ],
+  [
     runtime.includes('join("agent-runner/dist/index.js")')
       && runtime.includes("Bundled Agent Runner dist/index.js is missing"),
     "Desktop runtime must launch the compiled bundled Agent Runner",

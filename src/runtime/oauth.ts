@@ -73,7 +73,7 @@ export interface ManualSignInAttempt {
   routerProvider?: string;
 }
 
-const AI_ROUTER_OAUTH_URL = "http://127.0.0.1:20128/v1/oauth";
+const AI_ROUTER_OAUTH_URL = "http://127.0.0.1:36360/v1/oauth";
 
 const ROUTER_OAUTH_PROVIDER: Partial<Record<string, string>> = {
   gemini: "antigravity",
