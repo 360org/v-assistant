@@ -321,8 +321,8 @@ jobs:
           $nsisInstaller = "src-tauri/target/release/bundle/nsis/V Assistant_${{ needs.version.outputs.version }}_x64-setup.exe"
           # Get absolute path for MSI to avoid 1619 error in msiexec
           $msiInstaller = Resolve-Path "src-tauri/target/release/bundle/msi/V Assistant_${{ needs.version.outputs.version }}_x64_en-US.msi"
-          $nsisInstallPath = "$env:LOCALAPPDATA\Programs\V Assistant\V Assistant.exe"
-          $msiInstallPath = "C:\Program Files\V Assistant\V Assistant.exe"
+          $nsisInstallPath = "$env:LOCALAPPDATA\Programs\V Assistant\v-assistant.exe"
+          $msiInstallPath = "C:\Program Files\V Assistant\v-assistant.exe"
 
           # Helper to wait for file
           function Wait-For-File($path, $seconds) {
@@ -357,14 +357,14 @@ jobs:
             Get-Content "msi_install.log" -Tail 50
           }
 
-          Write-Host "Searching for V Assistant.exe under User Profile..."
-          $foundFiles = Get-ChildItem -Path $env:USERPROFILE -Filter "V Assistant.exe" -Recurse -ErrorAction SilentlyContinue
+          Write-Host "Searching for v-assistant.exe under User Profile..."
+          $foundFiles = Get-ChildItem -Path $env:USERPROFILE -Filter "v-assistant.exe" -Recurse -ErrorAction SilentlyContinue
           if ($foundFiles) {
-            Write-Host "Found V Assistant.exe at: $($foundFiles[0].FullName)"
+            Write-Host "Found v-assistant.exe at: $($foundFiles[0].FullName)"
             exit 0
           }
 
-          Write-Error "Verification Failed: Neither NSIS nor MSI installer produced V Assistant.exe."
+          Write-Error "Verification Failed: Neither NSIS nor MSI installer produced v-assistant.exe."
           exit 1
 
       - name: Upload platform artifacts

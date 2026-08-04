@@ -4,6 +4,17 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.48] — 2026-08-04
+
+### Sửa lỗi đường dẫn Runtime & Khởi động AI Router trên Windows
+
+*   **Sửa lỗi phân giải thư mục tài nguyên (Issue #7 & #8):** Cập nhật hàm `resolve_project_dir` trong
+    Rust backend để phát hiện và tìm đúng thư mục tài nguyên `_up_` giải nén cùng cấp với file thực thi chính
+    (`v-assistant.exe`) trên Windows. Sửa lỗi AI Router và Agent Runner không thể khởi động được (Đang dừng)
+    sau khi cài đặt app thực tế trên Windows 11.
+*   **Sửa lỗi typo Smoke Test:** Đổi tên file tìm kiếm từ `V Assistant.exe` thành `v-assistant.exe` trong
+    workflow kiểm thử cài đặt tự động trên GitHub Actions để test khói chạy đúng.
+
 ## [1.1.47] — 2026-08-04
 
 ### Desktop menu, updater và checklist

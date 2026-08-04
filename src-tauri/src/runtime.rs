@@ -14,6 +14,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -135,6 +136,18 @@ fn find_executable(name: &str) -> Option<PathBuf> {
 /// Development uses the checkout directly; release builds resolve that bundled
 /// project root before spawning JavaScript sidecars.
 pub fn resolve_project_dir(resource_dir: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                let local_up = exe_dir.join("_up_");
+                if local_up.join("ai-router/src/sidecar.mjs").exists() {
+                    return local_up;
+                }
+            }
+        }
+    }
+
     if resource_dir.join("ai-router/src/sidecar.mjs").exists() {
         return resource_dir;
     }
