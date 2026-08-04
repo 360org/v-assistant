@@ -59,7 +59,7 @@ const antigravityReg = REGISTRY.find(e => e.id === "antigravity");
 if (antigravityReg) antigravityReg.passthroughModels = true;
 
 const host = process.env.AI_ROUTER_HOST || "127.0.0.1";
-const port = Number(process.env.AI_ROUTER_PORT || 20128);
+const port = Number(process.env.AI_ROUTER_PORT || 36360);
 const uiOrigin = process.env.AI_ROUTER_UI_ORIGIN || "http://localhost:1420";
 const callbackHost = process.env.AI_ROUTER_CALLBACK_HOST || "127.0.0.1";
 const vaultPath = process.env.AI_ROUTER_VAULT_PATH || join(process.cwd(), ".vua_vault_dev.json");
