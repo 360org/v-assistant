@@ -2,6 +2,7 @@ import {
   Blocks,
   Bot,
   CalendarClock,
+  Download,
   Home,
   Image as ImageIcon,
   KeyRound,
@@ -47,6 +48,8 @@ export function Sidebar({
     onNavigate?.();
   };
 
+  const goUpdate = () => go("settings");
+
   return (
     <aside
       className={cn(
@@ -56,14 +59,24 @@ export function Sidebar({
     >
       <div className="flex items-center gap-2.5 px-2 py-3">
         <Logo />
-        <div>
-          <div className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
-            V Assistant
-            <span className="rounded-md border border-emerald-500/30 bg-emerald-950/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
-              v{currentVersion}
-            </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-1.5 text-sm font-semibold leading-tight">
+            <span className="min-w-0 truncate">V Assistant</span>
+            {appUpdate?.hasUpdate && (
+              <button
+                onClick={goUpdate}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-neutral-950 shadow-sm transition-colors hover:bg-emerald-400"
+                title={`Cập nhật lên v${appUpdate.latestVersion}`}
+              >
+                <Download className="size-2.5" />
+                Update
+              </button>
+            )}
           </div>
           <div className="text-xs text-neutral-500">AI for everyone</div>
+          <span className="mt-0.5 inline-flex rounded-md border border-emerald-500/30 bg-emerald-950/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
+            v{currentVersion}
+          </span>
         </div>
       </div>
 
@@ -104,11 +117,6 @@ export function Sidebar({
             <Settings className="size-4" />
             <span>{t("settings", language)}</span>
           </div>
-          {appUpdate?.hasUpdate && (
-            <span className="flex items-center gap-1.5 rounded-full border border-gold-400/50 bg-gold-400/20 px-2 py-0.5 text-[10px] font-bold text-gold-300 shadow-xs animate-pulse">
-              v{appUpdate.latestVersion}
-            </span>
-          )}
         </button>
 
         <button

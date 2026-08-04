@@ -12,7 +12,7 @@
 > - `[ ]` = Chưa triển khai
 > - `[REF: ...]` = Tham chiếu file/module gốc cần kế thừa
 >
-> *Cập nhật lần cuối: 2026-07-17*
+> *Cập nhật lần cuối: 2026-08-04*
 
 ---
 
@@ -36,13 +36,18 @@
 
 ### 2.1 Khung ứng dụng & Điều hướng
 - [x] Tauri 2 desktop shell (Rust backend)
-- [x] React 18 + Vite 6 + TypeScript + TailwindCSS + Framer Motion
+- [x] React 18 + Vite 6 + TypeScript + TailwindCSS + CSS transitions
 - [x] Sidebar navigation responsive (mobile drawer + desktop fixed)
-- [x] Animated page transitions (AnimatePresence)
-- [x] Menu đầy đủ: Home, Chat, Agents, Skills, Knowledge, Vault, Scheduled, Integrations, Settings
+- [x] Animated page transitions (CSS `@keyframes`)
+- [x] Menu đầy đủ: Home, Chat, Sessions, Agents, Skills, Knowledge, Media, Vault, Scheduled, Integrations, Settings
 - [x] Logo vương miện + đầu AI (360org branding)
 
-### 2.2 Trang Chat
+### 2.2 Trang Sessions
+- [x] Danh sách phiên chat đã lưu, tìm kiếm và lọc theo kênh
+- [x] Mở lại phiên, đổi tên phiên và xóa phiên
+- [x] Hiển thị phiên desktop/Telegram với channel badge
+
+### 2.3 Trang Chat
 - [x] Giao diện chat streaming real-time
 - [x] Hiển thị typing indicator
 - [x] Quản lý chat sessions: tạo, chuyển, đổi tên, xóa và persist qua reload
@@ -53,7 +58,7 @@
 - [x] Chuyển từ gọi engine nhúng trực tiếp → giao tiếp qua SQLite IPC (cho kiến trúc mới)
   `[REF: NanoClaw/container/agent-runner/src/db/messages-in.ts + messages-out.ts]`
 
-### 2.3 Trang Agents
+### 2.4 Trang Agents
 - [x] Danh sách Agent với agent store catalog
 - [x] Cấu hình Instructions (hướng dẫn nghiệp vụ) per-agent
 - [x] Cấu hình Soul (tính cách/phong cách) per-agent
@@ -66,7 +71,7 @@
       Agent Store → "Nhập từ URL"). Tương thích bộ msitarzewski/agency-agents (230+ agent)
 - [x] Export cấu hình Agent ra file markdown
 
-### 2.4 Trang Skills
+### 2.5 Trang Skills
 - [x] Hiển thị danh sách built-in skills (10 skills)
 - [x] Cài đặt skill từ URL (raw SKILL.md)
 - [x] Validate skills khi build (`validate-skills.mjs`)
@@ -74,7 +79,7 @@
 - [x] Per-role skill sets (mỗi Agent có bộ skill riêng)
   `[REF: NanoClaw/src/group-skills.ts — quản lý skill per-group]`
 
-### 2.5 Trang Knowledge
+### 2.6 Trang Knowledge
 - [x] Upload tài liệu: PDF, Word, Excel, PowerPoint, Text
 - [x] Trích xuất nội dung on-device (parsing cục bộ)
 - [x] Chia nhỏ thành chunks & lập chỉ mục
@@ -82,26 +87,31 @@
 - [x] Knowledge cô lập per-role (role này không thấy knowledge role khác)
 - [x] RAG: inject excerpts vào prompt dựa trên câu hỏi
 
-### 2.6 Trang Vault
+### 2.7 Trang Vault
 - [x] CRUD credential (tạo/đọc/sửa/xóa)
 - [x] Field động: chọn kiểu dữ liệu (text/password/number/url/email/date/datetime) + icon
 - [x] V-Assistant Vault nội bộ: SQLite mã hóa AES-256-CBC + HMAC-SHA256;
   không dùng OS Keychain
 
-### 2.7 Trang Scheduled
+### 2.8 Trang Scheduled
 - [x] Lập lịch tác vụ (cron expression / interval)
 - [x] Agent tự chạy theo lịch
 - [x] Giao kết quả vào chat + Telegram
 - [ ] UI quản lý lịch sử chạy / logs per-task
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/scheduling.ts — scheduling MCP tools]`
 
-### 2.8 Trang Integrations
+### 2.9 Trang Integrations
 - [x] Hiển thị danh sách integration templates
 - [x] Connectors đọc Vault, tự áp auth
 - [ ] Wizard kết nối từng bước cho connector mới
 - [ ] Trạng thái connected / disconnected realtime
 
-### 2.9 Trang Settings & Onboarding
+### 2.10 Trang Media Gallery
+- [x] Hiển thị gallery các media đã tạo hoặc tải lên
+- [x] Nạp ảnh từ file record/đường dẫn native của app
+- [x] Hiển thị trạng thái trống khi chưa có media
+
+### 2.11 Trang Settings & Onboarding
 - [x] Chọn AI provider, cấu hình model, API Key / Base URL
 - [x] Onboarding: OAuth login, local user, bỏ qua Welcome lần sau
 - [x] Đồng bộ hóa React state & Vault lưu trên host qua Vite API dev middleware (tránh mất kết nối khi đổi trình duyệt)
@@ -718,6 +728,11 @@
 - [x] **Tự sửa lỗi & Phục hồi (Self-Correction & Self-Healing):** Khi tool call trả về `is_error: true` hoặc lỗi hệ thống, Agent tự động phân tích nguyên nhân và thử các phương án tự sửa sai (quét thư mục, sửa cú pháp lệnh) thay vì dừng lại.
 - [x] **Chủ động hoàn tất tác vụ (Task Completion):** Tự động chuyển tiếp sang bước tiếp theo trong kế hoạch mà không cần người dùng ra lệnh cho từng bước nhỏ, luôn đánh giá Done criteria để chốt kết quả cuối cùng.
 - [ ] **Theo dõi trạng thái Task qua UI:** Tích hợp kế hoạch Markdown checklist của Agent hiển thị trực tiếp lên Task Workspace / Kanban view trên UI của V Assistant để người dùng theo dõi trực quan.
+- [ ] **Multi-task Scheduler & Task Tree:** Chuẩn hóa task cha/con với `parentTaskId`, `subtaskId`, trạng thái, timeout, retry và hiển thị cây task trong Task Workspace; giữ Scheduler hiện tại tương thích ngược.
+- [ ] **Multi-sub-agent Delegation:** Thêm capability `delegate_task` để Agent cha phân rã việc cho Agent con có role/instruction/memory riêng; Agent con trả kết quả về Agent cha qua IPC, không chia sẻ transcript hoặc credential ngoài boundary.
+- [ ] **Sub-agent Queue & Concurrency:** Xây queue riêng cho sub-agent, giới hạn số agent chạy đồng thời, backpressure, cancellation và graceful shutdown; không dùng `Promise.all()` không giới hạn trong `poll-loop.ts`.
+- [ ] **Result Aggregation & Review:** Agent cha gom, đối chiếu và tổng hợp kết quả từ nhiều Agent con; hỗ trợ trạng thái partial/failed và retry từng subtask.
+- [ ] **Multi-sub-agent Observability:** Ghi log/metrics cho task tree, agent identity, thời lượng, token/cost, lỗi và kết quả; không ghi secret hoặc credential raw vào log.
 - [ ] **Cải tiến Memory để tự học (Self-learning Memory):** Tinh chỉnh cấu trúc memories của Agent để ghi nhớ các lỗi tool đã sửa thành công, tự áp dụng giải pháp đã tối ưu cho các phiên làm việc sau.
 
 - [x] **Web Search & HTTP Fetch**: Tìm kiếm thông tin web công khai và đọc trang HTML/Markdown (`web_search`, `http_request`)

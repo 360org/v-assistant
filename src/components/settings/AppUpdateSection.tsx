@@ -36,7 +36,7 @@ export function AppUpdateSection() {
   };
 
   return (
-    <section className="mt-10">
+    <section>
       <h2 className="text-sm font-semibold text-neutral-300">
         🔄 {t("software_update_title", language)}
       </h2>

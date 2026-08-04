@@ -20,6 +20,9 @@ export function Settings() {
         </p>
       </div>
 
+      {/* Software Auto-Updater Section */}
+      <AppUpdateSection />
+
       {/* Model & AI Providers Section */}
       <ModelSettings />
 
@@ -37,9 +40,6 @@ export function Settings() {
 
       {/* General Settings (Theme, Language, Memory, Reset) */}
       <GeneralSettings />
-
-      {/* Software Auto-Updater Section */}
-      <AppUpdateSection />
     </div>
   );
 }
