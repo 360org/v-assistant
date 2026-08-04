@@ -2,7 +2,7 @@
 import { signIn, waitForPopupCallback } from "./oauth";
 import { inDesktopShell } from "./proxy";
 
-export const AI_ROUTER_BASE_URL = "http://127.0.0.1:20128/v1";
+export const AI_ROUTER_BASE_URL = "http://127.0.0.1:36360/v1";
 
 export interface AiRouterModel {
   id: string;

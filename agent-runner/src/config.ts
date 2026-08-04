@@ -60,7 +60,7 @@ export function loadConfig(): RunnerConfig {
     maxMessagesPerPrompt: (raw.maxMessagesPerPrompt as number) || DEFAULT_MAX_MESSAGES,
     mcpServers: (raw.mcpServers as RunnerConfig['mcpServers']) || {},
     model: (raw.model as string) || process.env.VUA_MODEL || 'auto',
-    baseUrl: (raw.baseUrl as string) || process.env.VUA_BASE_URL || 'http://127.0.0.1:20128/v1',
+    baseUrl: (raw.baseUrl as string) || process.env.VUA_BASE_URL || 'http://127.0.0.1:36360/v1',
     dataDir: DATA_DIR,
     ipcDir: process.env.VUA_IPC_DIR || path.join(DATA_DIR, 'ipc'),
   };

@@ -72,7 +72,7 @@ export function Onboarding() {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 1500);
           try {
-            const response = await fetch("http://127.0.0.1:20128/health", { signal: controller.signal });
+            const response = await fetch("http://127.0.0.1:36360/health", { signal: controller.signal });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
           } finally {
             clearTimeout(timeoutId);
