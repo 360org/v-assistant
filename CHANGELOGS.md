@@ -4,6 +4,14 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.51] — 2026-08-04
+
+### Tính năng Reply, Retry & Tối ưu hóa Lưu trữ
+*   **Hành động Reply & Retry trực quan:** Bổ sung hai nút "Trả lời" (trích dẫn tin nhắn dạng blockquote) và "Thử lại" (gửi lại yêu cầu trước đó) trực tiếp bên dưới các bong bóng chat của AI.
+*   **Thư mục dữ liệu thương hiệu `~/vuaai-data`:** Chuyển đổi toàn bộ thư mục lưu trữ dữ liệu mặc định từ tệp ẩn `.v-assistant/data` sang thư mục nổi `~/vuaai-data` để tăng tính nhận diện thương hiệu và giúp người dùng dễ quản lý.
+*   **Tự động Code Sign & Notarize:** Cấu hình tự động ký và chứng thực bảo mật với Apple trên GitHub Actions khi phát hành, khắc phục triệt để lỗi "unidentified developer" trên macOS.
+*   **Khắc phục lỗi cổng AI Router:** Chuyển cổng mặc định trong sidecar sang `36360` đồng bộ hoàn toàn với hệ thống, sửa lỗi AI Router bị tắt sau khi mở.
+
 ## [1.1.50] — 2026-08-04
 
 ### Sửa lỗi kiểm tra sức khỏe AI Router trên Windows (HTTP 400 Bad Request)
