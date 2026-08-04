@@ -4,18 +4,28 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
-## [1.1.45] — 2026-08-03
+## [1.1.46] — 2026-08-04
 
-### Hiển thị Trạng thái và Phục hồi AI Router
+### Sửa lỗi chớp tắt PowerShell & Giám sát AI Router trên Windows
 
-*   **Sửa lỗi crash khi click Sign In trên Windows:** Thay thế phương thức `AbortSignal.timeout()` bằng
+*   **Sửa lỗi chớp tắt cửa sổ console (Issue #6):** Thêm cờ `CREATE_NO_WINDOW` (`0x08000000`)
+    cho mọi tiến trình con (`powershell`, `node`, `taskkill`) được gọi trên Windows, ngăn chặn hoàn toàn
+    tình trạng nháy cửa sổ PowerShell màu đen khó chịu khi mở ứng dụng.
+*   **Sửa lỗi kẹt port AI Router trên Windows:** Bổ sung cơ chế tự động tìm và giải phóng (kill)
+    tiến trình đang chiếm port `20128` trên Windows trong hàm `kill_stale_port_process` trước khi bind lại,
+    tránh lỗi `AI Router unavailable` khi chạy app mới.
+*   **Sửa lỗi crash khi click Sign In trên Windows WebView2:** Thay thế phương thức `AbortSignal.timeout()` bằng
     cơ chế `AbortController` và `setTimeout` truyền thống nhằm tương thích ngược 100% với
-    các phiên bản WebView2 (Microsoft Edge) cũ trên Windows, ngăn chặn lỗi crash giao diện khi bấm Login.
-*   **Hiển thị trạng thái AI Router & Agent Runner:** Thêm mục giám sát trạng thái trực quan
+    các phiên bản WebView2 cũ, ngăn chặn crash giao diện khi bấm Login.
+*   **Giám sát trạng thái AI Router & Agent Runner:** Thêm mục giám sát trạng thái trực quan
     tại phần Settings -> Chẩn đoán (`AI Router: 🟢 Đang chạy` / `🔴 Đang dừng`, `Agent Runner: 🟢 Đang chạy` / `🔴 Đang dừng`).
 *   **Thêm nút restart phục hồi AI Router:** Cho phép người dùng click khởi động lại AI Router trực tiếp
     ở giao diện Chẩn đoán. Đồng thời nút "Thử lại" khi gặp lỗi kết nối AI Router giờ sẽ tự động gọi restart
-    AI Router sidecar trước khi kết nối lại, tăng khả năng tự phục hồi.
+    AI Router sidecar trước khi kết nối lại.
+
+## [1.1.45] — 2026-08-03
+
+*   Bản build thử nghiệm nội bộ cho AbortSignal timeout.
 
 ## [1.1.44] — 2026-08-03
 

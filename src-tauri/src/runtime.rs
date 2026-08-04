@@ -193,13 +193,27 @@ fn kill_stale_runner(dir: &Path) {
         ("kill", vec![pid.to_string()]),
     );
 
-    let is_ours = Command::new(probe.0)
-        .args(&probe.1)
+    let mut probe_cmd = Command::new(probe.0);
+    probe_cmd.args(&probe.1);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        probe_cmd.creation_flags(0x08000000);
+    }
+
+    let is_ours = probe_cmd
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).contains("agent-runner"))
         .unwrap_or(false);
     if is_ours {
-        let _ = Command::new(kill.0).args(&kill.1).status();
+        let mut kill_cmd = Command::new(kill.0);
+        kill_cmd.args(&kill.1);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            kill_cmd.creation_flags(0x08000000);
+        }
+        let _ = kill_cmd.status();
         eprintln!("[tauri-runtime] Stopped stale agent-runner (pid {pid})");
     }
     let _ = std::fs::remove_file(&pidfile);
@@ -281,6 +295,11 @@ fn spawn_process(
         cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
 
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
     let child = cmd.spawn().map_err(err)?;
     let _ = std::fs::write(dir.join("runner.pid"), child.id().to_string());
     Ok(child)
@@ -310,6 +329,21 @@ fn kill_stale_port_process(port: u16) {
         let _ = Command::new("pkill").arg("-f").arg("sidecar.mjs").status();
         // Give the OS a moment to release the socket before we rebind it.
         std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::process::Command;
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-NoProfile",
+            "-Command",
+            &format!("Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Foreach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}")
+        ]);
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        let _ = cmd.status();
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }
 
@@ -344,6 +378,12 @@ fn spawn_ai_router(
         if let Ok(stderr) = file.try_clone() {
             command.stdout(file).stderr(stderr);
         }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
     command.spawn().map_err(err)
 }
