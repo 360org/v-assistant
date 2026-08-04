@@ -95,27 +95,44 @@ export function WorkspaceSettingsSection() {
     setTimeout(() => setSavedPathMsg(null), 4000);
   };
 
-  const handleExportBackup = () => {
+  const handleExportBackup = async () => {
     try {
       const jsonStr = exportFullBackupData();
-      const blob = new Blob([jsonStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
       const now = new Date();
       const pad = (n: number) => n.toString().padStart(2, "0");
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       const filename = `v-assistant-backup-${dateStr}.json`;
       const timeFormatted = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ngày ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
 
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      setBackupMsg(`✅ Backup success! Tệp [${filename}] đã được tạo và tải xuống thành công lúc ${timeFormatted}.`);
+      if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const customDir = customDataPath || localStorage.getItem("vua:custom-data-path") || "~/vuaai-data";
+        const savedPath = await invoke<string>("save_custom_data_text", {
+          customDir,
+          relativePath: `backup/${filename}`,
+          content: jsonStr,
+        });
+        setBackupMsg(language === "en"
+          ? `✅ Backup success! Saved to [${savedPath}] at ${timeFormatted}.`
+          : `✅ Backup success! Tệp đã được lưu tại [${savedPath}] lúc ${timeFormatted}.`
+        );
+      } else {
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        setBackupMsg(language === "en"
+          ? `✅ Backup success! File [${filename}] created and downloaded successfully at ${timeFormatted}.`
+          : `✅ Backup success! Tệp [${filename}] đã được tạo và tải xuống thành công lúc ${timeFormatted}.`
+        );
+      }
       setTimeout(() => setBackupMsg(null), 8000);
     } catch (e) {
       console.error(e);
-      setBackupMsg("❌ Lỗi xuất dữ liệu sao lưu.");
+      setBackupMsg(language === "en" ? "❌ Failed to export backup." : "❌ Lỗi xuất dữ liệu sao lưu.");
     }
   };
 
