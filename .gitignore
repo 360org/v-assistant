@@ -29,6 +29,13 @@ scripts/.agentimport-*.mjs
 .vua_ai_router_connections.json
 .vua_ai_router_packs.json
 
+# Apple developer certificates and passwords
+certs/
+*.p12
+*.cer
+*.certSigningRequest
+*password.txt
+
 # Editor / OS
 .DS_Store
 *.local
