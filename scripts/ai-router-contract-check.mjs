@@ -26,7 +26,7 @@ assert(providers.length >= 90, `Expected the full 9router registry, found only $
 
 const adapter = fs.readFileSync(runnerAdapter, "utf8");
 assert(adapter.includes("registerProvider('ai-router'"), "Agent Runner does not register AI Router");
-assert(adapter.includes("http://127.0.0.1:20128/v1"), "AI Router local proxy contract changed unexpectedly");
+assert(adapter.includes("http://127.0.0.1:36360/v1"), "AI Router local proxy contract changed unexpectedly");
 assert(fs.existsSync(sidecar), "AI Router sidecar is missing");
 const sidecarSource = fs.readFileSync(sidecar, "utf8");
 assert(sidecarSource.includes('url.pathname === "/health"') && sidecarSource.includes('url.pathname === "/v1/chat/completions"'), "AI Router public API boundary is missing");
@@ -102,4 +102,4 @@ assert(!sidecarSource.includes("patch.accountLabel = email || `Account ${account
 assert(chatSource.includes("Connected accounts"), "Pack account filters are not inside a dropdown menu");
 assert(chatSource.includes("packExpanded && <details"), "Pack account filters must only render in expanded mode");
 
-console.log(`AI Router contract OK: ${providers.length} inherited providers, Runner -> 127.0.0.1:20128/v1`);
+console.log(`AI Router contract OK: ${providers.length} inherited providers, Runner -> 127.0.0.1:36360/v1`);
