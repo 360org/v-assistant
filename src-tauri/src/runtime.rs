@@ -380,7 +380,7 @@ fn router_healthcheck() -> Result<(), String> {
         Duration::from_millis(250),
     ).map_err(err)?;
     stream.set_read_timeout(Some(Duration::from_millis(500))).map_err(err)?;
-    stream.write_all(b"GET /health HTTP/1.1\\r\\nHost: 127.0.0.1:20128\\r\\nConnection: close\\r\\n\\r\\n").map_err(err)?;
+    stream.write_all(b"GET /health HTTP/1.1\r\nHost: 127.0.0.1:20128\r\nConnection: close\r\n\r\n").map_err(err)?;
     let mut response = String::new();
     stream.read_to_string(&mut response).map_err(err)?;
     if response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200") {
