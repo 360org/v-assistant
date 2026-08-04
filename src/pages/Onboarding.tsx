@@ -68,29 +68,40 @@ export function Onboarding() {
     setSigningIn(id);
     try {
       if (inDesktopShell()) {
-        // Issue #3: health-check AI Router trước khi gọi OAuth.
-        // Nếu sidecar chưa khởi động → thử restart rồi chờ tối đa 3s.
         const checkHealth = async () => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 1500);
           try {
-            await fetch("http://127.0.0.1:20128/health", { signal: controller.signal });
+            const response = await fetch("http://127.0.0.1:20128/health", { signal: controller.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
           } finally {
             clearTimeout(timeoutId);
           }
         };
 
+        const waitForHealth = async () => {
+          const deadline = Date.now() + 10_000;
+          let lastError = "chưa phản hồi";
+          while (Date.now() < deadline) {
+            try {
+              await checkHealth();
+              return;
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
+              await new Promise((resolve) => setTimeout(resolve, 250));
+            }
+          }
+          throw new Error(`AI Router chưa sẵn sàng (${lastError}).`);
+        };
+
         try {
-          await checkHealth();
+          await waitForHealth();
         } catch {
           try {
             await invoke("runtime_restart_ai_router");
-            await new Promise((r) => setTimeout(r, 2500));
-          } catch { /* invoke unavailable in web preview */ }
-          try {
-            await checkHealth();
+            await waitForHealth();
           } catch {
-            throw new Error("AI Router chưa khởi động. Vui lòng thử lại sau vài giây hoặc khởi động lại ứng dụng.");
+            throw new Error("AI Router chưa khởi động. Vui lòng kiểm tra Diagnostic trong Settings hoặc khởi động lại ứng dụng.");
           }
         }
         const attempt = await beginManualSignIn(id);
