@@ -6,8 +6,18 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
-### Giao diện
-- Hiển thị phiên bản hiện tại cạnh tên V Assistant trên Sidebar; giữ thông báo bản cập nhật ở khu vực Cài đặt để tránh trùng lặp.
+## [1.1.47] - 2026-08-04
+
+### Sửa lỗi Windows/Desktop
+- **Native menu desktop**: Bổ sung cấu trúc menu macOS gồm V Assistant, File, Edit, View, Window và Help.
+- **Filesystem approval**: Cho phép chọn file hoặc thư mục để cấp quyền đọc cho Agent Runner; đường dẫn được chuẩn hóa trước khi lưu.
+- **Updater placement**: Đưa khu vực cập nhật phần mềm lên đầu trang Settings và hiển thị nút cập nhật rõ ràng trên Sidebar.
+- **Local build**: Tắt updater artifacts cho `build:local` để bản cài local không bị nhầm là release artifact.
+- **Checklist và skill workflow**: Bổ sung checklist multi-sub-agent và skill xử lý GitHub Issues.
+
+### Kiểm chứng
+- `npm run check` — pass toàn bộ trên `main` sau merge.
+- Desktop bundle, OAuth, Host Process, AI Router, credential boundary, connector, isolation và RAG — pass.
 
 ## [1.1.41] - 2026-08-02
 

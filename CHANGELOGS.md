@@ -4,6 +4,24 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.47] — 2026-08-04
+
+### Desktop menu, updater và checklist
+
+*   Bổ sung cấu trúc native menu cho macOS gồm V Assistant, File, Edit, View,
+    Window và Help để chuẩn hóa trải nghiệm desktop.
+*   Cho phép cấp quyền đọc từ file hoặc thư mục được chọn trong native picker;
+    path được canonicalize trước khi lưu vào approved-read-paths.
+*   Đưa App Update Section lên đầu Settings và đưa nút Update rõ ràng lên
+    Sidebar; bản local build tắt updater artifacts để phân biệt với release build.
+*   Bổ sung checklist multi-task/multi-sub-agent và skill `github-issues-resolved`
+    cho quy trình quét, phân loại, fix và merge GitHub Issues.
+
+### Kiểm chứng
+
+*   `npm run check` đạt trên `main` sau merge, gồm desktop bundle, OAuth,
+    Host Process, AI Router, credential boundary, connector, isolation và RAG.
+
 ## [1.1.46] — 2026-08-04
 
 ### Sửa lỗi chớp tắt PowerShell & Giám sát AI Router trên Windows
