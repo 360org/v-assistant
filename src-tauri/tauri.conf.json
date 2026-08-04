@@ -47,7 +47,7 @@
       "icons/icon.png"
     ],
     "resources": [
-      "../agent-runner/**/*",
+      "../agent-runner/dist/**/*",
       "../ai-router/**/*",
       "../runtime/node/**/*"
     ],
