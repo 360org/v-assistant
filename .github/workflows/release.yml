@@ -71,14 +71,6 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          # Runner ARM macos-latest treo ngắt quãng trong Tauri mà không flush log.
-          # Runner Intel có cross linker của Xcode; Rust và Node bên dưới vẫn chọn
-          # đúng target ARM64 nên installer tạo ra vẫn dành cho Apple Silicon.
-          - platform: macos-15-intel
-            args: "--target aarch64-apple-darwin"
-            target: "aarch64-apple-darwin"
-            dmg_arch: "aarch64"
-            asset_suffix: "macOS-Apple-Silicon"
           # The runner is pure JavaScript (SQLite comes from `node:sqlite`), so
           # this runner only has to produce the Intel Tauri binary — there is no
           # native Node addon left to compile per architecture.
@@ -87,6 +79,14 @@ jobs:
             target: "x86_64-apple-darwin"
             dmg_arch: "x64"
             asset_suffix: "macOS-Intel"
+          # Runner ARM macos-latest treo ngắt quãng trong Tauri mà không flush log.
+          # Runner Intel có cross linker của Xcode; Rust và Node bên dưới vẫn chọn
+          # đúng target ARM64 nên installer tạo ra vẫn dành cho Apple Silicon.
+          - platform: macos-15-intel
+            args: "--target aarch64-apple-darwin"
+            target: "aarch64-apple-darwin"
+            dmg_arch: "aarch64"
+            asset_suffix: "macOS-Apple-Silicon"
 
     runs-on: ${{ matrix.platform }}
     steps:
