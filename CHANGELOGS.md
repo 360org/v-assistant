@@ -4,6 +4,15 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.53] — 2026-08-06
+
+### Tích hợp cổng 36360 & Tối ưu hóa Bộ nhớ
+*   **Hợp nhất cấu hình cổng 36360:** Chuyển đổi toàn bộ dịch vụ AI Router và các tệp kiểm thử hợp đồng sang cổng chuẩn `36360` để đồng bộ thương hiệu 360org.
+*   **Dọn dẹp môi trường Docker:** Gỡ bỏ các tệp tin cấu hình Docker và Colima (`docker-compose.yml`, `Dockerfile`, `dev.sh`...) thừa thãi nhằm cam kết tuyệt đối triết lý Zero-Docker cho người dùng và lập trình viên.
+*   **Tính năng Tự học & Tóm tắt bộ nhớ (Self-improving Memory):** Tự động tóm tắt tệp bộ nhớ `learned.md` của Agent khi vượt quá 30 mục và hỗ trợ công cụ tìm kiếm bộ nhớ cục bộ `search_memory`.
+*   **Cấu hình thư mục làm việc (Workspace Path):** Bổ sung Tauri command `set_workspace_path` và giao diện cấu hình đường dẫn thư mục lưu trữ dữ liệu của Agent, tự động cập nhật và restart runner khi thay đổi.
+*   **Bảo đảm tính ổn định:** Chạy bộ kiểm thử toàn diện và cargo check trên `main` đạt 100%.
+
 ## [1.1.52] — 2026-08-04
 
 ### Tính năng Reply, Retry & Tối ưu hóa Lưu trữ
