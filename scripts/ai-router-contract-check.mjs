@@ -6,7 +6,6 @@ const core = path.join(root, "ai-router", "core");
 const registry = path.join(core, "open-sse", "providers", "registry");
 const runnerAdapter = path.join(root, "agent-runner", "src", "providers", "adapters", "openai.ts");
 const sidecar = path.join(root, "ai-router", "src", "sidecar.mjs");
-const devCompose = path.join(root, "docker-compose.dev.yml");
 // Provider sign-in moved out of the Settings page during the module split;
 // the account-connection rules now live in the Model settings component.
 const settingsPage = path.join(root, "src", "components", "settings", "ModelSettings.tsx");
@@ -42,9 +41,6 @@ assert(sidecarSource.includes('redirectUri = `http://127.0.0.1:${listenPort}${ca
 assert(sidecarSource.includes('["127.0.0.1", "localhost"].includes(candidate.hostname)'), "AI Router CORS does not support both loopback UI origins");
 assert(!sidecarSource.includes('"access-control-allow-origin": "*"'), "AI Router must not expose Vault-backed requests to every browser origin");
 assert(!sidecarSource.includes("startCodexProxy"), "V-Assistant must not modify or embed the Core callback server");
-const composeSource = fs.readFileSync(devCompose, "utf8");
-assert(composeSource.includes("./.vua_vault_dev.json:/data/vault.json"), "Docker UI and AI Router are not sharing the App Vault");
-assert(composeSource.includes('"56121:56121"'), "Docker demo must publish xAI loopback callback port");
 const settingsSource = fs.readFileSync(settingsPage, "utf8");
 const chatSource = fs.readFileSync(chatPage, "utf8");
 const aiRouterClient = fs.readFileSync(path.join(root, "src", "runtime", "aiRouter.ts"), "utf8");
@@ -68,8 +64,8 @@ assert(sidecarSource.includes("const models = new Map()"), "Multiple accounts ca
 assert(sidecarSource.includes('from "../core/open-sse/services/combo.js"'), "AI Router must reuse the inherited Combo service");
 assert(sidecarSource.includes("AI_ROUTER_PACKS_PATH"), "Pack configuration needs its own non-secret store");
 assert(!sidecarSource.includes('ai-router:combos'), "Pack configuration must not be stored in the Vault");
-assert(composeSource.includes('AI_ROUTER_PACKS_PATH: "/data/packs.json"'), "Pack config path is not separated from the Vault");
-assert(composeSource.includes('ai_router_data:/data'), "Pack config must persist in AI Router application data");
+assert(sidecarSource.includes("const packsPath = process.env.AI_ROUTER_PACKS_PATH"), "Pack config path is not separated from the Vault");
+assert(!sidecarSource.includes("const packsPath = vaultPath"), "Pack config must not share the Vault file");
 assert(sidecarSource.includes('url.pathname === "/v1/packs"'), "Pack CRUD API is missing");
 assert(chatSource.includes("saveAiRouterPack"), "Model picker does not expose Pack creation");
 assert(!settingsSource.includes("saveAiRouterPack"), "Pack creation must stay in the model picker, not Settings");

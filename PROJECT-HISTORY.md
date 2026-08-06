@@ -136,10 +136,10 @@ Agent Runner (Host) ── Bộ não độc lập (Node.js/TypeScript)
 ## 7. Quy trình phát triển & phát hành
 
 ```bash
-# Chạy live (không cài gì trên host — Colima)
-./dev.sh up            # → http://localhost:1420, hot reload
+# Chạy live native
+npm run tauri dev
 
-# Test trước khi commit (build + 7 bài test đầu-cuối)
+# Test trước khi commit (build + kiểm thử đầu-cuối)
 npm run check
 
 # Commit khi xanh

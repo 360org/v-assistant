@@ -194,6 +194,18 @@ fn resolve_data_dir_path(custom_dir: String) -> String {
 }
 
 #[tauri::command]
+fn set_workspace_path(
+    app: tauri::AppHandle,
+    state: tauri::State<Runtime>,
+    custom_dir: String,
+) -> Result<String, String> {
+    let workspace = resolve_data_dir(&custom_dir).join("workspace/output-data");
+    state.set_workspace(workspace.clone())?;
+    state.spawn_engine(Some(&app))?;
+    Ok(workspace.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn save_custom_data_file(custom_dir: String, subfolder: String, filename: String, content_b64: String) -> Result<String, String> {
     use std::fs;
     use base64::Engine;
@@ -318,7 +330,7 @@ fn list_host_dir(path: String) -> Result<Vec<String>, String> {
 // §92 forbid giving the model a host shell, so it is gone rather than guarded.
 
 fn agent_workspace(state: &tauri::State<Runtime>) -> std::path::PathBuf {
-    state.dir.join("workspace")
+    state.workspace()
 }
 
 fn approved_read_paths(state: &tauri::State<Runtime>) -> Vec<String> {
@@ -572,6 +584,7 @@ pub fn run() {
             pick_directory,
             grant_agent_read_path,
             resolve_data_dir_path,
+            set_workspace_path,
             save_custom_data_file,
             save_custom_data_text,
             read_host_file,

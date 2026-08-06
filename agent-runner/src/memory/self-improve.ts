@@ -31,6 +31,10 @@ const REFLECT_SYSTEM =
   'Only stable, reusable facts or execution learnings — never one-off task details, and never anything ' +
   'already in the existing memory. Return ONLY a JSON array of strings; return [] if nothing is worth saving.';
 
+const SUMMARIZE_SYSTEM =
+  'You consolidate one assistant role long-term memory. Combine overlapping points, prefer newer facts when points conflict, ' +
+  'and keep only durable preferences, facts, and execution learnings. Return ONLY markdown bullet lines starting with "- ".';
+
 function log(msg: string): void {
   console.error(`[self-improve] ${msg}`);
 }
@@ -135,6 +139,34 @@ export async function reflectAndLearn(
     }
   }
   return fresh.slice(0, MAX_NOTES_PER_TURN);
+}
+
+/** Consolidate long memory files in the background; failure must not affect chat. */
+export async function summarizeMemoryIfNeeded(config: PollLoopConfig, agentDir: string): Promise<void> {
+  const target = memoryPath(agentDir);
+  const existing = readMemory(agentDir);
+  if (existing.length <= 30) return;
+
+  try {
+    let out = '';
+    const query = config.provider.query({
+      prompt: `Current memory:\n${existing.map((m) => `- ${m}`).join('\n')}\n\nConsolidate it under 20 bullet points.`,
+      messages: [],
+      systemContext: { instructions: SUMMARIZE_SYSTEM },
+    });
+    for await (const event of query.events) {
+      if (event.type === 'text_delta') out += event.text;
+      else if (event.type === 'result' && event.text) out = event.text;
+      else if (event.type === 'error') throw new Error(event.message);
+    }
+    const notes = out.split('\n').filter((line) => line.startsWith('- '));
+    if (notes.length > 0) {
+      fs.writeFileSync(target, `# Learned about the user\n\nWritten automatically after conversations.\n\n${notes.join('\n')}\n`, 'utf8');
+      log(`Memory consolidated from ${existing.length} to ${notes.length} note(s)`);
+    }
+  } catch (error) {
+    log(`Memory consolidation skipped: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**

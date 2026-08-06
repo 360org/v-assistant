@@ -159,7 +159,7 @@
   registry/executor/translator/OAuth/refresh/model catalog cho tất cả vendor;
   không phụ thuộc Git submodule, dashboard hay process 9router.
 - [x] Đổi ranh giới Runner sang provider nội bộ `ai-router`; giữ `9router` chỉ
-  là alias tương thích config cũ. Contract proxy: `http://127.0.0.1:20128/v1`.
+  là alias tương thích config cũ. Contract proxy: `http://127.0.0.1:36360/v1`.
 - [x] Chat không còn dropdown vendor. Model selector đọc `/v1/models` của AI
   Router; request được đánh dấu router-only để không lén gọi vendor trực tiếp.
 - [~] Settings bỏ trạng thái "active provider" cũ và chỉ hiển thị connection
@@ -698,7 +698,7 @@
 ### 14.3 CI/CD & Đóng gói
 - [x] GitHub Actions workflow (build installer)
 - [x] Bản phát hành v0.1.0
-- [x] Docker live-dev (`docker-compose.dev.yml` + `dev.sh`)
+- [x] Đã xoá Docker live-dev cũ; dev/test dùng Tauri Host Process native
 - [x] Bundle Agent Runner + Node runtime vào Tauri resources. Build local tự
       nạp Node theo kiến trúc macOS; CI nạp runtime đúng target.
 - [ ] Auto-detect runtime: Bun có sẵn → dùng Bun; fallback Node

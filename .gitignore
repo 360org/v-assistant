@@ -38,6 +38,7 @@ certs/
 
 # Editor / OS
 .DS_Store
+*.swp
 *.local
 .vscode/*
 !.vscode/extensions.json

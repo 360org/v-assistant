@@ -21,6 +21,7 @@ use tauri::Manager;
 /// App-facing engine state, managed by Tauri.
 pub struct Runtime {
     pub dir: PathBuf,
+    workspace: Arc<Mutex<PathBuf>>,
     engine: Arc<Mutex<Option<Child>>>,
     ai_router: Arc<Mutex<Option<Child>>>,
     connector_token: String,
@@ -86,6 +87,15 @@ fn is_host_shell(command: &str) -> bool {
         .and_then(|name| name.to_str())
         .map(|name| matches!(name.to_ascii_lowercase().as_str(), "sh" | "bash" | "zsh" | "fish" | "cmd" | "cmd.exe" | "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe"))
         .unwrap_or(false)
+}
+
+fn saved_workspace(dir: &Path) -> PathBuf {
+    std::fs::read_to_string(dir.join("workspace-path.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|config| config.get("workspace")?.as_str().map(PathBuf::from))
+        .filter(|workspace| workspace.is_absolute())
+        .unwrap_or_else(|| dir.join("workspace"))
 }
 
 fn find_executable(name: &str) -> Option<PathBuf> {
@@ -234,6 +244,7 @@ fn kill_stale_runner(dir: &Path) {
 
 fn spawn_process(
     dir: &Path,
+    workspace: &Path,
     project_dir: &Path,
     config_path: &Path,
     connector_token: &str,
@@ -283,7 +294,7 @@ fn spawn_process(
 
     cmd.env("VUA_DATA_DIR", dir)
         .env("VUA_IPC_DIR", dir.join("ipc"))
-        .env("VUA_AGENT_WORKSPACE", dir.join("workspace"))
+        .env("VUA_AGENT_WORKSPACE", workspace)
         .env("VUA_AGENT_APPROVED_READ_PATHS_FILE", dir.join("approved-read-paths.json"))
         .env("VUA_AI_ROUTER_URL", "http://127.0.0.1:36360")
         .env("VUA_CONNECTOR_GATEWAY_TOKEN", connector_token)
@@ -522,13 +533,15 @@ impl Runtime {
     pub fn new(dir: PathBuf, project_dir: PathBuf, broker: VaultBroker) -> Result<Self, String> {
         std::fs::create_dir_all(dir.join("ipc")).map_err(err)?;
         std::fs::create_dir_all(dir.join("agents")).map_err(err)?;
-        std::fs::create_dir_all(dir.join("workspace")).map_err(err)?;
+        let workspace = Arc::new(Mutex::new(saved_workspace(&dir)));
+        std::fs::create_dir_all(workspace.lock().map_err(err)?.as_path()).map_err(err)?;
 
         let engine = Arc::new(Mutex::new(None));
         let ai_router = Arc::new(Mutex::new(None));
 
         let runtime = Runtime {
             dir: dir.clone(),
+            workspace: workspace.clone(),
             engine: engine.clone(),
             ai_router: ai_router.clone(),
             connector_token: broker.connector_token.clone(),
@@ -559,6 +572,7 @@ impl Runtime {
 
         // Spawning background process monitor (health check & auto-restart)
         let dir_clone = dir;
+        let workspace_clone = workspace.clone();
         let engine_clone = engine.clone();
         let router_clone = ai_router.clone();
         let project_dir_val = project_dir;
@@ -606,8 +620,13 @@ impl Runtime {
                             }
 
                             let config_path = dir_clone.join("runner.json");
+                            let workspace = match workspace_clone.lock() {
+                                Ok(workspace) => workspace.clone(),
+                                Err(_) => continue,
+                            };
                             match spawn_process(
                                 &dir_clone,
+                                &workspace,
                                 &project_dir_val,
                                 &config_path,
                                 &connector_token,
@@ -862,6 +881,21 @@ impl Runtime {
         Ok(())
     }
 
+    pub fn workspace(&self) -> PathBuf {
+        self.workspace.lock().map(|workspace| workspace.clone()).unwrap_or_else(|_| self.dir.join("workspace"))
+    }
+
+    pub fn set_workspace(&self, workspace: PathBuf) -> Result<(), String> {
+        std::fs::create_dir_all(&workspace).map_err(err)?;
+        std::fs::write(
+            self.dir.join("workspace-path.json"),
+            serde_json::json!({ "workspace": workspace }).to_string(),
+        )
+        .map_err(err)?;
+        *self.workspace.lock().map_err(err)? = workspace;
+        Ok(())
+    }
+
     pub fn spawn_engine_with_config(
         &self,
         agent_name: &str,
@@ -909,6 +943,7 @@ impl Runtime {
 
         let child = spawn_process(
             &self.dir,
+            &self.workspace(),
             &project_dir,
             &config_path,
             &self.connector_token,
@@ -1005,7 +1040,7 @@ impl Runtime {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_host_shell, resolve_project_dir};
+    use super::{is_host_shell, resolve_project_dir, saved_workspace};
 
     #[test]
     fn rejects_host_shells_as_mcp_servers() {
@@ -1017,6 +1052,21 @@ mod tests {
     }
 
     use std::fs;
+
+    #[test]
+    fn restores_saved_workspace_path() {
+        let root = std::env::temp_dir().join(format!("v-assistant-workspace-test-{}", std::process::id()));
+        fs::create_dir_all(&root).expect("runtime directory must be created");
+        let expected = root.join("custom/workspace/output-data");
+        fs::write(
+            root.join("workspace-path.json"),
+            serde_json::json!({ "workspace": expected }).to_string(),
+        )
+        .expect("workspace configuration must be written");
+
+        assert_eq!(saved_workspace(&root), expected);
+        fs::remove_dir_all(root).expect("runtime directory must be removed");
+    }
 
     #[test]
     fn resolves_tauri_parent_resource_layout() {

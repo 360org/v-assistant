@@ -14,37 +14,7 @@ npm run dev      # → http://localhost:1420
 "Continue with OpenRouter" là đăng nhập thật trên localhost; các vendor khác định
 tuyến qua model của OpenRouter. Ở đây credential nằm trong trình duyệt.
 
-**Docker (Colima) — không cài gì trên máy host:**
-
-Runtime là [Colima](https://github.com/abiosoft/colima), không phải Docker Desktop.
-Cài một lần:
-
-```bash
-brew install colima docker docker-compose
-```
-
-Rồi dùng script `dev.sh` — nó tự khởi động Colima khi cần:
-
-```bash
-./dev.sh up        # bật → http://localhost:1420 (lần đầu ~1 phút)
-./dev.sh logs      # xem log dev server
-./dev.sh restart   # restart sau khi đổi cấu hình
-./dev.sh stop      # tạm dừng (giữ container)
-./dev.sh start     # chạy lại
-./dev.sh down      # dừng và xóa (giữ volume node_modules)
-./dev.sh reset     # dựng lại từ đầu (node_modules mới)
-./dev.sh shell     # mở shell trong container dev
-./dev.sh status    # trạng thái Colima + container
-```
-
-Không cần Node hay Rust trên máy — mọi thứ chạy trong container. Source được
-bind-mount vào, nên sửa file trên host là app hot-reload ngay. `node_modules` nằm
-trong volume riêng (binary build trong container không đụng vào host). Cái này chạy
-bản **web** (Vault dùng bộ nhớ trình duyệt); đăng nhập thật với OpenRouter chạy
-được trên localhost.
-
-Bên dưới, `dev.sh` bọc `docker compose -f docker-compose.dev.yml`, nên anh vẫn có
-thể dùng Compose trực tiếp nếu thích.
+**Không dùng Docker/Colima cho dev/test nữa:** app chạy bằng Tauri Host Process native để test đúng Vault, sidecar, filesystem và IPC thật.
 
 **App desktop (bản thật, hot reload):**
 

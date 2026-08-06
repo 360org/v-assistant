@@ -26,7 +26,7 @@ POST /v1/responses
 POST /v1/embeddings
 ```
 
-The service binds only to `127.0.0.1:20128`. The Agent Runner calls it using
+The service binds only to `127.0.0.1:36360`. The Agent Runner calls it using
 the provider id `ai-router`; it must never call a vendor directly in production.
 
 `src/sidecar.mjs` is the API-only boundary. It is a first-party V-Assistant

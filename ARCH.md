@@ -118,7 +118,7 @@ Tiến trình nền chạy độc lập trên máy host (Bun hoặc Node.js), **
 
 ### 2.4. Universal LLM Client + AI Router
 
-Agent Runner chỉ gọi API nội bộ `http://127.0.0.1:20128/v1`. AI Router dùng Provider Core đã copy để kết nối các endpoint vendor:
+Agent Runner chỉ gọi API nội bộ `http://127.0.0.1:36360/v1`. AI Router dùng Provider Core đã copy để kết nối các endpoint vendor:
 
 | Provider | Endpoint | Giao thức |
 |----------|----------|-----------|

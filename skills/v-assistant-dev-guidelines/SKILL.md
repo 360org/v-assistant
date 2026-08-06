@@ -41,7 +41,7 @@ Trước khi đề xuất bất kỳ thay đổi nào về **luồng người d�
 
 | Đúng | Sai |
 |---|---|
-| **AI Router** — tên chính thức của tầng chung chuyển, chạy local `127.0.0.1:20128` (`ai-router/`) | Gọi nó là "9router" trong UI/tài liệu sản phẩm |
+| **AI Router** — tên chính thức của tầng chung chuyển, chạy local `127.0.0.1:36360` (`ai-router/`) | Gọi nó là "9router" trong UI/tài liệu sản phẩm |
 | **9router** — chỉ là **công nghệ nền** (upstream) mà AI Router kế thừa | Đổi tên AI Router về 9router |
 | **OpenRouter** — chỉ là **một provider** trong danh sách, ngang hàng ChatGPT/Claude/Gemini | Coi OpenRouter là hạ tầng chung chuyển của app |
 
@@ -164,9 +164,9 @@ Trước khi "sửa" một phần đang hoạt động: **hỏi PO xem nó có �
 | Bản cài thật vào `/Applications/V Assistant.app` | `npm run build:local` |
 | Chỉ biên dịch sidecar sau khi sửa `agent-runner/src` | `npm run build:runner` |
 
-* `./dev up|ui|all` (Docker/Colima) **không dùng nữa** — chỉ còn cho profile server nếu PO yêu cầu rõ.
+* Docker/Colima profile cũ đã xoá khỏi repo; không dùng `./dev up|ui|all` nữa.
 * Host đã có `node`/`npm` (`/usr/local/bin`) và `cargo` (`~/.cargo/bin`).
-* **Dev build và app release dùng chung** bundle id + Vault + port 20128 → chạy song song sẽ đá nhau. Chỉ chạy **một instance** khi test, và nói rõ đang test instance nào.
+* **Dev build và app release dùng chung** bundle id + Vault + port 36360 → chạy song song sẽ đá nhau. Chỉ chạy **một instance** khi test, và nói rõ đang test instance nào.
 * **Vòng chờ (`until … do sleep`) phải có điều kiện thoát khi tiến trình chết**, nếu không sẽ treo vĩnh viễn. Luôn dọn task nền đã xong.
 * Không thao tác UI khi PO đang dùng app.
 

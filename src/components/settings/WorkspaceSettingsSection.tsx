@@ -72,26 +72,35 @@ export function WorkspaceSettingsSection() {
     }
   };
 
-  const handleSaveDataPath = () => {
+  const handleSaveDataPath = async () => {
     const cleanPath = dataPathInput.trim();
-    setCustomDataPath(cleanPath);
-    if (cleanPath) {
-      void import("@tauri-apps/api/core").then(({ invoke }) => {
-        void invoke("save_custom_data_text", {
-          customDir: cleanPath,
-          relativePath: "README.txt",
-          content: "Thư mục lưu trữ dữ liệu Vua AI Assistant.\nCác tệp tải lên (uploads/), nhật ký trò chuyện (chats/) và bản sao lưu tự động (v_assistant_backup.json) được lưu trữ tại đây.",
-        }).catch(() => {});
-      }).catch(() => {});
+    if (!cleanPath) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_workspace_path", { customDir: cleanPath });
+      await invoke("save_custom_data_text", {
+        customDir: cleanPath,
+        relativePath: "README.txt",
+        content: "Thư mục lưu trữ dữ liệu Vua AI Assistant.\nCác tệp tải lên (uploads/), nhật ký trò chuyện (chats/) và bản sao lưu tự động (v_assistant_backup.json) được lưu trữ tại đây.",
+      });
+      setCustomDataPath(cleanPath);
+      setSavedPathMsg("✅ Đã lưu vị trí & workspace/output-data đã được áp dụng!");
+    } catch {
+      setSavedPathMsg("❌ Không thể áp dụng vị trí lưu trữ.");
     }
-    setSavedPathMsg("✅ Đã lưu vị trí & tự động đồng bộ dữ liệu vào thư mục host!");
     setTimeout(() => setSavedPathMsg(null), 4000);
   };
 
-  const handleResetDefaultDataPath = () => {
-    setCustomDataPath("");
-    setDataPathInput("~/vuaai-data");
-    setSavedPathMsg("✅ Đã đặt lại đường dẫn dữ liệu mặc định!");
+  const handleResetDefaultDataPath = async () => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_workspace_path", { customDir: "~/vuaai-data" });
+      setCustomDataPath("");
+      setDataPathInput("~/vuaai-data");
+      setSavedPathMsg("✅ Đã đặt lại đường dẫn dữ liệu mặc định!");
+    } catch {
+      setSavedPathMsg("❌ Không thể đặt lại vị trí lưu trữ.");
+    }
     setTimeout(() => setSavedPathMsg(null), 4000);
   };
 

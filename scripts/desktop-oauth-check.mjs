@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PORT = Number(process.env.AI_ROUTER_PORT || 20128);
+const PORT = Number(process.env.AI_ROUTER_PORT || 36360);
 const baseUrl = process.env.AI_ROUTER_BASE_URL || `http://127.0.0.1:${PORT}/v1`;
 
 async function reachable() {

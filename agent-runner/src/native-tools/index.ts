@@ -8,6 +8,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { loadConfig } from '../config.js';
+import { readMemory } from '../memory/self-improve.js';
 import type { ToolDefinition, ToolResult } from '../providers/types.js';
 
 function log(msg: string): void {
@@ -663,6 +664,38 @@ const scheduleTaskTool: NativeTool = {
   },
 };
 
+const searchMemoryTool: NativeTool = {
+  definition: {
+    name: 'search_memory',
+    description: 'Search the agent long-term learned memory for durable user preferences, facts, and execution learnings.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Keywords to search for in memory' },
+      },
+      required: ['query'],
+    },
+  },
+  async execute(args): Promise<string> {
+    const query = String(args.query || '').trim().toLowerCase();
+    if (!query) return 'Error: query cannot be empty.';
+
+    const words = query.split(/\s+/).filter((word) => word.length > 1);
+    const matches = readMemory(AGENT_ROOT)
+      .map((note) => ({
+        note,
+        score: words.reduce((score, word) => score + (note.toLowerCase().includes(word) ? 1 : 0), 0),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    return matches.length
+      ? matches.map((item) => `- ${item.note}`).join('\n')
+      : `No memories matched query: "${args.query}"`;
+  },
+};
+
 // --- Registry ---
 
 /** All built-in native tools */
@@ -677,6 +710,7 @@ export const NATIVE_TOOLS: NativeTool[] = [
   connectorRequestTool,
   vaultListTool,
   scheduleTaskTool,
+  searchMemoryTool,
 ];
 
 /** Get tool definitions for all native tools (for sending to LLM) */
