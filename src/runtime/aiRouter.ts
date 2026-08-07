@@ -540,6 +540,10 @@ export async function saveConnectionAndCleanupDuplicates(
     isActive: true,
   });
 
+  // Tự động chạy verify kết nối ngay sau khi lưu để kích hoạt trạng thái Verified
+  // và tự động load models cho người dùng mà không cần click nút Test thủ công.
+  void testAiRouterConnection(connId).catch(() => {});
+
   for (const c of connections) {
     if (
       c.id !== connId &&
