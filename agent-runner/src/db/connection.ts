@@ -14,7 +14,7 @@ import path from 'path';
 import { openDatabase, type DatabaseHandle } from './sqlite.js';
 
 const DEFAULT_IPC_DIR = process.env.VUA_IPC_DIR || path.join(
-  process.env.VUA_DATA_DIR || path.join(process.env.HOME || '/tmp', '.v-assistant'),
+  process.env.VUA_DATA_DIR || path.join(process.env.HOME || '/tmp', '.v-vuaai'),
   'ipc'
 );
 

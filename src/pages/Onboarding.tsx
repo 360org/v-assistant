@@ -21,6 +21,7 @@ import {
 import { inDesktopShell } from "@/runtime/proxy";
 import { invoke } from "@tauri-apps/api/core";
 import { loginConfig } from "@/runtime/providers";
+import { saveConnectionAndCleanupDuplicates } from "@/runtime/aiRouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/Logo";
@@ -118,6 +119,17 @@ export function Onboarding() {
           result.provider,
           loginConfig(result.provider, result.apiKey, result),
         );
+        await saveConnectionAndCleanupDuplicates(
+          result.provider,
+          getProvider(result.provider).name,
+          result.apiKey,
+          "subscription",
+          {
+            refreshToken: result.refreshToken,
+            projectId: result.projectId,
+            expiresIn: result.expiresAt ? Math.round((result.expiresAt - Date.now()) / 1000) : undefined,
+          }
+        ).catch((err) => console.error("Failed to save onboarding connection to AI Router:", err));
         completeOnboarding(result.provider, []);
       }
     } catch (error) {
@@ -141,6 +153,18 @@ export function Onboarding() {
     try {
       const result = await completeManualSignIn(manualAttempt, manualCallback);
       await connectProvider(result.provider, loginConfig(result.provider, result.apiKey, result));
+      await saveConnectionAndCleanupDuplicates(
+        result.provider,
+        getProvider(result.provider).name,
+        result.apiKey,
+        "subscription",
+        {
+          refreshToken: result.refreshToken,
+          projectId: result.projectId,
+          expiresIn: result.expiresAt ? Math.round((result.expiresAt - Date.now()) / 1000) : undefined,
+        },
+        manualCallback
+      ).catch((err) => console.error("Failed to save onboarding connection to AI Router:", err));
       completeOnboarding(result.provider, []);
     } catch (error) {
       setSignInError(error instanceof Error ? error.message : String(error));

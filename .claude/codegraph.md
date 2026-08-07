@@ -52,5 +52,5 @@ graph TD;
     ai-router_core_open-sse_executors_cursor_js["ai-router/core/open-sse/executors/cursor.js"] --> ai-router_core_open-sse_utils_sseConstants_js["ai-router/core/open-sse/utils/sseConstants.js"];
     ai-router_core_open-sse_executors_cursor_js["ai-router/core/open-sse/executors/cursor.js"] --> ai-router_core_open-sse_utils_sse_js["ai-router/core/open-sse/utils/sse.js"];
     ai-router_core_open-sse_executors_cursor_js["ai-router/core/open-sse/executors/cursor.js"] --> ai-router_core_open-sse_translator_formats_js["ai-router/core/open-sse/translator/formats.js"];
-    truncated["... và 1652 mối liên kết khác (đã rút gọn để tiết kiệm token)"]
+    truncated["... và 1653 mối liên kết khác (đã rút gọn để tiết kiệm token)"]
 ```

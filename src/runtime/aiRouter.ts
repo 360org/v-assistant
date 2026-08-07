@@ -118,6 +118,8 @@ function normalizeModels(payload: unknown): AiRouterModel[] {
 }
 
 import { vaultGet, vaultSet } from "./vault";
+import { fetchVendorAccount } from "./oauth";
+import type { ProviderId } from "@/lib/catalog";
 
 const PACKS_VAULT_KEY = "ai_router_custom_packs_v1";
 
@@ -436,4 +438,119 @@ export async function captureGrokWebSsoCookie(): Promise<string> {
   }
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<string>("capture_grok_sso_cookie");
+}
+
+export function parseEmailFromTokenData(
+  tokens?: { email?: string; idToken?: string } | null,
+  callbackUrl?: string
+): string | undefined {
+  if (tokens?.email && tokens.email.includes("@")) return tokens.email;
+
+  if (tokens?.idToken) {
+    try {
+      const parts = tokens.idToken.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+        if (payload.email && typeof payload.email === "string" && payload.email.includes("@")) {
+          return payload.email;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (callbackUrl) {
+    try {
+      const urlObj = new URL(callbackUrl.trim());
+      const email = urlObj.searchParams.get("email") || urlObj.searchParams.get("user") || urlObj.searchParams.get("login");
+      if (email && email.includes("@")) return email;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return undefined;
+}
+
+export async function saveConnectionAndCleanupDuplicates(
+  providerId: string,
+  providerName: string,
+  key: string,
+  authType: "subscription" | "api-key",
+  tokenData?: { email?: string; idToken?: string; refreshToken?: string; projectId?: string; expiresIn?: number } | null,
+  callbackUrlStr?: string,
+  customBaseUrl?: string
+): Promise<string> {
+  const vendorAcc = await fetchVendorAccount(providerId as ProviderId, key).catch(() => null);
+  const targetEmail =
+    vendorAcc?.label && vendorAcc.label.includes("@")
+      ? vendorAcc.label
+      : tokenData?.email || parseEmailFromTokenData(tokenData, callbackUrlStr);
+
+  const matchedProviderKeys = [providerId.toLowerCase()];
+  if (providerId === "grok-cli" || providerId === "grok") matchedProviderKeys.push("grok-cli", "grok", "xai");
+  if (providerId === "codex" || providerId === "chatgpt" || providerId === "openai") matchedProviderKeys.push("codex", "chatgpt", "openai");
+  if (providerId === "antigravity" || providerId === "gemini") matchedProviderKeys.push("antigravity", "gemini");
+
+  const connections = await getAiRouterConnections().catch(() => []);
+  const existingConn = connections.find(
+    (c) =>
+      matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p)) &&
+      ((targetEmail &&
+        targetEmail.includes("@") &&
+        (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
+        c.credentialRef === key)
+  );
+
+  const connId = existingConn ? existingConn.id : `${providerId}_${Date.now()}`;
+  const credentialRef = `ai-router:credential:${connId}`;
+  const countForProv = connections.filter((c) =>
+    matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p))
+  ).length + 1;
+  const maskedKey = key.length > 10 ? `Key (${key.slice(0, 4)}...${key.slice(-4)})` : "API Key";
+  const accountLabel =
+    targetEmail ||
+    existingConn?.accountLabel ||
+    existingConn?.email ||
+    vendorAcc?.label ||
+    (authType === "api-key" ? maskedKey : `${providerName} Account #${countForProv}`);
+
+  await vaultSet(
+    credentialRef,
+    JSON.stringify({
+      accessToken: authType === "subscription" ? key : undefined,
+      apiKey: authType === "api-key" ? key : undefined,
+      refreshToken: tokenData?.refreshToken,
+      projectId: tokenData?.projectId,
+      expiresAt: tokenData?.expiresIn ? Date.now() + tokenData.expiresIn * 1000 : undefined,
+      email: targetEmail,
+      ...(customBaseUrl ? { providerSpecificData: { baseUrl: customBaseUrl } } : {}),
+    })
+  ).catch(() => {});
+
+  await saveAiRouterConnection({
+    id: connId,
+    provider: providerId,
+    name: providerName,
+    accountLabel,
+    email: targetEmail || existingConn?.email,
+    authType,
+    credentialRef,
+    isActive: true,
+  });
+
+  for (const c of connections) {
+    if (
+      c.id !== connId &&
+      matchedProviderKeys.some((p) => c.provider.toLowerCase() === p || c.id.toLowerCase().startsWith(p)) &&
+      ((targetEmail &&
+        targetEmail.includes("@") &&
+        (c.email?.toLowerCase() === targetEmail.toLowerCase() || c.accountLabel?.toLowerCase() === targetEmail.toLowerCase())) ||
+        c.credentialRef === credentialRef)
+    ) {
+      await deleteAiRouterConnection(c.id).catch(() => {});
+    }
+  }
+  return connId;
 }

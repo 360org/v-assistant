@@ -175,7 +175,12 @@ fn find_node(project_dir: &Path) -> Option<PathBuf> {
         "runtime/node/node"
     });
     if bundled.exists() {
-        return Some(bundled);
+        // Kiểm tra xem bundled node có thực sự chạy được không (tránh lỗi glibc/permission trên Linux)
+        if let Ok(output) = Command::new(&bundled).arg("--version").output() {
+            if output.status.success() {
+                return Some(bundled);
+            }
+        }
     }
     find_executable("node")
 }

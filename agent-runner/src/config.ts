@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const DATA_DIR = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '/tmp', '.v-assistant');
+const DATA_DIR = process.env.VUA_DATA_DIR || path.join(process.env.HOME || '/tmp', '.v-vuaai');
 const CONFIG_PATH = process.env.CONFIG_PATH || path.join(DATA_DIR, 'runner.json');
 
 export interface RunnerConfig {
