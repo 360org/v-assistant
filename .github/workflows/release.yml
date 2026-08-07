@@ -446,6 +446,8 @@ jobs:
     if: needs.version.outputs.tag != '' && github.event_name == 'push'
     runs-on: ubuntu-22.04
     steps:
+      - uses: actions/checkout@v5
+
       - name: Generate updater manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
