@@ -4,6 +4,11 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.56] — 2026-08-07
+
+### Tối ưu hóa Trải nghiệm Kết nối (UX Models Load)
+*   **Tự động Verify kết nối sau khi đăng nhập:** Sửa đổi `saveConnectionAndCleanupDuplicates` tự động trigger kiểm tra kết nối API (`testAiRouterConnection`) ngay khi đăng nhập OAuth hoặc thêm API Key thành công. Loại bỏ thao tác bắt người dùng phải bấm "Test API" thủ công mới load được danh sách models trong Chat.
+
 ## [1.1.55] — 2026-08-07
 
 ### Sửa lỗi build release
