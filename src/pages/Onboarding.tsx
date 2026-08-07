@@ -358,7 +358,23 @@ export function Onboarding() {
           hasSubscription={Boolean(user && providerConfigs["openrouter"]?.apiKey)}
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
-            if (config) void connectProvider(connectFor, config);
+            if (config) {
+              void connectProvider(connectFor, config);
+              const key = config.apiKey || (connectFor === "local" ? config.baseUrl : undefined);
+              if (key) {
+                const providerInfo = getProvider(connectFor);
+                const authType = config.oauth ? "subscription" : "api-key";
+                void saveConnectionAndCleanupDuplicates(
+                  connectFor,
+                  providerInfo.name,
+                  key,
+                  authType,
+                  null,
+                  undefined,
+                  connectFor === "local" ? (config.baseUrl || undefined) : undefined
+                ).catch((err) => console.error("Failed to save provider config connection to AI Router:", err));
+              }
+            }
             setProvider(connectFor);
             setConnectFor(null);
             setStep("connect");
