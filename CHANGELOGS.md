@@ -4,6 +4,12 @@ Nhật ký ghi lại các cột mốc thay đổi kiến trúc và tái cấu tr
 
 ## [Unreleased]
 
+## [1.1.55] — 2026-08-07
+
+### Sửa lỗi build release
+*   **Fix lỗi TypeScript chặn build macOS (v1.1.54):** Xoá 3 import thừa (`saveAiRouterConnection`, `fetchVendorAccount`, `vaultSet`) trong `ModelSettings.tsx` gây lỗi `TS6133` khiến bước `tsc` fail trên CI, chặn toàn bộ release v1.1.54.
+*   **Sắp xếp lại thứ tự build macOS:** Build Intel (`x86_64-apple-darwin`) chạy trước Apple Silicon (`aarch64-apple-darwin`) trong job `build_macos`.
+
 ## [1.1.53] — 2026-08-06
 
 ### Tích hợp cổng 36360 & Tối ưu hóa Bộ nhớ
