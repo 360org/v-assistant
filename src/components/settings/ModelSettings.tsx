@@ -10,7 +10,6 @@ import {
   exchangeAiRouterOAuthCallbackUrl,
   getAiRouterConnections,
   getAiRouterProviderCatalog,
-  saveAiRouterConnection,
   saveConnectionAndCleanupDuplicates,
   signInWithAiRouterCore,
   testAiRouterConnection,
@@ -22,8 +21,8 @@ import { openExternalUrl } from "@/components/MessageContent";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import { beginManualSignIn, completeManualSignIn, exchangeCode, fetchVendorAccount, type ManualSignInAttempt } from "@/runtime/oauth";
-import { vaultGet, vaultSet } from "@/runtime/vault";
+import { beginManualSignIn, completeManualSignIn, exchangeCode, type ManualSignInAttempt } from "@/runtime/oauth";
+import { vaultGet } from "@/runtime/vault";
 import type { ProviderId } from "@/lib/catalog";
 
 const LOCAL_AI_ACCOUNTS = [
