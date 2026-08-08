@@ -42,6 +42,7 @@ assert(sidecarSource.includes('["127.0.0.1", "localhost"].includes(candidate.hos
 assert(!sidecarSource.includes('"access-control-allow-origin": "*"'), "AI Router must not expose Vault-backed requests to every browser origin");
 assert(!sidecarSource.includes("startCodexProxy"), "V-Assistant must not modify or embed the Core callback server");
 const settingsSource = fs.readFileSync(settingsPage, "utf8");
+const onboardingSource = fs.readFileSync(path.join(root, "src", "pages", "Onboarding.tsx"), "utf8");
 const chatSource = fs.readFileSync(chatPage, "utf8");
 const aiRouterClient = fs.readFileSync(path.join(root, "src", "runtime", "aiRouter.ts"), "utf8");
 const authRustSource = fs.readFileSync(authRust, "utf8");
@@ -51,14 +52,25 @@ const tauriLibSource = fs.readFileSync(tauriLib, "utf8");
 // credential matches, otherwise a fresh per-provider id is minted. That keeps
 // two accounts of the same vendor apart without minting duplicates for the
 // same account on every login.
+//
+// The derivation lives in the shared aiRouter client, not in the Settings
+// component: onboarding signs in too, and both paths must mint ids the same
+// way. Assert against the client so moving the UI cannot silently drop it.
 assert(
-  settingsSource.includes("existingConn ? existingConn.id : `${providerId}_${Date.now()}`"),
+  aiRouterClient.includes("existingConn ? existingConn.id : `${providerId}_${Date.now()}`"),
   "Provider login does not derive a stable per-account connection ID",
 );
 assert(
-  settingsSource.includes("saveConnectionAndCleanupDuplicates"),
-  "Provider login does not de-duplicate connections for the same account",
+  aiRouterClient.includes("export async function saveConnectionAndCleanupDuplicates"),
+  "The shared connection writer is missing",
 );
+// Every sign-in surface must go through that shared writer.
+for (const [name, source] of [["Settings", settingsSource], ["Onboarding", onboardingSource]]) {
+  assert(
+    source.includes("saveConnectionAndCleanupDuplicates"),
+    `${name} sign-in does not de-duplicate connections for the same account`,
+  );
+}
 assert(!settingsSource.includes('`${selectedProvider.id}:default`'), "Provider login still overwrites the default account");
 assert(sidecarSource.includes("const models = new Map()"), "Multiple accounts can duplicate models in the catalog");
 assert(sidecarSource.includes('from "../core/open-sse/services/combo.js"'), "AI Router must reuse the inherited Combo service");

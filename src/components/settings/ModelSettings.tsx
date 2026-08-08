@@ -23,6 +23,7 @@ import { useApp } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { beginManualSignIn, completeManualSignIn, exchangeCode, type ManualSignInAttempt } from "@/runtime/oauth";
 import { vaultGet } from "@/runtime/vault";
+import { friendlyProviderError } from "@/runtime/providerErrors";
 import type { ProviderId } from "@/lib/catalog";
 
 const LOCAL_AI_ACCOUNTS = [
@@ -248,24 +249,34 @@ export function ModelSettings() {
   const handleTestConnection = async (connId: string) => {
     setActionConnId(connId);
     setCardTestStatus((prev) => ({ ...prev, [connId]: { loading: true } }));
+    // Tên dịch vụ để câu báo lỗi gọi đúng tên thay vì "nhà cung cấp".
+    const vendorName = connections.find((c) => c.id === connId)?.provider;
     try {
       const res = await testAiRouterConnection(connId);
       if (res.valid) {
         setCardTestStatus((prev) => ({
           ...prev,
-          [connId]: { loading: false, success: true, message: "✅ Xắc thực kết nối API thành công! Tài khoản đang hoạt động tốt." },
+          [connId]: { loading: false, success: true, message: "✅ Xác thực kết nối API thành công! Tài khoản đang hoạt động tốt." },
         }));
       } else {
         setCardTestStatus((prev) => ({
           ...prev,
-          [connId]: { loading: false, success: false, message: `❌ Xắc thực thất bại: ${res.error || "Không thể kết nối API"}` },
+          [connId]: {
+            loading: false,
+            success: false,
+            message: `❌ ${friendlyProviderError(res.error || "", vendorName)}`,
+          },
         }));
       }
       await loadConnections();
     } catch (e) {
       setCardTestStatus((prev) => ({
         ...prev,
-        [connId]: { loading: false, success: false, message: `❌ Lỗi kiểm tra: ${e instanceof Error ? e.message : String(e)}` },
+        [connId]: {
+          loading: false,
+          success: false,
+          message: `❌ ${friendlyProviderError(e instanceof Error ? e.message : String(e), vendorName)}`,
+        },
       }));
     } finally {
       setActionConnId(null);

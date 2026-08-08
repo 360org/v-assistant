@@ -46,6 +46,21 @@ jobs:
       - run: node scripts/rag-check.mjs
       # Nhập Agent từ persona markdown (The Agency) → Agent (soul/instructions).
       - run: node scripts/agent-import-check.mjs
+      # Đăng nhập xong là có model để chat — không đòi smoke test phải xong trước.
+      - run: node scripts/models-availability-check.mjs
+      # Lỗi nhà cung cấp hiện ra câu người dùng hiểu, không phải JSON thô.
+      - run: node scripts/provider-error-check.mjs
+      # Các hợp đồng dưới đây trước đây chỉ chạy tay qua `npm run check`, nên
+      # regression về AI Router / OAuth / Vault lọt lưới cho tới khi người dùng
+      # báo lỗi. Chạy luôn trong CI.
+      - run: node scripts/desktop-bundle-contract-check.mjs
+      - run: node scripts/desktop-oauth-check.mjs
+      - run: node scripts/pack-rebind-check.mjs
+      - run: node scripts/host-process-contract-check.mjs
+      - run: node scripts/ai-router-contract-check.mjs
+      - run: node scripts/ai-router-multi-account-check.mjs
+      - run: node scripts/credential-boundary-check.mjs
+      - run: node scripts/connector-capability-check.mjs
 
   agent-runner:
     runs-on: ubuntu-22.04

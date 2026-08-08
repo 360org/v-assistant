@@ -67,7 +67,7 @@ export function WorkspaceSettingsSection() {
       const relPath = firstFile.webkitRelativePath || firstFile.name;
       const folderName = relPath.split("/")[0] || relPath.split("\\")[0];
       if (folderName) {
-        setDataPathInput(`~/.v-vuaai/${folderName}`);
+        setDataPathInput(`~/vuaai-data/${folderName}`);
       }
     }
   };

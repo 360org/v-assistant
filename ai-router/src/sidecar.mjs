@@ -289,6 +289,22 @@ async function deleteVaultValue(ref) {
   writeFileSync(vaultPath, JSON.stringify(vault, null, 2), { mode: 0o600 });
 }
 
+/**
+ * Whether a saved connection may serve chat requests.
+ *
+ * A fresh sign-in starts at "Pending test": the credential is saved but the
+ * background smoke test has not answered yet. Requiring "Verified" here left
+ * the user with a connected account and an empty model list — the promised
+ * "login → chat" flow dead-ended, and a single flaky test call (rate limit,
+ * transient 5xx, a retired probe model) made the app unusable.
+ *
+ * So the gate is negative: only a connection the smoke test actually rejected
+ * ("Failed") is withheld. Pending and Verified both serve models.
+ */
+function isUsableConnection(connection) {
+  return connection?.isActive !== false && connection?.testStatus !== "Failed";
+}
+
 async function readConnections() {
   try {
     let raw = await readVaultValue(connectionsRef);
@@ -380,9 +396,7 @@ function modelAccount(modelId) {
  * no longer exists is stale, not a preference, so it is re-bound here.
  */
 function packModelsForConnections(models, connections) {
-  const live = connections.filter(
-    (item) => item.isActive !== false && item.testStatus === "Verified",
-  );
+  const live = connections.filter(isUsableConnection);
   return models.map((modelId) => {
     const pinIndex = modelId.indexOf("?account=");
     const bare = pinIndex < 0 ? modelId : modelId.slice(0, pinIndex);
@@ -411,9 +425,9 @@ function modelsForConnections(connections, packs = []) {
     });
   }
   for (const connection of connections) {
-    // A saved credential is not evidence that the vendor can serve requests.
-    // Chat only exposes models after the same Core path has passed a smoke test.
-    if (connection.isActive === false || connection.testStatus !== "Verified") continue;
+    // Pending connections are listed too, so a fresh sign-in can chat right
+    // away; only a connection the smoke test rejected is withheld.
+    if (!isUsableConnection(connection)) continue;
     const provider = REGISTRY.find((entry) => entry.id === connection.provider);
     if (!provider || !Array.isArray(provider.models) || provider.passthroughModels) continue;
     for (const model of provider.models
@@ -479,8 +493,14 @@ async function dynamicModelsForConnection(connection) {
 async function allModelsForConnections(connections, packs = []) {
   const models = new Map(modelsForConnections(connections, packs).map((model) => [model.id, model]));
   for (const connection of connections) {
-    if (connection.isActive === false || connection.testStatus !== "Verified") continue;
-    for (const model of await dynamicModelsForConnection(connection)) models.set(model.id, model);
+    if (!isUsableConnection(connection)) continue;
+    // A vendor catalogue fetch can fail independently (expired token, offline);
+    // that must not wipe out the static models already collected above.
+    try {
+      for (const model of await dynamicModelsForConnection(connection)) models.set(model.id, model);
+    } catch {
+      /* keep the static catalogue for this connection */
+    }
   }
   return [...models.values()];
 }
@@ -634,8 +654,7 @@ async function resolveModel(modelId) {
       const model = accountVariant.modelId.slice(separator + 1);
       const candidates = connections.filter((item) =>
         item.provider === provider
-        && item.isActive !== false
-        && item.testStatus === "Verified"
+        && isUsableConnection(item)
         && (!accountVariant.connectionId || item.id === accountVariant.connectionId)
       );
       if (candidates.length) return { provider, model, connection: candidates[0], candidates };
@@ -643,7 +662,7 @@ async function resolveModel(modelId) {
   }
 
   for (const connection of connections) {
-    if (connection.isActive === false || connection.testStatus !== "Verified") continue;
+    if (!isUsableConnection(connection)) continue;
     const provider = REGISTRY.find((entry) => entry.id === connection.provider);
     const defaultModel = connection.defaultModel
       ? provider?.models?.find((item) => item.id === connection.defaultModel)
@@ -651,7 +670,7 @@ async function resolveModel(modelId) {
     const model = defaultModel || provider?.models?.find((item) => !item.kind || item.kind === "llm");
     if (provider && model) {
       const candidates = connections.filter((item) =>
-        item.provider === provider.id && item.isActive !== false && item.testStatus === "Verified"
+        item.provider === provider.id && isUsableConnection(item)
       );
       return { provider: provider.id, model: model.id, connection, candidates };
     }

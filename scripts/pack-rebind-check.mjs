@@ -20,12 +20,19 @@ const check = (name, cond) => {
 };
 
 // Lift the function under test out of the sidecar rather than booting it: it is
-// pure, and this keeps the check offline and instant.
+// pure, and this keeps the check offline and instant. Its shared connection
+// gate is lifted alongside it, so the two stay in step.
+const gate = sidecar.slice(
+  sidecar.indexOf("function isUsableConnection"),
+  sidecar.indexOf("async function readConnections"),
+);
 const source = sidecar.slice(
   sidecar.indexOf("function packModelsForConnections"),
   sidecar.indexOf("function modelsForConnections"),
 );
-const packModelsForConnections = new Function(`${source}; return packModelsForConnections;`)();
+const packModelsForConnections = new Function(
+  `${gate}\n${source}; return packModelsForConnections;`,
+)();
 
 const LIVE = "antigravity:5584492d-fe3d-411e-9b95-f2b781b24326";
 const DEAD = "antigravity_1785118192453";

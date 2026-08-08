@@ -44,7 +44,7 @@ assert(
 );
 assert(
   store.includes("runtimeDir()"),
-  "Files shared with the runner must go to the runtime dir, not ~/.v-vuaai/data",
+  "Files shared with the runner must go to the runtime dir, not ~/vuaai-data",
 );
 
 // --- one outbound queue, three channels -------------------------------------
