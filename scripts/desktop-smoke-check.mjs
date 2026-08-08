@@ -18,6 +18,7 @@
  * chưa build không bị đỏ.
  */
 import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -65,18 +66,66 @@ const check = (name, cond) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Phục vụ bản dựng giao diện và ghi lại những gì WebView thật sự tải.
+ *
+ * Binary debug nạp giao diện từ `devUrl` (http://localhost:1420), không phải từ
+ * `dist` nhúng sẵn như bản release. Không có gì ở cổng đó thì cửa sổ chỉ hiện
+ * "Could not connect to localhost: Connection refused" — mà mọi kiểm tra phía
+ * backend vẫn xanh. Đó chính là lỗ hổng khiến "app mở lên nhưng trắng trơn"
+ * lọt lưới (#8/#19). Nên ở đây vừa phục vụ dist vừa đếm request: WebView có
+ * tải `index.html` và ít nhất một bundle JS thì mới coi là giao diện đã nạp.
+ */
+const distDir = path.join(repoRoot, "dist");
+if (!existsSync(path.join(distDir, "index.html"))) {
+  skip("chưa có dist/index.html; chạy `npm run build`");
+}
+const loaded = { html: false, script: false };
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".json": "application/json",
+  ".woff2": "font/woff2",
+};
+const ui = createServer((request, response) => {
+  const requested = decodeURIComponent((request.url || "/").split("?")[0]);
+  let file = path.join(distDir, requested === "/" ? "index.html" : requested);
+  // SPA: đường dẫn không phải file tĩnh thì trả index.html.
+  if (!existsSync(file) || statSync(file).isDirectory()) file = path.join(distDir, "index.html");
+  if (!file.startsWith(distDir)) { response.writeHead(403).end(); return; }
+  const extension = path.extname(file);
+  if (extension === ".html") loaded.html = true;
+  if (extension === ".js") loaded.script = true;
+  response.writeHead(200, { "Content-Type": MIME[extension] || "application/octet-stream" });
+  response.end(readFileSync(file));
+});
+await new Promise((resolve, reject) => {
+  ui.once("error", reject);
+  ui.listen(1420, "127.0.0.1", resolve);
+});
+
 const [command, args] = needsXvfb
   ? ["xvfb-run", ["-a", "--server-args=-screen 0 1400x900x24", binary]]
   : [binary, []];
 
+console.log(`▸ mở ${command} ${args.join(" ")}`);
 const app = spawn(command, args, {
   cwd: repoRoot,
   detached: !isWindows,
   stdio: ["ignore", "pipe", "pipe"],
 });
 let output = "";
+let spawnError = null;
+let exitInfo = null;
 app.stdout.on("data", (c) => { output += String(c); });
 app.stderr.on("data", (c) => { output += String(c); });
+app.on("error", (error) => { spawnError = error; });
+// Ghi lại mã thoát ngay lúc nó xảy ra: một bản cài hỏng thoát trong tích tắc và
+// nếu không bắt ở đây thì chỉ thấy "app không sống" mà không biết vì sao.
+app.on("exit", (code, signal) => { exitInfo = { code, signal }; });
 
 function stopAll() {
   try {
@@ -133,10 +182,23 @@ for (const relative of ["ipc/inbound.db", "ipc/outbound.db", "vault.db"]) {
   check(`tạo ${relative}`, existsSync(path.join(dataDir, relative)));
 }
 
+// --- 5. Giao diện thật sự nạp được -----------------------------------------
+// Chờ thêm một nhịp cho WebView kịp tải, rồi kiểm dấu vết request.
+for (let i = 0; i < 20 && !(loaded.html && loaded.script); i++) await sleep(1000);
+check("WebView tải được trang giao diện", loaded.html);
+check("WebView chạy bundle ứng dụng (không phải cửa sổ trắng)", loaded.script);
+
+ui.close();
 stopAll();
 if (!pass) {
-  console.log("\n--- log app ---");
-  console.log(output.slice(-2000));
+  console.log("\n--- chẩn đoán ---");
+  console.log(`binary   : ${binary}`);
+  console.log(`nền tảng : ${process.platform} ${process.arch}`);
+  if (spawnError) console.log(`spawn lỗi: ${spawnError.message}`);
+  if (exitInfo) console.log(`thoát    : code=${exitInfo.code} signal=${exitInfo.signal}`);
+  console.log(`UI đã tải: html=${loaded.html} script=${loaded.script}`);
+  console.log("--- log app (2000 ký tự cuối) ---");
+  console.log(output.trim() ? output.slice(-2000) : "(app không in ra gì)");
 }
 console.log(
   pass
