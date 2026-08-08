@@ -148,7 +148,10 @@
 - [x] Loopback OAuth desktop (PKCE) qua trình duyệt hệ thống
 - [x] Đăng nhập qua OpenRouter (1-click OAuth)
 - [x] Đăng nhập trực tiếp vendor: ChatGPT / Claude / Gemini (dán API key)
-- [x] Local user creation sau OAuth thành công
+- [x] Local user creation sau OAuth thành công — hồ sơ tạo trong `connectProvider`
+      ở cả 4 lối đăng nhập (một chạm, dán callback thủ công, nhập khoá, OAuth
+      quay lại trên web); tra cứu danh tính hỏng vẫn tạo hồ sơ với tên đường lui.
+      Test: `scripts/local-user-check.mjs`
 - [x] Onboarding chờ ghi kết nối vào AI Router xong mới vào ứng dụng; ghi hỏng
       thì thử lại (sau khi restart AI Router) rồi báo lỗi, không im lặng đi tiếp
       (#18). Test: `scripts/onboarding-connection-check.mjs`
