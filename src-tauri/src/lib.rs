@@ -542,9 +542,15 @@ pub fn run() {
                 }
             }
 
-            let project_dir = std::env::var("VUA_PROJECT_DIR")
-                .map(std::path::PathBuf::from)
-                .unwrap_or(runtime::resolve_project_dir(app.path().resource_dir()?));
+            // `unwrap_or` tính tham số ngay cả khi giá trị đã có, nên
+            // `resource_dir()?` vẫn chạy dù VUA_PROJECT_DIR đã được đặt. Ở đâu
+            // resource_dir() lỗi (chạy binary trần chưa đóng gói) thì setup trả
+            // Err và app tắt ngay khi vừa mở — không kịp in gì. Dùng
+            // `unwrap_or_else` để chỉ dò thư mục resource khi thật sự cần.
+            let project_dir = match std::env::var("VUA_PROJECT_DIR") {
+                Ok(value) => std::path::PathBuf::from(value),
+                Err(_) => runtime::resolve_project_dir(app.path().resource_dir()?),
+            };
             vault::migrate_legacy_vault(&dir).map_err(std::io::Error::other)?;
             let broker = vault::start_broker(dir.clone()).map_err(std::io::Error::other)?;
             let runtime = Runtime::new(dir, project_dir, broker).map_err(std::io::Error::other)?;

@@ -112,6 +112,9 @@ const [command, args] = needsXvfb
   : [binary, []];
 
 console.log(`▸ mở ${command} ${args.join(" ")}`);
+// Mốc thời gian để phân biệt nhịp tim mới với nhịp còn sót của lần chạy trước.
+// Lùi 1s cho lệch đồng hồ giữa tiến trình và hệ thống tệp.
+const launchedAt = Date.now() - 1000;
 const app = spawn(command, args, {
   cwd: repoRoot,
   detached: !isWindows,
@@ -163,20 +166,15 @@ check("AI Router tự khởi động và trả /health", routerUp);
 const dataDir = path.join(appDataDir(), "runtime");
 const heartbeat = path.join(dataDir, "ipc/.heartbeat");
 
-// Chờ runner đập nhịp lần đầu.
+// Chờ nhịp tim MỚI HƠN lúc mở app. Chỉ kiểm "file tồn tại" là chưa đủ: lần
+// chạy trước có thể để lại một nhịp cũ, khiến test tưởng runner đang sống.
 let beat = false;
-for (let i = 0; i < 40; i++) {
-  if (existsSync(heartbeat)) { beat = true; break; }
+for (let i = 0; i < 60; i++) {
+  if (existsSync(heartbeat) && statSync(heartbeat).mtimeMs >= launchedAt) { beat = true; break; }
   await sleep(1000);
 }
 check(`thư mục dữ liệu được tạo (${dataDir})`, existsSync(dataDir));
-check("Agent Runner ghi nhịp tim", beat);
-
-if (beat) {
-  // Nhịp phải còn mới: một runner treo vẫn còn tiến trình nhưng ngừng đập.
-  const age = Date.now() - statSync(heartbeat).mtimeMs;
-  check(`nhịp tim còn mới (${Math.round(age / 1000)}s)`, age < 120_000);
-}
+check("Agent Runner đập nhịp sau khi app mở", beat);
 
 for (const relative of ["ipc/inbound.db", "ipc/outbound.db", "vault.db"]) {
   check(`tạo ${relative}`, existsSync(path.join(dataDir, relative)));
