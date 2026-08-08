@@ -6,6 +6,11 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+## [1.1.57] - 2026-08-08
+
+> Bản này sửa lỗi nặng nhất từ trước tới nay: **Windows 11 cài xong không mở
+> được app**. Ai đang dùng Windows nên cập nhật.
+
 ### Sửa lỗi
 - **Windows 11 cài xong bấm vào không mở được** (#8): app đăng ký phím tắt toàn
   cục bằng `with_shortcuts(["Cmd+Shift+Q", "Cmd+Shift+R", "Cmd+Shift+E"]).unwrap()`.
