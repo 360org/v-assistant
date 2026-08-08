@@ -17,7 +17,17 @@ pub mod vault;
 use knowledge::{KnowledgeContent, KnowledgeRecord};
 use runtime::{AgentConfig, OutboundMessage, Runtime, RuntimeStatus};
 use tauri::{Manager, Emitter};
-use tauri_plugin_global_shortcut::ShortcutState;
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, ShortcutState};
+
+/// Phím tắt toàn cục, theo quy ước của từng hệ điều hành.
+///
+/// Trên Windows "Cmd" được ánh xạ thành phím Windows, mà Win+Shift+R là tổ hợp
+/// quay màn hình do chính Windows 11 giữ — đăng ký sẽ hỏng. Vì vậy máy không
+/// phải macOS dùng Ctrl+Alt, tổ hợp hiếm khi bị hệ thống chiếm.
+#[cfg(target_os = "macos")]
+const GLOBAL_SHORTCUTS: [&str; 3] = ["Cmd+Shift+Q", "Cmd+Shift+R", "Cmd+Shift+E"];
+#[cfg(not(target_os = "macos"))]
+const GLOBAL_SHORTCUTS: [&str; 3] = ["Ctrl+Alt+Q", "Ctrl+Alt+R", "Ctrl+Alt+E"];
 
 #[tauri::command]
 fn runtime_status(state: tauri::State<Runtime>) -> RuntimeStatus {
@@ -402,11 +412,15 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new()
-            .with_shortcuts(["Cmd+Shift+Q", "Cmd+Shift+R", "Cmd+Shift+E"]).unwrap()
+            // Không đăng ký phím tắt ngay ở đây: `with_shortcuts(...).unwrap()`
+            // sẽ panic nếu hệ điều hành đã giữ tổ hợp đó, và app chết ngay khi
+            // mở. Việc đăng ký chuyển xuống `setup` để lỗi chỉ là mất phím tắt.
             .with_handler(|app, shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    match shortcut.to_string().as_str() {
-                        "Cmd+Shift+Q" => {
+                    // So khớp theo phím chữ, không theo chuỗi tổ hợp: mỗi hệ
+                    // điều hành dùng một bộ phím bổ trợ khác nhau.
+                    match shortcut.key {
+                        Code::KeyQ => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.is_visible().map(|visible| {
                                     if visible {
@@ -418,13 +432,13 @@ pub fn run() {
                                 });
                             }
                         }
-                        "Cmd+Shift+R" => {
+                        Code::KeyR => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.eval("window.location.reload()");
                             }
                         }
-                        "Cmd+Shift+E" => {
-                            let _ = app.emit("global-shortcut", "Cmd+Shift+E");
+                        Code::KeyE => {
+                            let _ = app.emit("global-shortcut", "toggle-input");
                         }
                         _ => {}
                     }
@@ -432,6 +446,15 @@ pub fn run() {
             })
             .build())
         .setup(|app| {
+            // Phím tắt là tiện ích, không phải điều kiện để app chạy. Nếu hệ
+            // điều hành hoặc một ứng dụng khác đã giữ tổ hợp nào thì bỏ qua
+            // đúng tổ hợp đó — tuyệt đối không để app không mở được vì nó.
+            for accelerator in GLOBAL_SHORTCUTS {
+                if let Err(err) = app.global_shortcut().register(accelerator) {
+                    eprintln!("[v-assistant] bỏ qua phím tắt {accelerator}: {err}");
+                }
+            }
+
             #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{Menu, Submenu, PredefinedMenuItem, MenuItem};

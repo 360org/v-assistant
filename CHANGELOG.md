@@ -7,6 +7,24 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 ## [Chưa phát hành]
 
 ### Sửa lỗi
+- **Windows 11 cài xong bấm vào không mở được** (#8): app đăng ký phím tắt toàn
+  cục bằng `with_shortcuts(["Cmd+Shift+Q", "Cmd+Shift+R", "Cmd+Shift+E"]).unwrap()`.
+  Trên Windows, "Cmd" ánh xạ thành phím Windows, mà **Win+Shift+R là tổ hợp quay
+  màn hình do chính Windows 11 giữ**. Đăng ký hỏng, `unwrap()` panic ngay lúc
+  dựng app:
+
+  ```
+  PluginInitialization("global-shortcut", "HotKey already registered:
+    HotKey { mods: Modifiers(SHIFT | SUPER), key: KeyR, id: 570425380 }")
+  thread 'main' panicked at src/lib.rs
+  ```
+
+  Tiến trình chết với mã 101 **trước khi cửa sổ kịp hiện**, nên người dùng chỉ
+  thấy "bấm vào không lên gì" — không thông báo, không log. Sửa theo hai hướng:
+  máy không phải macOS dùng `Ctrl+Alt` thay vì phím Windows, và quan trọng hơn,
+  việc đăng ký chuyển xuống `setup` theo từng tổ hợp — tổ hợp nào bị chiếm thì
+  bỏ qua đúng tổ hợp đó và ghi log. **Phím tắt là tiện ích, không bao giờ được
+  là điều kiện để app chạy.**
 - **Kết nối xong nhưng không có model để chat** (#19 macOS, #16): danh sách model
   chỉ hiện khi kết nối đạt trạng thái `Verified`, trong khi mọi lần đăng nhập mới
   đều bắt đầu ở `Pending test`. Người dùng đăng nhập xong thấy 0 model và không
@@ -77,6 +95,30 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
   và bao cả hai lối đăng nhập (Settings và Onboarding).
 - Thêm `models-availability-check` và `provider-error-check`; cả hai đã được thử
   nghịch đảo để xác nhận bắt đúng lỗi cũ.
+- **Smoke test chạy app thật** (`desktop-smoke-check.mjs`) trên Linux (xvfb),
+  Windows và macOS: mở đúng binary đã build rồi khẳng định app không thoát sớm,
+  AI Router trả `/health`, Agent Runner còn đập nhịp, IPC + Vault được tạo, và
+  WebView thật sự nạp được `index.html` kèm bundle JS. Chính bài này bắt được
+  #8 — thứ mà mọi bài kiểm tra logic đều bỏ lọt vì lỗi nằm ở lúc dựng app.
+- Thêm `hotkey-conflict-check.mjs`: mở **hai bản app cùng lúc trên một màn
+  hình** để bản thứ hai gặp đúng lỗi "HotKey already registered" mà Windows gây
+  ra, rồi đòi nó vẫn phải sống. Đã thử nghịch đảo (dựng lại đúng mã cũ) — bài
+  test đỏ với `panicked at src/lib.rs`, khẳng định nó bắt đúng lỗi.
+
+### Ghi nhớ khi kiểm thử — tránh lặp lại
+- **Bài test phải tự giết được chính lỗi nó nói là bắt.** Mỗi bài mới ở trên đều
+  được chạy ngược trên mã lỗi cũ trước khi tin. Không làm bước này thì có test
+  xanh mà lỗi vẫn ra tới người dùng.
+- **Xanh ở tầng logic không có nghĩa app mở được.** #8 nằm ở `tauri::Builder`,
+  trước cả dòng giao diện đầu tiên; không một bài kiểm tra TypeScript nào chạm
+  tới. Lỗi "cài xong không mở được" chỉ có thể bắt bằng cách mở app thật.
+- **Hai bản app phải dùng chung một màn hình mới tranh nhau tài nguyên toàn
+  cục.** Bọc mỗi bản trong một `xvfb-run -a` riêng sẽ cho hai màn hình khác
+  nhau và xung đột không bao giờ xảy ra — bài test sẽ xanh giả.
+- **Đừng dọn tiến trình theo tên ảnh trên Windows**: `taskkill /IM node.exe /F`
+  giết luôn tiến trình đang chạy test, nên phần chẩn đoán không bao giờ được in
+  ra và Windows đỏ suốt nhiều lần mà không ai biết vì sao. Dùng
+  `taskkill /PID <pid> /T /F`.
 
 ## [1.1.52] - 2026-08-04
 

@@ -48,26 +48,10 @@ export default function App() {
     if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
 
     import("@tauri-apps/api/event").then(({ listen }) => {
+      // Rust tự xử lý ẩn/hiện cửa sổ và tải lại; chỉ những phím tắt cần giao
+      // diện phản ứng mới gửi sự kiện xuống đây.
       listen("global-shortcut", (event) => {
-        const shortcut = event.payload as string;
-        console.log("[Global Shortcut]", shortcut);
-
-        switch (shortcut) {
-          case "Cmd+Shift+Q":
-            // Window toggle handled by Rust
-            break;
-          case "Cmd+Shift+R":
-            // Reload handled by Rust
-            break;
-          case "Cmd+Shift+E":
-            // External editor shortcut - could trigger something in the future
-            break;
-          case "Cmd+Shift+N":
-            // New chat - could be added
-            break;
-          default:
-            break;
-        }
+        console.log("[Global Shortcut]", event.payload);
       });
     }).catch(() => {});
   }, []);

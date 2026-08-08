@@ -140,6 +140,9 @@ jobs:
         run: cargo build
       - name: Smoke test bản desktop
         run: node scripts/desktop-smoke-check.mjs
+      # Phím tắt toàn cục bị chiếm không được làm chết app — đúng lỗi #8.
+      - name: Kiểm phím tắt trùng
+        run: node scripts/hotkey-conflict-check.mjs
 
   # Smoke test bản desktop trên đúng nền tảng người dùng báo lỗi. #8 (Windows 11
   # cài xong không mở được) và #19 (macOS) là lỗi đặc thù nền tảng — job Linux
@@ -194,3 +197,6 @@ jobs:
       # macOS và Windows runner đã có phiên đồ hoạ, không cần màn hình ảo.
       - name: Smoke test bản desktop
         run: node scripts/desktop-smoke-check.mjs
+      # Windows 11 giữ sẵn Win+Shift+R; app phải mở được dù phím tắt bị chiếm.
+      - name: Kiểm phím tắt trùng
+        run: node scripts/hotkey-conflict-check.mjs

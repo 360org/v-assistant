@@ -756,6 +756,30 @@
       `xvfb-run`), Windows và macOS (job `desktop-smoke`, runner có sẵn phiên đồ
       hoạ). Đo runner sống bằng nhịp tim `.heartbeat` còn mới thay vì chỉ kiểm
       có tiến trình — runner treo vẫn còn tiến trình nhưng ngừng đập.
+- [x] **#8 — Windows 11 cài xong không mở được: đã tìm ra và sửa.** App panic
+      ngay ở `tauri::Builder` vì đăng ký phím tắt toàn cục bằng
+      `with_shortcuts([...]).unwrap()`: trên Windows "Cmd" là phím Windows, mà
+      Win+Shift+R là tổ hợp quay màn hình Windows 11 giữ sẵn ⇒
+      `HotKey already registered` ⇒ thoát mã 101 trước khi cửa sổ hiện.
+      Nay máy không phải macOS dùng `Ctrl+Alt`, và việc đăng ký chuyển xuống
+      `setup` theo từng tổ hợp — tổ hợp bị chiếm thì bỏ qua, app vẫn chạy.
+      Test: `scripts/hotkey-conflict-check.mjs` (mở hai bản app cùng một màn
+      hình để ép xung đột; đã thử nghịch đảo trên mã cũ và bài test đỏ đúng).
+
+> **Bài học — đừng lặp lại.**
+> - Lỗi "cài xong không mở được" **không nằm ở tầng logic**: nó ở đoạn dựng app,
+>   trước dòng giao diện đầu tiên. Không bài kiểm tra TypeScript nào chạm tới.
+>   Chỉ có mở app thật mới bắt được.
+> - **Tuyệt đối không `unwrap()` trên tài nguyên hệ điều hành có thể bị chiếm**
+>   (phím tắt toàn cục, cổng mạng, tệp khoá). Tiện ích hỏng thì bỏ tiện ích,
+>   không được kéo cả app chết theo.
+> - Mỗi bài test mới phải được **chạy ngược trên mã lỗi cũ** trước khi tin. Test
+>   xanh mà không chứng minh được nó bắt lỗi thì chỉ là xanh giả.
+> - Trên Linux, hai bản app phải **dùng chung một màn hình** mới tranh nhau tài
+>   nguyên toàn cục; bọc mỗi bản trong `xvfb-run -a` riêng là xanh giả.
+> - Trên Windows, dọn tiến trình bằng `taskkill /PID <pid> /T /F`, **không** dùng
+>   `/IM node.exe` — nó giết chính tiến trình đang chạy test và nuốt mất log
+>   chẩn đoán.
 - [x] Bundle Agent Runner + Node runtime vào Tauri resources. Build local tự
       nạp Node theo kiến trúc macOS; CI nạp runtime đúng target.
 - [ ] Auto-detect runtime: Bun có sẵn → dùng Bun; fallback Node
