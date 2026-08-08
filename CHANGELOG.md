@@ -6,6 +6,40 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 
 ## [Chưa phát hành]
 
+### Sửa lỗi
+- **Kết nối xong nhưng không có model để chat** (#19 macOS, #16): danh sách model
+  chỉ hiện khi kết nối đạt trạng thái `Verified`, trong khi mọi lần đăng nhập mới
+  đều bắt đầu ở `Pending test`. Người dùng đăng nhập xong thấy 0 model và không
+  chat được; chỉ cần một lần smoke test chập chờn (giới hạn tốc độ, lỗi 5xx tạm
+  thời, model dò đã bị nhà cung cấp gỡ) là ứng dụng thành vô dụng dù thông tin
+  đăng nhập vẫn tốt. Nay cổng lọc đảo chiều: `Pending test` vẫn phục vụ model,
+  chỉ kết nối bị smoke test **từ chối** (`Failed`) mới bị ẩn. Lỗi tải danh mục
+  model động cũng không còn xoá sạch danh mục tĩnh đã có.
+- **Lỗi nhà cung cấp hiển thị JSON thô** (#13): tài khoản Deepseek hết số dư đổ
+  nguyên khối JSON lồng nhau lên giao diện khiến người dùng tưởng ứng dụng hỏng.
+  Bổ sung `providerErrors.ts` bóc thông điệp trong cùng kèm mã HTTP rồi dịch sang
+  câu tiếng Việt có hướng xử lý (hết số dư, sai khoá, hết hạn mức, máy chủ lỗi,
+  mất mạng…).
+- **Thư mục dữ liệu chưa thống nhất** (#15): Agent Runner vẫn mặc định
+  `~/.v-vuaai` nên khi `VUA_DATA_DIR` chưa được đặt thì runner đọc/ghi lệch chỗ
+  so với vỏ desktop. Đồng bộ toàn bộ về `~/vuaai-data`.
+
+### Hạ tầng kiểm thử
+- **Job `rust` trong CI đã đỏ suốt nhiều bản phát hành**: `tauri.conf.json` khai
+  báo `agent-runner/dist` và `runtime/node` là resource nhưng job chỉ checkout
+  rồi chạy `cargo check`, nên build script Tauri dừng ngay. Hệ quả nặng hơn CI
+  đỏ: hai bài kiểm tra Rust phía sau (loopback OAuth, WASM sandbox) bị *skipped*
+  — hợp đồng đăng nhập desktop và sandbox chạy code thực tế không được kiểm
+  chứng ở bất kỳ bản gần đây nào. Job nay dựng đủ resource trước khi biên dịch.
+- **8 contract check trước đây chỉ chạy tay** qua `npm run check`, nên hồi quy về
+  AI Router / OAuth / Vault lọt lưới cho tới khi người dùng báo lỗi. Nay chạy
+  trong CI.
+- `ai-router-contract-check` trỏ nhầm `ModelSettings.tsx` sau khi logic dời sang
+  `aiRouter.ts`, khiến `npm run check` đỏ oan; nay kiểm tra ở client dùng chung
+  và bao cả hai lối đăng nhập (Settings và Onboarding).
+- Thêm `models-availability-check` và `provider-error-check`; cả hai đã được thử
+  nghịch đảo để xác nhận bắt đúng lỗi cũ.
+
 ## [1.1.52] - 2026-08-04
 
 ### Tính năng mới & Trải nghiệm người dùng
