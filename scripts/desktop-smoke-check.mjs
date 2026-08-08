@@ -132,14 +132,14 @@ app.on("exit", (code, signal) => { exitInfo = { code, signal }; });
 
 function stopAll() {
   try {
-    if (isWindows) spawnSync("taskkill", ["/PID", String(app.pid), "/T", "/F"]);
+    // `/T` hạ cả cây tiến trình, nên AI Router và Agent Runner do app sinh ra
+    // cũng dừng theo. Tuyệt đối không dọn theo tên ảnh trên Windows: chính
+    // tiến trình chạy test này cũng là node.exe, nên `taskkill /IM node.exe`
+    // giết luôn nó — đó là lý do phần chẩn đoán không bao giờ được in ra.
+    if (isWindows) spawnSync("taskkill", ["/PID", String(app.pid), "/T", "/F"], { stdio: "ignore" });
     else process.kill(-app.pid, "SIGKILL");
   } catch { /* đã thoát */ }
-  if (isWindows) {
-    for (const image of ["v-assistant.exe", "node.exe"]) {
-      spawnSync("taskkill", ["/IM", image, "/F"], { stdio: "ignore" });
-    }
-  } else {
+  if (!isWindows) {
     for (const pattern of ["ai-router/src/sidecar.mjs", "agent-runner/dist/index.js"]) {
       spawnSync("pkill", ["-9", "-f", pattern], { stdio: "ignore" });
     }
