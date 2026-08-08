@@ -44,6 +44,18 @@ npm install
 npm run check    # typecheck + e2e (poll loop + SQLite IPC) + native tools
 ```
 
+Smoke test bản desktop (mở app thật, không cần màn hình):
+
+```bash
+sudo apt-get install -y xvfb libwebkit2gtk-4.1-dev libgtk-3-dev   # Linux, một lần
+npm run build && (cd src-tauri && cargo build)
+node scripts/desktop-smoke-check.mjs
+```
+
+Test này mở app dưới `xvfb-run` rồi kiểm nó **tự** dựng AI Router, Agent Runner,
+hàng đợi IPC và Vault — đúng thứ người dùng báo hỏng ở #7/#8/#9. Máy không có
+`xvfb-run` hoặc chưa build binary thì test tự bỏ qua, không làm đỏ.
+
 Phía Rust (vỏ desktop + sandbox):
 
 ```bash

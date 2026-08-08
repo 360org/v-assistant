@@ -127,3 +127,13 @@ jobs:
       - name: WASM sandbox contract test
         working-directory: src-tauri
         run: cargo run --features sandbox --example sandbox_check
+      # Mở app thật dưới màn hình ảo và kiểm nó tự dựng AI Router, Agent Runner,
+      # IPC và Vault — chính thứ người dùng báo hỏng ở #7/#8/#9. Trước đây tưởng
+      # phải có máy thật mới kiểm được; xvfb-run là đủ.
+      - name: Cài Xvfb cho smoke test
+        run: sudo apt-get install -y xvfb
+      - name: Build binary desktop
+        working-directory: src-tauri
+        run: cargo build
+      - name: Smoke test bản desktop
+        run: node scripts/desktop-smoke-check.mjs
