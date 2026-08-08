@@ -132,8 +132,65 @@ jobs:
       # phải có máy thật mới kiểm được; xvfb-run là đủ.
       - name: Cài Xvfb cho smoke test
         run: sudo apt-get install -y xvfb
+      # App cần bản dựng giao diện (dist) để hiển thị, không chỉ resource.
+      - name: Build giao diện
+        run: npm run build
       - name: Build binary desktop
         working-directory: src-tauri
         run: cargo build
+      - name: Smoke test bản desktop
+        run: node scripts/desktop-smoke-check.mjs
+
+  # Smoke test bản desktop trên đúng nền tảng người dùng báo lỗi. #8 (Windows 11
+  # cài xong không mở được) và #19 (macOS) là lỗi đặc thù nền tảng — job Linux
+  # không tái hiện được, nên phải chạy trên chính runner của nền tảng đó.
+  desktop-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            node_archive: node-v24.18.0-win-x64
+          - os: macos-latest
+            node_archive: node-v24.18.0-darwin-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Cài phụ thuộc
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix agent-runner
+      - name: Dựng resource Tauri (Agent Runner + Node đóng gói)
+        shell: bash
+        run: |
+          npm run build:runner
+          archive="${{ matrix.node_archive }}"
+          mkdir -p runtime/node
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.zip" -o node.zip
+            unzip -q node.zip
+            cp "${archive}/node.exe" runtime/node/node.exe
+            test -f runtime/node/node.exe
+          else
+            curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o node.tar.gz
+            tar -xzf node.tar.gz
+            install -m 755 "${archive}/bin/node" runtime/node/node
+            test -x runtime/node/node
+          fi
+          test -d agent-runner/dist
+      - name: Build giao diện
+        run: npm run build
+      - name: Build binary desktop
+        working-directory: src-tauri
+        run: cargo build
+      # macOS và Windows runner đã có phiên đồ hoạ, không cần màn hình ảo.
       - name: Smoke test bản desktop
         run: node scripts/desktop-smoke-check.mjs

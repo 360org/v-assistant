@@ -749,10 +749,13 @@
 - [x] GitHub Actions workflow (build installer)
 - [x] Bản phát hành v0.1.0
 - [x] Đã xoá Docker live-dev cũ; dev/test dùng Tauri Host Process native
-- [x] **Smoke test bản desktop chạy headless** (`scripts/desktop-smoke-check.mjs`):
-      mở app thật dưới `xvfb-run` rồi kiểm nó tự dựng AI Router, Agent Runner,
-      IPC và Vault. Trước đây tưởng phải có máy thật mới kiểm được nên #7/#8/#9
-      không có cách tái hiện; nay chạy trong CI mỗi lần push.
+- [x] **Smoke test bản desktop** (`scripts/desktop-smoke-check.mjs`): mở app
+      thật rồi kiểm nó tự dựng AI Router, Agent Runner, IPC và Vault. Trước đây
+      tưởng phải có máy thật mới kiểm được nên #7/#8/#9 không có cách tái hiện.
+      Nay chạy mỗi lần push trên **cả ba nền tảng**: Linux (job `rust`, dùng
+      `xvfb-run`), Windows và macOS (job `desktop-smoke`, runner có sẵn phiên đồ
+      hoạ). Đo runner sống bằng nhịp tim `.heartbeat` còn mới thay vì chỉ kiểm
+      có tiến trình — runner treo vẫn còn tiến trình nhưng ngừng đập.
 - [x] Bundle Agent Runner + Node runtime vào Tauri resources. Build local tự
       nạp Node theo kiến trúc macOS; CI nạp runtime đúng target.
 - [ ] Auto-detect runtime: Bun có sẵn → dùng Bun; fallback Node
