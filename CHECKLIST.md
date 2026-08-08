@@ -117,6 +117,11 @@
 - [x] Đồng bộ hóa React state & Vault lưu trên host qua Vite API dev middleware (tránh mất kết nối khi đổi trình duyệt)
 - [x] Tự động tải thẳng vào trang Chat (thay vì Home) khi onboarded = true
 - [x] Quản lý phiên đăng nhập và yêu cầu đăng nhập lại khi session hết hạn
+- [x] Kết nối vừa lưu là chat được ngay: model không đòi smoke test phải xong
+      trước (`Pending test` vẫn phục vụ, chỉ `Failed` bị ẩn) — #19/#16
+- [x] Lỗi nhà cung cấp hiển thị câu người dùng hiểu, không đổ JSON thô — #13
+- [x] Thư mục dữ liệu thống nhất `~/vuaai-data` ở cả vỏ desktop lẫn Agent Runner
+      (trước đây runner mặc định `~/.v-vuaai` nên ghi lệch chỗ) — #15
 - [ ] Theme / Language settings
 - [ ] Data export / import
 
@@ -124,10 +129,34 @@
 
 ## 3. Đăng nhập & Xác thực (Authentication)
 
+> **Luồng thật trên desktop — đọc trước khi sửa bất cứ thứ gì ở đây.**
+> `Onboarding` → `beginManualSignIn` → mở **trình duyệt hệ thống**
+> (`openExternal`) → người dùng đăng nhập → **tự dán URL callback** trở lại ứng
+> dụng (`setStep("manual")`).
+>
+> - OAuth **không** chạy trong webview (đã bỏ từ trước). Chữ "WebView" còn trong
+>   mã chỉ là nơi Tauri render giao diện.
+> - Desktop **không hứng callback**: mã uỷ quyền quay về **bằng thao tác dán**.
+>   Vì vậy cổng 1420 **không cần** ai lắng nghe ở bản đóng gói. Chỉ Codex (1455)
+>   và xAI (56121) có relay vì hai nhà cung cấp đó cần.
+> - Đọc lỗi OAuth: lỗi hiện **trên trang nhà cung cấp** ⇒ sai ở bước uỷ quyền
+>   (`client_id` / `redirect_uri` / `scope`); lỗi hiện **trong ứng dụng** ⇒ sai
+>   ở bước đổi mã hoặc nhận callback. Xác định đúng bước rồi mới sửa.
+> - Đã có một lần chẩn đoán sai theo hướng "thiếu relay hứng callback"
+>   (`3b28047`, đã revert ở `ed9ba92`). Đừng lặp lại.
+
 - [x] Loopback OAuth desktop (PKCE) qua trình duyệt hệ thống
 - [x] Đăng nhập qua OpenRouter (1-click OAuth)
 - [x] Đăng nhập trực tiếp vendor: ChatGPT / Claude / Gemini (dán API key)
 - [x] Local user creation sau OAuth thành công
+- [x] Onboarding chờ ghi kết nối vào AI Router xong mới vào ứng dụng; ghi hỏng
+      thì thử lại (sau khi restart AI Router) rồi báo lỗi, không im lặng đi tiếp
+      (#18). Test: `scripts/onboarding-connection-check.mjs`
+- [ ] **Windows 10 Home Single Language: Google trả `400: invalid_request`**
+      (#11 Gemini, #12 Claude, #14 ChatGPT). Lỗi hiện trên trang nhà cung cấp ⇒
+      thuộc bước uỷ quyền. **Cần URL uỷ quyền thật người dùng gặp** (đầy đủ
+      `client_id`, `redirect_uri`, `scope`) mới chẩn đoán được. Chưa có cách tái
+      hiện trong CI vì cần máy Windows thật + tài khoản thật.
 - [~] Native OAuth flow cho từng vendor (không cần dán key thủ công). Desktop
   manual callback Gemini/Claude đã chuyển authorize/exchange sang AI Router
   sidecar và có Docker contract `npm run check:desktop-oauth`; còn cần real
@@ -671,7 +700,25 @@
 - [x] `scripts/self-improve-check.mjs` — Self-improving memory
 - [x] `scripts/connector-check.mjs` — Connectors
 - [x] `scripts/rag-check.mjs` — Knowledge RAG
-- [x] `npm run check` — CI pipeline chạy toàn bộ test
+- [x] `scripts/models-availability-check.mjs` — đăng nhập xong là có model để
+      chat (`Pending test` vẫn phục vụ, chỉ `Failed` bị ẩn) — #19/#16
+- [x] `scripts/provider-error-check.mjs` — lỗi nhà cung cấp ra câu người dùng
+      hiểu, không phải JSON thô — #13
+- [x] `scripts/onboarding-connection-check.mjs` — không lối đăng nhập nào nuốt
+      lỗi ghi kết nối — #18
+- [x] `npm run check` — chạy toàn bộ test
+- [x] **CI chạy đủ 8 contract check** (desktop-bundle, desktop-oauth,
+      pack-rebind, host-process, ai-router, multi-account, credential-boundary,
+      connector-capability). Trước đây chỉ chạy tay nên hồi quy lọt lưới tới khi
+      người dùng báo lỗi.
+- [x] **Job `rust` dựng đủ resource Tauri trước `cargo check`**. Trước đây job
+      này đỏ suốt nhiều bản phát hành (thiếu `agent-runner/dist`), khiến hai
+      test Rust phía sau bị *skipped* — hợp đồng đăng nhập desktop và WASM
+      sandbox thực tế không được kiểm chứng ở bản nào.
+
+> **Nguyên tắc khi thêm test:** thử **nghịch đảo** (cố tình khôi phục lỗi cũ) để
+> chắc test bắt được. Test `desktop-oauth-check` từng chỉ so chuỗi `redirectUri`
+> nên luôn xanh dù hành vi thật sai — so chuỗi không thay được kiểm chứng hành vi.
 
 ### 14.2 Test cần thêm
 - [ ] Test Universal LLM Client (mock server mỗi provider)

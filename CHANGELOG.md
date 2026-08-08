@@ -33,6 +33,35 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
   Router, vẫn hỏng thì báo lỗi rõ kèm hướng xử lý thay vì đưa người dùng vào
   một ứng dụng chết.
 
+### Chưa xử lý — cần thêm dữ liệu
+- **Đăng nhập Gemini/Claude/ChatGPT lỗi trên Windows 10 Home Single Language**
+  (#11, #12, #14): người dùng báo Google trả `400: invalid_request`
+  (`flowName=GeneralOAuthFlow`). Lỗi hiện **trên trang Google**, tức bị từ chối
+  ngay ở bước uỷ quyền — **trước** mọi redirect. Vì vậy nguyên nhân nằm trong
+  chính URL uỷ quyền (`client_id`, `redirect_uri`, hoặc `scope`), không phải ở
+  khâu nhận callback. Cần URL uỷ quyền thật mà người dùng gặp để chẩn đoán.
+
+  > **Đã thử và đã revert** (`3b28047` → `ed9ba92`): một relay hứng callback ở
+  > cổng 1420 được thêm vào rồi gỡ, vì dựa trên tiền đề sai — xem "Ghi nhớ kiến
+  > trúc" bên dưới. Đừng đi lại hướng này.
+
+### Ghi nhớ kiến trúc — tránh lặp lại chẩn đoán sai
+- **OAuth **không** chạy trong webview, và desktop **không** hứng callback.**
+  Luồng đăng nhập desktop là: `Onboarding` → `beginManualSignIn` → mở **trình
+  duyệt hệ thống** (`openExternal`) → người dùng đăng nhập → **tự dán URL
+  callback trở lại ứng dụng** (`setStep("manual")`). Không có listener nào chờ
+  mã uỷ quyền.
+- Hệ quả khi chẩn đoán: **cổng 1420 không cần ai lắng nghe** trong bản đóng gói.
+  Suy luận kiểu "bản đóng gói không phục vụ `/callback` nên mã không quay về" là
+  **sai** — mã quay về bằng thao tác dán. Chỉ Codex (1455) và xAI (56121) có
+  relay, vì hai nhà cung cấp đó cần, không phải vì mọi nhà cung cấp đều cần.
+- Chữ "WebView" còn trong mã nguồn chỉ **nơi Tauri render giao diện**
+  (WebView2/WKWebView) — bản chất của Tauri. Đừng nhầm với "OAuth trong
+  webview", thứ đã được bỏ từ trước.
+- Phân biệt khi đọc lỗi OAuth: lỗi hiện **trên trang nhà cung cấp** thuộc bước
+  uỷ quyền (sai tham số/đăng ký client); lỗi hiện **trong ứng dụng** mới thuộc
+  bước đổi mã hoặc nhận callback. Xác định đúng bước trước khi sửa.
+
 ### Hạ tầng kiểm thử
 - **Job `rust` trong CI đã đỏ suốt nhiều bản phát hành**: `tauri.conf.json` khai
   báo `agent-runner/dist` và `runtime/node` là resource nhưng job chỉ checkout
