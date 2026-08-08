@@ -58,6 +58,55 @@ export function Onboarding() {
     }
   }, [completeOnboarding, oauthReturn]);
 
+  /**
+   * Ghi kết nối vừa đăng nhập vào AI Router.
+   *
+   * Trước đây lỗi ở bước này bị nuốt (`.catch(console.error)`) rồi onboarding
+   * vẫn hoàn tất, nên người dùng vào thẳng ứng dụng mà không có kết nối nào —
+   * đúng triệu chứng "đăng nhập xong lại phải vào Settings thêm AI provider
+   * một lần nữa" (#18). Nay thử lại một lần sau khi khởi động lại AI Router,
+   * và nếu vẫn hỏng thì báo lỗi thay vì đưa người dùng vào một ứng dụng chết.
+   */
+  const registerConnection = async (
+    result: { provider: ProviderId; apiKey: string; refreshToken?: string; projectId?: string; expiresAt?: number },
+    callbackUrl?: string,
+  ) => {
+    const save = () =>
+      saveConnectionAndCleanupDuplicates(
+        result.provider,
+        getProvider(result.provider).name,
+        result.apiKey,
+        "subscription",
+        {
+          refreshToken: result.refreshToken,
+          projectId: result.projectId,
+          expiresIn: result.expiresAt ? Math.round((result.expiresAt - Date.now()) / 1000) : undefined,
+        },
+        callbackUrl,
+      );
+    try {
+      await save();
+    } catch (first) {
+      console.error("Lưu kết nối vào AI Router thất bại, thử lại:", first);
+      if (inDesktopShell()) {
+        try {
+          await invoke("runtime_restart_ai_router");
+        } catch {
+          /* khởi động lại là nỗ lực tốt nhất; lần thử dưới sẽ nói rõ nếu hỏng */
+        }
+      }
+      try {
+        await save();
+      } catch (second) {
+        throw new Error(
+          `Đăng nhập thành công nhưng chưa lưu được kết nối (${
+            second instanceof Error ? second.message : String(second)
+          }). Hãy thử lại; nếu vẫn lỗi, mở Settings → Diagnostics để kiểm tra AI Router.`,
+        );
+      }
+    }
+  };
+
   const choose = async (id: ProviderId) => {
     // Providers with direct sign-in log in one click; others open the
     // connect dialog (key under Advanced).
@@ -119,17 +168,7 @@ export function Onboarding() {
           result.provider,
           loginConfig(result.provider, result.apiKey, result),
         );
-        await saveConnectionAndCleanupDuplicates(
-          result.provider,
-          getProvider(result.provider).name,
-          result.apiKey,
-          "subscription",
-          {
-            refreshToken: result.refreshToken,
-            projectId: result.projectId,
-            expiresIn: result.expiresAt ? Math.round((result.expiresAt - Date.now()) / 1000) : undefined,
-          }
-        ).catch((err) => console.error("Failed to save onboarding connection to AI Router:", err));
+        await registerConnection(result);
         completeOnboarding(result.provider, []);
       }
     } catch (error) {
@@ -153,18 +192,7 @@ export function Onboarding() {
     try {
       const result = await completeManualSignIn(manualAttempt, manualCallback);
       await connectProvider(result.provider, loginConfig(result.provider, result.apiKey, result));
-      await saveConnectionAndCleanupDuplicates(
-        result.provider,
-        getProvider(result.provider).name,
-        result.apiKey,
-        "subscription",
-        {
-          refreshToken: result.refreshToken,
-          projectId: result.projectId,
-          expiresIn: result.expiresAt ? Math.round((result.expiresAt - Date.now()) / 1000) : undefined,
-        },
-        manualCallback
-      ).catch((err) => console.error("Failed to save onboarding connection to AI Router:", err));
+      await registerConnection(result, manualCallback);
       completeOnboarding(result.provider, []);
     } catch (error) {
       setSignInError(error instanceof Error ? error.message : String(error));
@@ -358,26 +386,38 @@ export function Onboarding() {
           hasSubscription={Boolean(user && providerConfigs["openrouter"]?.apiKey)}
           onClose={() => setConnectFor(null)}
           onSave={(config) => {
-            if (config) {
-              void connectProvider(connectFor, config);
-              const key = config.apiKey || (connectFor === "local" ? config.baseUrl : undefined);
-              if (key) {
-                const providerInfo = getProvider(connectFor);
-                const authType = config.oauth ? "subscription" : "api-key";
-                void saveConnectionAndCleanupDuplicates(
-                  connectFor,
-                  providerInfo.name,
-                  key,
-                  authType,
-                  null,
-                  undefined,
-                  connectFor === "local" ? (config.baseUrl || undefined) : undefined
-                ).catch((err) => console.error("Failed to save provider config connection to AI Router:", err));
+            void (async () => {
+              if (config) {
+                await connectProvider(connectFor, config);
+                const key = config.apiKey || (connectFor === "local" ? config.baseUrl : undefined);
+                if (key) {
+                  const providerInfo = getProvider(connectFor);
+                  const authType = config.oauth ? "subscription" : "api-key";
+                  try {
+                    // Chờ ghi xong: nuốt lỗi ở đây từng đưa người dùng vào ứng
+                    // dụng không có kết nối nào và bắt thêm provider lại (#18).
+                    await saveConnectionAndCleanupDuplicates(
+                      connectFor,
+                      providerInfo.name,
+                      key,
+                      authType,
+                      null,
+                      undefined,
+                      connectFor === "local" ? (config.baseUrl || undefined) : undefined,
+                    );
+                  } catch (error) {
+                    setSignInError(
+                      `Đã lưu khoá nhưng chưa đăng ký được với AI Router (${
+                        error instanceof Error ? error.message : String(error)
+                      }). Mở Settings → Diagnostics để kiểm tra.`,
+                    );
+                  }
+                }
               }
-            }
-            setProvider(connectFor);
-            setConnectFor(null);
-            setStep("connect");
+              setProvider(connectFor);
+              setConnectFor(null);
+              setStep("connect");
+            })();
           }}
         />
       )}

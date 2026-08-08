@@ -33,6 +33,14 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
   Codex và xAI đã có relay hứng callback từ trước; Gemini là nhà cung cấp duy
   nhất còn thiếu. Nay dùng chung `startLoopbackCallbackRelay`, đồng thời bỏ qua
   lỗi cổng đã bận để môi trường dev (Vite giữ 1420) vẫn chạy như cũ.
+- **Đăng nhập xong vẫn bị bắt thêm AI provider lần nữa** (#18): Onboarding ghi
+  kết nối vừa đăng nhập vào AI Router nhưng nuốt lỗi bước này
+  (`.catch(console.error)`) rồi vẫn hoàn tất. Khi ghi hỏng, người dùng vào
+  thẳng ứng dụng mà **không có kết nối nào** và phải mở Settings thêm provider
+  một lần nữa — sai luồng chuẩn "tải → cài → đăng nhập → chat". Nay cả ba lối
+  đăng nhập đều chờ ghi xong; hỏng thì thử lại một lần sau khi khởi động lại AI
+  Router, vẫn hỏng thì báo lỗi rõ kèm hướng xử lý thay vì đưa người dùng vào
+  một ứng dụng chết.
 
 ### Hạ tầng kiểm thử
 - **Job `rust` trong CI đã đỏ suốt nhiều bản phát hành**: `tauri.conf.json` khai
