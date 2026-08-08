@@ -55,6 +55,8 @@ jobs:
       # báo lỗi. Chạy luôn trong CI.
       - run: node scripts/desktop-bundle-contract-check.mjs
       - run: node scripts/desktop-oauth-check.mjs
+      # Callback OAuth phải có nơi hứng trong bản đóng gói (Gemini/#11).
+      - run: node scripts/oauth-callback-relay-check.mjs
       - run: node scripts/pack-rebind-check.mjs
       - run: node scripts/host-process-contract-check.mjs
       - run: node scripts/ai-router-contract-check.mjs
