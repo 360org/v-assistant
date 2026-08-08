@@ -162,12 +162,12 @@
       hiện trong CI vì cần máy Windows thật + tài khoản thật.
 - [~] Native OAuth flow cho từng vendor (không cần dán key thủ công). Desktop
   manual callback Gemini/Claude đã chuyển authorize/exchange sang AI Router
-  sidecar và có Docker contract `npm run check:desktop-oauth`; còn cần real
+  sidecar và có contract `npm run check:desktop-oauth`; còn cần real
   desktop smoke với từng subscription trước khi đánh dấu hoàn thành.
 - [~] AI Router desktop sidecar phải chạy từ bundled resource và bundled Node
   runtime, không phụ thuộc Node cài trên máy. Chờ kiểm tra DMG macOS artifact
   có `Resources/_up_/runtime/node/node`, runtime dependencies và real provider
-  catalog smoke. Docker có contract `npm run check:desktop-bundle`; CI kiểm tra
+  catalog smoke. Có contract `npm run check:desktop-bundle`; CI kiểm tra
   lại artifact sau build.
   `[REF: 9router/src/lib/oauth/ — OAuth flows cho nhiều provider]`
 - [ ] OAuth Drive / Outlook / Calendar
@@ -224,7 +224,7 @@
   V Assistant (`localhost` hoặc `127.0.0.1`) để callback thực sự cập nhật UI.
 - [x] AI Router CORS cho phép đúng hai UI loopback origin `localhost:1420` và
   `127.0.0.1:1420`; không dùng wildcard vì Router có quyền dùng Vault credential.
-- [x] Docker demo dùng một App Vault duy nhất: UI dev broker và AI Router cùng
+- [x] Bản dev dùng một App Vault duy nhất: UI dev broker và AI Router cùng
   đọc/ghi `.vua_vault_dev.json`; connection metadata chỉ giữ `credentialRef`.
 - [x] Claude OAuth callback compatibility: authorize/exchange dùng URI cố định
   `http://localhost:443/callback`; Provider Manager cho dán full callback URL
@@ -738,7 +738,7 @@
 - [x] Test provider transient retries —
       `agent-runner/scripts/anthropic-retry-check.mjs` +
       `agent-runner/scripts/openai-gemini-retry-check.mjs`
-- [x] Test MCP client handshake/discovery/tool call trong Docker
+- [x] Test MCP client handshake/discovery/tool call (chạy native)
   `agent-runner/scripts/mcp-client-check.mjs`
   `[REF: NanoClaw/container/agent-runner/src/mcp-tools/core.test.ts]`
 - [ ] Test Vault encryption/decryption

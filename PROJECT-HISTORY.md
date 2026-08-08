@@ -47,10 +47,11 @@ chi tiết từng tính năng nằm ở [`idea.md`](./idea.md); nhật ký phiê
 | **Tự học** | Self-improving memory (kiểu Hermes) |
 | **Connectors** | Integration thành plugin, agent gọi tên → tự lấy credential từ Vault |
 | **Quy trình dev** | `npm run check`, `version:set`, `DEVELOPMENT.md` |
-| **Docker live-dev** | `docker-compose.dev.yml` + `dev.sh` (Colima), hot-reload, không cài gì trên host |
+| **Docker live-dev** *(đã bỏ)* | `docker-compose.dev.yml` + `dev.sh` (Colima). **Không còn dùng** — xem mốc "Bỏ Docker khỏi dev/test" bên dưới |
 | **Đăng nhập thẳng vendor** | ChatGPT/Claude/Gemini kết nối trực tiếp vendor (mở trang → dán key → xong) |
 | **Knowledge thật (RAG)** | Trích xuất PDF/Word/Excel/PowerPoint thật → chunks → truy xuất theo câu hỏi, tiêm vào prompt của đúng role |
 | **Universal Agent Runner** | Kiến trúc độc lập SDK: tách "bộ não" & tool execution ra host process, giao tiếp qua SQLite IPC (inbound.db/outbound.db), Local Vault bảo mật, và Memory Scaffold per-agent |
+| **Bỏ Docker khỏi dev/test** | Gỡ `dev.sh`, `docker-compose*.yml`, `Dockerfile`. Dev/test chạy **Tauri Host Process native** (`npm run tauri dev`) để kiểm đúng Vault, sidecar, filesystem và IPC thật — thứ Docker không phản ánh được |
 
 ---
 
