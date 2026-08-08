@@ -152,6 +152,11 @@
       ở cả 4 lối đăng nhập (một chạm, dán callback thủ công, nhập khoá, OAuth
       quay lại trên web); tra cứu danh tính hỏng vẫn tạo hồ sơ với tên đường lui.
       Test: `scripts/local-user-check.mjs`
+- [x] Lối "dùng thử không cần tài khoản" cũng tạo hồ sơ local trước khi vào ứng
+      dụng. Thiếu bước này thì App (`!onboarded || !user`) đá ngược về
+      Onboarding và nút "Start chatting" trông như nút hỏng.
+      Test: `scripts/local-user-check.mjs` (đã thử nghịch đảo — bỏ
+      `ensureLocalUser` là hai mục đỏ ngay).
 - [x] Onboarding chờ ghi kết nối vào AI Router xong mới vào ứng dụng; ghi hỏng
       thì thử lại (sau khi restart AI Router) rồi báo lỗi, không im lặng đi tiếp
       (#18). Test: `scripts/onboarding-connection-check.mjs`

@@ -56,6 +56,27 @@ check(
   /completeOAuthReturn\(\)[\s\S]{0,400}?await connectProvider\(/.test(store),
 );
 
+// Lối "dùng thử không cần tài khoản" không đi qua connectProvider, nên phải tự
+// tạo hồ sơ. Quên bước này thì App (`!onboarded || !user`) đá người dùng ngược
+// về Onboarding và nút "Start chatting" trông như nút hỏng: bấm không đi đâu.
+const finishBody = onboarding.match(/const finish = \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
+check(
+  "lối dùng thử không tài khoản cũng tạo hồ sơ local trước khi vào ứng dụng",
+  /ensureLocalUser\(/.test(finishBody),
+);
+check(
+  "hồ sơ được tạo TRƯỚC khi hoàn tất onboarding, không phải sau",
+  finishBody.indexOf("ensureLocalUser(") > -1 &&
+    finishBody.indexOf("ensureLocalUser(") < finishBody.indexOf("completeOnboarding("),
+);
+// App vẫn phải đòi có hồ sơ mới cho vào — đây là điều kiện khiến lỗi trên xuất
+// hiện, nên khoá lại để test không xanh giả nếu điều kiện bị gỡ.
+const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
+check(
+  "App chỉ vào màn hình chính khi đã có hồ sơ local",
+  /if \(!onboarded \|\| !user\)/.test(app),
+);
+
 // --- 3. Tra cứu danh tính: hỏng thì trả null, không ném ---------------------
 const entry = `export { fetchVendorAccount } from "../src/runtime/oauth.ts";`;
 fs.writeFileSync("scripts/.local-user-entry.mjs", entry);

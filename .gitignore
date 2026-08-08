@@ -43,3 +43,4 @@ certs/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+.screenshots/

@@ -34,6 +34,7 @@ export function Onboarding() {
   const {
     completeOnboarding,
     connectProvider,
+    ensureLocalUser,
     oauthReturn,
     oauthError,
     user,
@@ -207,12 +208,24 @@ export function Onboarding() {
     );
 
   const finish = () => {
-    if (provider) {
-      completeOnboarding(provider, selected);
-    } else {
+    if (!provider) {
       setSignInError("Không xác định được tài khoản AI. Vui lòng thử đăng nhập lại.");
       setStep("login");
+      return;
     }
+    // App chỉ hiển thị màn hình chính khi CÓ hồ sơ người dùng cục bộ
+    // (`!onboarded || !user` ⇒ quay lại Onboarding). Bốn lối đăng nhập thật đều
+    // tạo hồ sơ trong `connectProvider`, nhưng lối "dùng thử không cần tài
+    // khoản" thì không — nên bấm "Start chatting" xong màn hình đứng yên như
+    // nút hỏng. Tạo hồ sơ cục bộ cho chính lối đó trước khi vào ứng dụng.
+    if (!user) {
+      ensureLocalUser({
+        name: "Người dùng",
+        provider,
+        detail: "Dùng thử — chưa liên kết tài khoản AI",
+      });
+    }
+    completeOnboarding(provider, selected);
   };
 
   return (

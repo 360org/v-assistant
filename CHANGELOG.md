@@ -12,6 +12,14 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
 > được app**. Ai đang dùng Windows nên cập nhật.
 
 ### Sửa lỗi
+- **Bấm "Start chatting" không đi đâu ở lối dùng thử không cần tài khoản**: App
+  chỉ hiển thị màn hình chính khi có hồ sơ người dùng cục bộ
+  (`!onboarded || !user` ⇒ quay lại Onboarding). Bốn lối đăng nhập thật đều tạo
+  hồ sơ trong `connectProvider`, nhưng lối "Try the preview without an account"
+  thì không — nên `completeOnboarding` đặt `onboarded = true` xong, App vẫn đá
+  người dùng ngược về đúng màn hình vừa bấm. Nhìn y hệt nút hỏng: bấm, không có
+  gì xảy ra, không báo lỗi. Nay lối đó tự tạo hồ sơ cục bộ trước khi vào ứng
+  dụng. Phát hiện khi chạy app thật và chụp lại từng bước, không phải từ đọc mã.
 - **Windows 11 cài xong bấm vào không mở được** (#8): app đăng ký phím tắt toàn
   cục bằng `with_shortcuts(["Cmd+Shift+Q", "Cmd+Shift+R", "Cmd+Shift+E"]).unwrap()`.
   Trên Windows, "Cmd" ánh xạ thành phím Windows, mà **Win+Shift+R là tổ hợp quay
