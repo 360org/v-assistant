@@ -24,15 +24,6 @@ Ghi lại mọi thay đổi đáng chú ý của V Assistant. Định dạng the
   `~/.v-vuaai` nên khi `VUA_DATA_DIR` chưa được đặt thì runner đọc/ghi lệch chỗ
   so với vỏ desktop. Đồng bộ toàn bộ về `~/vuaai-data`.
 
-- **Đăng nhập Gemini thất bại ở bản đóng gói** (#11, cùng cụm #12/#14): Google
-  chỉ đăng ký một loopback duy nhất cho client kế thừa —
-  `http://localhost:1420/callback`. Cổng 1420 là Vite dev server: khi chạy dev
-  thì chính ứng dụng phục vụ `/callback` nên đăng nhập trót lọt, nhưng bản đóng
-  gói chạy từ origin WebView của Tauri và **không có gì lắng nghe ở 1420**, nên
-  trình duyệt bị đẩy tới một cổng chết và mã uỷ quyền không bao giờ quay lại.
-  Codex và xAI đã có relay hứng callback từ trước; Gemini là nhà cung cấp duy
-  nhất còn thiếu. Nay dùng chung `startLoopbackCallbackRelay`, đồng thời bỏ qua
-  lỗi cổng đã bận để môi trường dev (Vite giữ 1420) vẫn chạy như cũ.
 - **Đăng nhập xong vẫn bị bắt thêm AI provider lần nữa** (#18): Onboarding ghi
   kết nối vừa đăng nhập vào AI Router nhưng nuốt lỗi bước này
   (`.catch(console.error)`) rồi vẫn hoàn tất. Khi ghi hỏng, người dùng vào

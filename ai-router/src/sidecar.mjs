@@ -1126,22 +1126,6 @@ const server = createServer((request, response) => {
         // The inherited Google OAuth client only registers this loopback URI.
         // Never forward a Tauri/WebView origin to Google: it is not an OAuth
         // callback origin and Google rejects it before the user can sign in.
-        //
-        // Port 1420 is the Vite dev server. In development the app itself
-        // serves /callback there, but the packaged desktop app is served from
-        // the Tauri WebView origin — nothing listens on 1420, so Google sent
-        // the browser to a dead port and the code never came back. Codex and
-        // xAI already relay their callbacks; Gemini was the one provider left
-        // without one. Start the same relay here, and tolerate the port
-        // already being served (that is dev, where Vite handles it).
-        await startLoopbackCallbackRelay({
-          returnUri: redirectUri,
-          listenHost: callbackHost,
-          listenPort: 1420,
-          callbackPath: "/callback",
-        }).catch((error) => {
-          if (error?.code !== "EADDRINUSE") throw error;
-        });
         redirectUri = "http://localhost:1420/callback";
       } else if (provider === "xai") {
         const oauthProvider = getProvider(provider);
