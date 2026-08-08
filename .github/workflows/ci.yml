@@ -93,6 +93,26 @@ jobs:
             librsvg2-dev \
             patchelf \
             libgtk-3-dev
+      # tauri.conf.json bundles agent-runner/dist and runtime/node as resources.
+      # Without them the Tauri build script aborts with "glob pattern … didn't
+      # match any files", so `cargo check` failed on every push and the two Rust
+      # contract tests below were skipped instead of run.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Stage Tauri resources
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix agent-runner
+          npm run build:runner
+          archive="node-v24.18.0-linux-x64"
+          curl --fail --location --retry 3 "https://nodejs.org/dist/v24.18.0/${archive}.tar.gz" -o node.tar.gz
+          tar -xzf node.tar.gz
+          mkdir -p runtime/node
+          install -m 755 "${archive}/bin/node" runtime/node/node
+          test -d agent-runner/dist
+          test -x runtime/node/node
       - name: Cargo check
         working-directory: src-tauri
         run: cargo check
