@@ -821,6 +821,36 @@
 - [ ] **Multi-sub-agent Observability:** Ghi log/metrics cho task tree, agent identity, thời lượng, token/cost, lỗi và kết quả; không ghi secret hoặc credential raw vào log.
 - [ ] **Cải tiến Memory để tự học (Self-learning Memory):** Tinh chỉnh cấu trúc memories của Agent để ghi nhớ các lỗi tool đã sửa thành công, tự áp dụng giải pháp đã tối ưu cho các phiên làm việc sau.
 
+### 15.1 Điều khiển vòng lặp — học từ Loop Engineering
+
+> Phân tích đầy đủ và lý do chọn/bỏ nằm ở `idea.md` §5. Hiện `poll-loop.ts` chỉ
+> có đúng một cái phanh là `MAX_TOOL_ITERATIONS = 25` — phanh cùn: agent gọi
+> một tool hỏng rồi lặp lại y hệt 25 lần, người dùng trả tiền 25 lượt gọi model
+> để nhận về một thông báo lỗi.
+
+- [ ] **Circuit breaker cho vòng lặp agentic:** ngoài trần số vòng, thêm phát
+      hiện giậm chân (cùng một lỗi 3 lần liên tiếp), không tiến triển (5 tool
+      call hỏng liên tiếp) và trần token. Ba trạng thái ra: tiếp tục / chỉ báo
+      cáo / hỏi người dùng. Phải **tất định, không gọi model** để rẻ đủ chạy mọi
+      vòng. Test phải dựng đúng tình huống lặp vô ích và khẳng định dừng sớm.
+- [ ] **Sổ lần thử + cắt tỉa ngữ cảnh tất định:** hiện mỗi vòng đẩy nguyên
+      `result.content` vào `conversationHistory` không cắt, nên tới vòng 20
+      prompt đầy stack trace cũ (context rot) — vừa đắt vừa làm model quên mục
+      tiêu. Gộp lỗi lặp, cắt trace, giữ cửa sổ gần nhất; đo token trước/sau để
+      chứng minh rẻ đi thật.
+- [ ] **Dừng sớm phải nói cho người dùng biết:** câu tiếng Việt nói rõ đã thử
+      gì, hỏng vì sao, đề nghị bước tiếp — không im lặng bỏ cuộc, không đổ JSON
+      thô (cùng chuẩn với #13).
+- [ ] **Vai kiểm độc lập (maker/checker) trước hành động có hậu quả thật:**
+      phiên riêng với vai làm, mặc định TỪ CHỐI cho tới khi có bằng chứng, chỉ
+      trả `DUYỆT` / `TỪ CHỐI + lý do` / `HỎI NGƯỜI DÙNG`.
+- [ ] **Màn hình chính sách trong Settings:** giới hạn do người dùng đặt (số tin
+      gửi ra ngoài mỗi giờ, trần ngân sách quảng cáo mỗi ngày, đường dẫn cấm)
+      ghi xuống tệp chính sách và **được capability rail thi hành** — luật nằm
+      trong rail, không phải nhét vào system prompt rồi mong model nghe lời.
+- [ ] **Ngân sách token theo ngày cho tác vụ lịch:** chạm 80% chuyển sang chỉ
+      báo cáo, chạm trần thì dừng và báo người dùng.
+
 - [x] **Web Search & HTTP Fetch**: Tìm kiếm thông tin web công khai và đọc trang HTML/Markdown (`web_search`, `http_request`)
 - [ ] **Interactive Browser Automation (Playwright / Puppeteer MCP)**: Tự động tương tác với website phức tạp đòi hỏi JavaScript (click nút, điền form, chụp ảnh màn hình web, xử lý captcha)
 - [ ] **Chrome DevTools Protocol (CDP) Bridge**: Kết nối trực tiếp vào trình duyệt Google Chrome đang mở của người dùng qua Remote Debugging Port để đọc cookies/session và điều khiển tab
